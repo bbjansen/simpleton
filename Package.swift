@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "SimpletonCore", targets: ["SimpletonCore"]),
+        .executable(name: "Simpleton", targets: ["Simpleton"]),
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.0.0"),
@@ -14,6 +15,10 @@ let package = Package(
         .target(
             name: "SimpletonCore",
             dependencies: ["SwiftTerm"]
+        ),
+        .executableTarget(
+            name: "Simpleton",
+            dependencies: ["SimpletonCore", "SwiftTerm"]
         ),
         .testTarget(
             name: "SimpletonCoreTests",
