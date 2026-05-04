@@ -25,6 +25,9 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Callback when the process exits.
     var onProcessExit: ((PaneController, Int32?) -> Void)?
 
+    /// Stored environment for shell restarts.
+    var shellEnvironment: [String]?
+
     init(id: PaneID = UUID(), frame: NSRect, connectionType: ConnectionType) {
         self.id = id
         self.connectionType = connectionType
@@ -36,6 +39,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
     /// Start a local shell process.
     func startLocalShell(shell: String, environment: [String]? = nil, workingDirectory: String? = nil) {
+        self.shellEnvironment = environment
         state = .running
         terminalView.startProcess(
             executable: shell,
@@ -47,13 +51,13 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     }
 
     /// Restart the shell (after exit, when user clicks "Reopen").
-    func restartShell(shell: String, workingDirectory: String? = nil) {
+    func restartShell(shell: String, environment: [String]? = nil, workingDirectory: String? = nil) {
         removeBanner()
         state = .running
         terminalView.startProcess(
             executable: shell,
             args: ["-l"],
-            environment: nil,
+            environment: environment,
             execName: nil,
             currentDirectory: workingDirectory
         )
@@ -131,7 +135,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
     @objc private func reopenShellClicked() {
         if case .local(let shell, let dir) = connectionType {
-            restartShell(shell: shell, workingDirectory: dir)
+            restartShell(shell: shell, environment: shellEnvironment, workingDirectory: dir)
         }
     }
 

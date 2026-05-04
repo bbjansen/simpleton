@@ -80,19 +80,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func loadConfig() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let simpletonDir = appSupport.appendingPathComponent("Simpleton")
-        let configStore = ConfigStore(directory: simpletonDir)
+        let configFile = simpletonDir.appendingPathComponent("config.json")
 
-        // Run synchronously for startup
-        let semaphore = DispatchSemaphore(value: 0)
-        Task {
+        if FileManager.default.fileExists(atPath: configFile.path) {
             do {
-                self.config = try await configStore.load()
+                let file = try AtomicFileWriter.readJSON(ConfigFile.self, from: configFile)
+                self.config = file.config
             } catch {
                 self.config = AppConfig()
             }
-            semaphore.signal()
+        } else {
+            self.config = AppConfig()
         }
-        semaphore.wait()
     }
 
     // MARK: - Environment

@@ -57,12 +57,12 @@ enum ShellDetector {
 
         do {
             try process.run()
-            process.waitUntilExit()
         } catch {
             return nil
         }
 
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         guard let output = String(data: data, encoding: .utf8) else { return nil }
 
         // Output format: "UserShell: /bin/zsh"
