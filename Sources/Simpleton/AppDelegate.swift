@@ -8,11 +8,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowControllers: [WindowController] = []
     private var config: AppConfig = AppConfig()
     private var theme: Theme = Theme(name: "default-dark")
+    private var sshConfigWatcher: SSHConfigWatcher?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
         loadConfig()
+
+        // Start SSH config watcher
+        sshConfigWatcher = SSHConfigWatcher()
+        sshConfigWatcher?.onConfigChanged = { entries in
+            let concrete = entries.filter(\.isConcrete)
+            if !concrete.isEmpty {
+                // Entries available for sidebar (Phase 5 will use this)
+            }
+        }
+        sshConfigWatcher?.start()
+
         createNewWindow()
         buildMenuBar()
 
