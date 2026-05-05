@@ -205,7 +205,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func pickLayout() {
-        guard let window = NSApp.keyWindow else { return }
+        guard let window = NSApp.keyWindow,
+              let sc = activeSplitController else { return }
+
         let alert = NSAlert()
         alert.messageText = "Pick Layout"
         alert.informativeText = "Choose a layout for this tab."
@@ -214,11 +216,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         alert.addButton(withTitle: "Cancel")
 
-        alert.beginSheetModal(for: window) { [weak self] response in
+        alert.beginSheetModal(for: window) { response in
             let index = Int(response.rawValue) - Int(NSApplication.ModalResponse.alertFirstButtonReturn.rawValue)
             guard index >= 0, index < PredefinedLayouts.all.count else { return }
             let layout = PredefinedLayouts.all[index]
-            self?.activeSplitController?.applyLayout(layout)
+            sc.applyLayout(layout)
         }
     }
 
