@@ -9,6 +9,7 @@ final class TabContainerController: NSViewController {
     let splitController: SplitController
     private let config: AppConfig
     private let theme: Theme
+    private var closeObserver: NSObjectProtocol?
 
     init(config: AppConfig, theme: Theme) {
         self.config = config
@@ -32,9 +33,15 @@ final class TabContainerController: NSViewController {
         }
 
         // Observe pane close requests
-        NotificationCenter.default.addObserver(forName: .simpletonPaneCloseRequested, object: nil, queue: .main) { [weak self] notification in
-            guard let paneID = notification.object as? PaneID else { return }
-            self?.splitController.closePane(paneID)
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonPaneCloseRequested,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let paneID = notification.object as? PaneID,
+                  let self = self,
+                  self.splitController.panes[paneID] != nil else { return }
+            self.splitController.closePane(paneID)
         }
 
         // Start the initial shell
@@ -43,6 +50,12 @@ final class TabContainerController: NSViewController {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    deinit {
+        if let observer = closeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))

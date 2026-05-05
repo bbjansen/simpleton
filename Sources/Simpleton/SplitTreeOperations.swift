@@ -56,43 +56,61 @@ enum SplitTreeOperations {
         from paneID: PaneID,
         direction: NavigationDirection
     ) -> PaneID? {
-        let flatPanes = flattenPanes(tree: tree, direction: direction)
-        guard let index = flatPanes.firstIndex(of: paneID) else { return nil }
+        // Find the path to the pane
+        guard let path = findPath(to: paneID, in: tree) else { return nil }
 
-        switch direction {
-        case .left, .up:
-            return index > 0 ? flatPanes[index - 1] : nil
-        case .right, .down:
-            return index < flatPanes.count - 1 ? flatPanes[index + 1] : nil
+        // Walk up the path looking for a split in the matching axis
+        for i in stride(from: path.count - 1, through: 0, by: -1) {
+            let (node, childIndex) = path[i]
+            if case .split(let splitDir, let children, _) = node {
+                let matchesAxis = (direction == .left || direction == .right) && splitDir == .vertical
+                    || (direction == .up || direction == .down) && splitDir == .horizontal
+
+                if matchesAxis {
+                    let targetIndex: Int
+                    switch direction {
+                    case .left, .up:
+                        targetIndex = childIndex - 1
+                    case .right, .down:
+                        targetIndex = childIndex + 1
+                    }
+
+                    if targetIndex >= 0 && targetIndex < children.count {
+                        // Return the first pane in the target subtree (closest to the edge)
+                        return firstPane(in: children[targetIndex])
+                    }
+                }
+            }
         }
+        return nil
     }
 
     /// Apply a predefined layout, creating new pane IDs as needed.
     /// Returns the new tree and list of all pane IDs in order.
     static func applyLayout(_ layout: PredefinedLayout, existingPaneID: PaneID) -> (SplitNode, [PaneID]) {
-        var paneIDs: [PaneID] = [existingPaneID]
+        var paneIDs: [PaneID] = []
+        var isFirst = true
 
         func makeNode(from template: LayoutNode) -> SplitNode {
             switch template {
             case .pane:
-                if paneIDs.count <= template.paneCount {
+                if isFirst {
+                    isFirst = false
+                    paneIDs.append(existingPaneID)
+                    return .pane(existingPaneID)
+                } else {
                     let newID = UUID()
                     paneIDs.append(newID)
                     return .pane(newID)
                 }
-                return .pane(paneIDs[0]) // First pane reuses existing
             case .split(let dir, let children, let ratios):
                 let childNodes = children.map { makeNode(from: $0) }
                 return .split(direction: dir, children: childNodes, ratios: ratios)
             }
         }
 
-        // Build the tree, using existingPaneID for the first pane
         let tree = makeNode(from: layout.rootNode)
-
-        // Collect all pane IDs from the built tree
-        let allIDs = tree.allPaneIDs
-        return (tree, allIDs)
+        return (tree, paneIDs)
     }
 
     /// Update ratios for a split containing the given pane.
@@ -124,20 +142,26 @@ enum SplitTreeOperations {
         }
     }
 
-    /// Flatten pane IDs in traversal order appropriate for the navigation direction.
-    private static func flattenPanes(tree: SplitNode, direction: NavigationDirection) -> [PaneID] {
+    /// Returns the path from root to pane as [(node, childIndex)] pairs.
+    private static func findPath(to paneID: PaneID, in tree: SplitNode) -> [(SplitNode, Int)]? {
         switch tree {
         case .pane(let id):
-            return [id]
-        case .split(let splitDir, let children, _):
-            let isRelevantAxis = (direction == .left || direction == .right) && splitDir == .vertical
-                || (direction == .up || direction == .down) && splitDir == .horizontal
-            if isRelevantAxis {
-                return children.flatMap { flattenPanes(tree: $0, direction: direction) }
-            } else {
-                // For perpendicular splits, just flatten all children
-                return children.flatMap { flattenPanes(tree: $0, direction: direction) }
+            return id == paneID ? [] : nil
+        case .split(_, let children, _):
+            for (index, child) in children.enumerated() {
+                if let subPath = findPath(to: paneID, in: child) {
+                    return [(tree, index)] + subPath
+                }
             }
+            return nil
+        }
+    }
+
+    /// Returns the first pane ID found in depth-first traversal.
+    private static func firstPane(in node: SplitNode) -> PaneID? {
+        switch node {
+        case .pane(let id): return id
+        case .split(_, let children, _): return children.first.flatMap { firstPane(in: $0) }
         }
     }
 }

@@ -48,6 +48,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowControllers.first { $0.window?.isKeyWindow == true }
     }
 
+    /// The active split controller, resolved from the key window's content view controller.
+    /// This correctly handles native AppKit tabbing where each tab is a separate NSWindow.
+    private var activeSplitController: SplitController? {
+        guard let window = NSApp.keyWindow,
+              let tabContainer = window.contentViewController as? TabContainerController else {
+            return nil
+        }
+        return tabContainer.splitController
+    }
+
     // MARK: - Config
 
     private func loadConfig() {
@@ -174,15 +184,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Split Actions
 
     @objc private func splitRight() {
-        activeWindowController?.activeSplitController.splitFocusedPane(direction: .vertical)
+        activeSplitController?.splitFocusedPane(direction: .vertical)
     }
 
     @objc private func splitDown() {
-        activeWindowController?.activeSplitController.splitFocusedPane(direction: .horizontal)
+        activeSplitController?.splitFocusedPane(direction: .horizontal)
     }
 
     @objc private func closePane() {
-        guard let sc = activeWindowController?.activeSplitController else { return }
+        guard let sc = activeSplitController else { return }
         sc.closePane(sc.focusedPaneID)
     }
 
@@ -202,23 +212,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let index = response.rawValue - 1000 // NSAlert buttons start at 1000
             guard index >= 0, index < PredefinedLayouts.all.count else { return }
             let layout = PredefinedLayouts.all[index]
-            self?.activeWindowController?.activeSplitController.applyLayout(layout)
+            self?.activeSplitController?.applyLayout(layout)
         }
     }
 
     // MARK: - Focus Navigation
 
     @objc private func focusLeft() {
-        activeWindowController?.activeSplitController.moveFocus(.left)
+        activeSplitController?.moveFocus(.left)
     }
     @objc private func focusRight() {
-        activeWindowController?.activeSplitController.moveFocus(.right)
+        activeSplitController?.moveFocus(.right)
     }
     @objc private func focusUp() {
-        activeWindowController?.activeSplitController.moveFocus(.up)
+        activeSplitController?.moveFocus(.up)
     }
     @objc private func focusDown() {
-        activeWindowController?.activeSplitController.moveFocus(.down)
+        activeSplitController?.moveFocus(.down)
     }
 
     // MARK: - Tab Actions
@@ -242,7 +252,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Font Actions
 
     @objc private func increaseFontSize() {
-        guard let sc = activeWindowController?.activeSplitController else { return }
+        guard let sc = activeSplitController else { return }
         for pane in sc.panes.values {
             let size = pane.terminalView.font.pointSize
             pane.terminalView.font = pane.terminalView.font.withSize(size + 1)
@@ -250,7 +260,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func decreaseFontSize() {
-        guard let sc = activeWindowController?.activeSplitController else { return }
+        guard let sc = activeSplitController else { return }
         for pane in sc.panes.values {
             let size = pane.terminalView.font.pointSize
             if size > 8 {
@@ -260,7 +270,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func resetFontSize() {
-        guard let sc = activeWindowController?.activeSplitController else { return }
+        guard let sc = activeSplitController else { return }
         let defaultSize = CGFloat(config.appearance.fontSize)
         for pane in sc.panes.values {
             pane.terminalView.font = pane.terminalView.font.withSize(defaultSize)
