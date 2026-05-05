@@ -140,8 +140,12 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     }
 
     @objc private func closePaneClicked() {
-        // In Phase 2, closing the pane terminates the app (single pane).
-        // In Phase 3 (window management), this will remove the pane from the split tree.
-        NSApp.terminate(nil)
+        // Find the SplitController that owns this pane by walking up the responder chain
+        // For now, post a notification that the TabContainerController can handle
+        NotificationCenter.default.post(name: .simpletonPaneCloseRequested, object: self.id)
     }
+}
+
+extension Notification.Name {
+    static let simpletonPaneCloseRequested = Notification.Name("simpletonPaneCloseRequested")
 }

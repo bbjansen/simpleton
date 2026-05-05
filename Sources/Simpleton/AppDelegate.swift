@@ -5,74 +5,47 @@ import SimpletonCore
 
 class AppDelegate: NSObject, NSApplicationDelegate {
 
-    private var window: NSWindow!
-    private var paneController: PaneController!
+    private var windowControllers: [WindowController] = []
     private var config: AppConfig = AppConfig()
+    private var theme: Theme = Theme(name: "default-dark")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
-        // Load config (synchronous for startup — config is tiny)
         loadConfig()
-
-        // Create window
-        window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Simpleton"
-        window.minSize = NSSize(width: 400, height: 300)
-        window.center()
-        window.tabbingMode = .preferred
-
-        // Detect shell and working directory
-        let shell = ShellDetector.detectShell(config: config)
-        let workingDir = ShellDetector.workingDirectory(config: config)
-
-        // Create pane controller
-        let contentFrame = window.contentView!.bounds
-        paneController = PaneController(
-            frame: contentFrame,
-            connectionType: .local(shell: shell, workingDirectory: workingDir)
-        )
-
-        // Apply theme
-        let theme = Theme(name: "default-dark")
-        ThemeApplier.apply(theme: theme, config: config, to: paneController.terminalView)
-
-        // Wire up title changes
-        paneController.onTitleChange = { [weak self] title in
-            self?.window.title = title
-        }
-
-        // Add terminal view to window
-        window.contentView!.addSubview(paneController.terminalView)
-
-        // Set TERM environment variable
-        let termEnv = buildEnvironment()
-
-        // Start shell
-        paneController.startLocalShell(
-            shell: shell,
-            environment: termEnv,
-            workingDirectory: workingDir
-        )
-
-        // Show window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-
-        // Make terminal view first responder (capture keyboard input)
-        window.makeFirstResponder(paneController.terminalView)
-
-        // Build basic menu bar
+        createNewWindow()
         buildMenuBar()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowClosed(_:)),
+            name: .simpletonWindowClosed,
+            object: nil
+        )
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
+    }
+
+    // MARK: - Window Management
+
+    @objc func createNewWindow() {
+        let wc = WindowController(config: config, theme: theme)
+        windowControllers.append(wc)
+        wc.window?.center()
+        wc.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func windowClosed(_ notification: Notification) {
+        guard let wc = notification.object as? WindowController else { return }
+        windowControllers.removeAll { $0 === wc }
+    }
+
+    /// The active window controller (key window).
+    private var activeWindowController: WindowController? {
+        windowControllers.first { $0.window?.isKeyWindow == true }
     }
 
     // MARK: - Config
@@ -94,15 +67,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Environment
-
-    private func buildEnvironment() -> [String] {
-        var env = ProcessInfo.processInfo.environment
-        env["TERM"] = config.general.termVariable
-        env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
-        return env.map { "\($0.key)=\($0.value)" }
-    }
-
     // MARK: - Menu Bar
 
     private func buildMenuBar() {
@@ -117,7 +81,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
-        // Edit menu (for copy/paste to work)
+        // File menu
+        let fileMenuItem = NSMenuItem()
+        let fileMenu = NSMenu(title: "File")
+        fileMenu.addItem(withTitle: "New Window", action: #selector(createNewWindow), keyEquivalent: "n")
+        fileMenu.addItem(withTitle: "New Tab", action: #selector(newTab), keyEquivalent: "t")
+        fileMenu.addItem(.separator())
+        fileMenu.addItem(withTitle: "Close Pane", action: #selector(closePane), keyEquivalent: "w")
+
+        let closeTabItem = NSMenuItem(title: "Close Tab", action: #selector(closeTab), keyEquivalent: "W")
+        closeTabItem.keyEquivalentModifierMask = [.command, .shift]
+        fileMenu.addItem(closeTabItem)
+
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
+
+        // Edit menu
         let editMenuItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
@@ -135,25 +114,156 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
 
+        // Split menu
+        let splitMenuItem = NSMenuItem()
+        let splitMenu = NSMenu(title: "Split")
+        splitMenu.addItem(withTitle: "Split Right", action: #selector(splitRight), keyEquivalent: "d")
+
+        let splitDownItem = NSMenuItem(title: "Split Down", action: #selector(splitDown), keyEquivalent: "D")
+        splitDownItem.keyEquivalentModifierMask = [.command, .shift]
+        splitMenu.addItem(splitDownItem)
+
+        splitMenu.addItem(.separator())
+
+        let layoutItem = NSMenuItem(title: "Pick Layout…", action: #selector(pickLayout), keyEquivalent: "L")
+        layoutItem.keyEquivalentModifierMask = [.command, .shift]
+        splitMenu.addItem(layoutItem)
+
+        splitMenu.addItem(.separator())
+
+        // Focus navigation
+        let focusLeftItem = NSMenuItem(title: "Focus Left", action: #selector(focusLeft), keyEquivalent: String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!)))
+        focusLeftItem.keyEquivalentModifierMask = [.command, .option]
+        splitMenu.addItem(focusLeftItem)
+
+        let focusRightItem = NSMenuItem(title: "Focus Right", action: #selector(focusRight), keyEquivalent: String(Character(UnicodeScalar(NSRightArrowFunctionKey)!)))
+        focusRightItem.keyEquivalentModifierMask = [.command, .option]
+        splitMenu.addItem(focusRightItem)
+
+        let focusUpItem = NSMenuItem(title: "Focus Up", action: #selector(focusUp), keyEquivalent: String(Character(UnicodeScalar(NSUpArrowFunctionKey)!)))
+        focusUpItem.keyEquivalentModifierMask = [.command, .option]
+        splitMenu.addItem(focusUpItem)
+
+        let focusDownItem = NSMenuItem(title: "Focus Down", action: #selector(focusDown), keyEquivalent: String(Character(UnicodeScalar(NSDownArrowFunctionKey)!)))
+        focusDownItem.keyEquivalentModifierMask = [.command, .option]
+        splitMenu.addItem(focusDownItem)
+
+        splitMenuItem.submenu = splitMenu
+        mainMenu.addItem(splitMenuItem)
+
+        // Window menu
+        let windowMenuItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.miniaturize(_:)), keyEquivalent: "m")
+
+        let nextTabItem = NSMenuItem(title: "Next Tab", action: #selector(nextTab), keyEquivalent: "}")
+        nextTabItem.keyEquivalentModifierMask = [.command, .shift]
+        windowMenu.addItem(nextTabItem)
+
+        let prevTabItem = NSMenuItem(title: "Previous Tab", action: #selector(prevTab), keyEquivalent: "{")
+        prevTabItem.keyEquivalentModifierMask = [.command, .shift]
+        windowMenu.addItem(prevTabItem)
+
+        windowMenuItem.submenu = windowMenu
+        mainMenu.addItem(windowMenuItem)
+
         NSApp.mainMenu = mainMenu
+        NSApp.windowsMenu = windowMenu
     }
 
-    // MARK: - Font size actions
+    // MARK: - Split Actions
+
+    @objc private func splitRight() {
+        activeWindowController?.activeSplitController.splitFocusedPane(direction: .vertical)
+    }
+
+    @objc private func splitDown() {
+        activeWindowController?.activeSplitController.splitFocusedPane(direction: .horizontal)
+    }
+
+    @objc private func closePane() {
+        guard let sc = activeWindowController?.activeSplitController else { return }
+        sc.closePane(sc.focusedPaneID)
+    }
+
+    @objc private func pickLayout() {
+        // Show a simple alert with layout choices for now.
+        // In Phase 5 this becomes a proper UI (command palette).
+        guard let window = activeWindowController?.window else { return }
+        let alert = NSAlert()
+        alert.messageText = "Pick Layout"
+        alert.informativeText = "Choose a layout for this tab."
+        for layout in PredefinedLayouts.all {
+            alert.addButton(withTitle: layout.name)
+        }
+        alert.addButton(withTitle: "Cancel")
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            let index = response.rawValue - 1000 // NSAlert buttons start at 1000
+            guard index >= 0, index < PredefinedLayouts.all.count else { return }
+            let layout = PredefinedLayouts.all[index]
+            self?.activeWindowController?.activeSplitController.applyLayout(layout)
+        }
+    }
+
+    // MARK: - Focus Navigation
+
+    @objc private func focusLeft() {
+        activeWindowController?.activeSplitController.moveFocus(.left)
+    }
+    @objc private func focusRight() {
+        activeWindowController?.activeSplitController.moveFocus(.right)
+    }
+    @objc private func focusUp() {
+        activeWindowController?.activeSplitController.moveFocus(.up)
+    }
+    @objc private func focusDown() {
+        activeWindowController?.activeSplitController.moveFocus(.down)
+    }
+
+    // MARK: - Tab Actions
+
+    @objc private func newTab() {
+        activeWindowController?.newTab()
+    }
+
+    @objc private func closeTab() {
+        activeWindowController?.window?.close()
+    }
+
+    @objc private func nextTab() {
+        activeWindowController?.window?.selectNextTab(nil)
+    }
+
+    @objc private func prevTab() {
+        activeWindowController?.window?.selectPreviousTab(nil)
+    }
+
+    // MARK: - Font Actions
 
     @objc private func increaseFontSize() {
-        let currentSize = paneController.terminalView.font.pointSize
-        paneController.terminalView.font = paneController.terminalView.font.withSize(currentSize + 1)
+        guard let sc = activeWindowController?.activeSplitController else { return }
+        for pane in sc.panes.values {
+            let size = pane.terminalView.font.pointSize
+            pane.terminalView.font = pane.terminalView.font.withSize(size + 1)
+        }
     }
 
     @objc private func decreaseFontSize() {
-        let currentSize = paneController.terminalView.font.pointSize
-        if currentSize > 8 {
-            paneController.terminalView.font = paneController.terminalView.font.withSize(currentSize - 1)
+        guard let sc = activeWindowController?.activeSplitController else { return }
+        for pane in sc.panes.values {
+            let size = pane.terminalView.font.pointSize
+            if size > 8 {
+                pane.terminalView.font = pane.terminalView.font.withSize(size - 1)
+            }
         }
     }
 
     @objc private func resetFontSize() {
+        guard let sc = activeWindowController?.activeSplitController else { return }
         let defaultSize = CGFloat(config.appearance.fontSize)
-        paneController.terminalView.font = paneController.terminalView.font.withSize(defaultSize)
+        for pane in sc.panes.values {
+            pane.terminalView.font = pane.terminalView.font.withSize(defaultSize)
+        }
     }
 }

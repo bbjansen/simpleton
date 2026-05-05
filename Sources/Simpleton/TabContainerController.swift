@@ -31,6 +31,12 @@ final class TabContainerController: NSViewController {
             self?.createPane(id: paneID) ?? PaneController(id: paneID, frame: .zero, connectionType: .local(shell: "/bin/zsh", workingDirectory: NSHomeDirectory()))
         }
 
+        // Observe pane close requests
+        NotificationCenter.default.addObserver(forName: .simpletonPaneCloseRequested, object: nil, queue: .main) { [weak self] notification in
+            guard let paneID = notification.object as? PaneID else { return }
+            self?.splitController.closePane(paneID)
+        }
+
         // Start the initial shell
         let env = buildEnvironment()
         initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
