@@ -11,6 +11,12 @@ final class TabContainerController: NSViewController {
     private let theme: Theme
     private var closeObserver: NSObjectProtocol?
 
+    /// Reference to the bookmark store for frecency updates.
+    var bookmarkStore: BookmarkStore?
+
+    /// SSH config watcher reference.
+    var sshConfigWatcher: SSHConfigWatcher?
+
     init(config: AppConfig, theme: Theme) {
         self.config = config
         self.theme = theme
@@ -100,5 +106,50 @@ final class TabContainerController: NSViewController {
         env["TERM"] = config.general.termVariable
         env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
         return env.map { "\($0.key)=\($0.value)" }
+    }
+
+    // MARK: - SSH Connections
+
+    /// Open an SSH connection in a new split pane or the current pane.
+    func openSSHConnection(bookmark: Bookmark, inNewSplit direction: SplitDirection? = nil) {
+        if let direction = direction {
+            // Temporarily override the pane factory to create an SSH pane
+            let previousFactory = splitController.paneFactory
+            splitController.paneFactory = { [weak self] paneID in
+                guard let self = self else {
+                    return PaneController(id: paneID, frame: .zero, connectionType: .ssh(bookmarkID: bookmark.id))
+                }
+                return self.createSSHPane(id: paneID, bookmark: bookmark)
+            }
+            splitController.splitFocusedPane(direction: direction)
+            // Restore original factory
+            splitController.paneFactory = previousFactory
+        } else {
+            // Open in current focused pane — start SSH in existing pane
+            if let pane = splitController.panes[splitController.focusedPaneID] {
+                pane.startSSH(bookmark: bookmark, config: config)
+            }
+        }
+
+        // Record frecency
+        Task {
+            await bookmarkStore?.recordUse(bookmarkId: bookmark.id)
+        }
+    }
+
+    private func createSSHPane(id: PaneID, bookmark: Bookmark) -> PaneController {
+        let pane = PaneController(
+            id: id,
+            frame: NSRect(x: 0, y: 0, width: 400, height: 300),
+            connectionType: .ssh(bookmarkID: bookmark.id)
+        )
+        ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
+        pane.startSSH(bookmark: bookmark, config: config)
+
+        pane.onTitleChange = { [weak self] title in
+            self?.view.window?.tab.title = title
+        }
+
+        return pane
     }
 }
