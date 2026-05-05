@@ -34,8 +34,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let wc = WindowController(config: config, theme: theme)
         windowControllers.append(wc)
         wc.window?.center()
+        wc.window?.makeKeyAndOrderFront(nil)
         wc.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        // Focus the terminal in the new window
+        if let tabContainer = wc.window?.contentViewController as? TabContainerController {
+            wc.window?.makeFirstResponder(
+                tabContainer.splitController.panes[tabContainer.splitController.focusedPaneID]?.terminalView
+            )
+        }
     }
 
     @objc private func windowClosed(_ notification: Notification) {
@@ -197,9 +205,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func pickLayout() {
-        // Show a simple alert with layout choices for now.
-        // In Phase 5 this becomes a proper UI (command palette).
-        guard let window = activeWindowController?.window else { return }
+        guard let window = NSApp.keyWindow else { return }
         let alert = NSAlert()
         alert.messageText = "Pick Layout"
         alert.informativeText = "Choose a layout for this tab."
@@ -209,7 +215,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "Cancel")
 
         alert.beginSheetModal(for: window) { [weak self] response in
-            let index = response.rawValue - 1000 // NSAlert buttons start at 1000
+            let index = Int(response.rawValue) - Int(NSApplication.ModalResponse.alertFirstButtonReturn.rawValue)
             guard index >= 0, index < PredefinedLayouts.all.count else { return }
             let layout = PredefinedLayouts.all[index]
             self?.activeSplitController?.applyLayout(layout)
@@ -234,19 +240,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Tab Actions
 
     @objc private func newTab() {
-        activeWindowController?.newTab()
+        // Find the WindowController that owns the key window (or its tab group)
+        guard let keyWindow = NSApp.keyWindow else { return }
+        if let wc = windowControllers.first(where: { $0.window === keyWindow || $0.window?.tabbedWindows?.contains(keyWindow) == true }) {
+            wc.newTab()
+        } else {
+            activeWindowController?.newTab()
+        }
     }
 
     @objc private func closeTab() {
-        activeWindowController?.window?.close()
+        NSApp.keyWindow?.close()
     }
 
     @objc private func nextTab() {
-        activeWindowController?.window?.selectNextTab(nil)
+        NSApp.keyWindow?.selectNextTab(nil)
     }
 
     @objc private func prevTab() {
-        activeWindowController?.window?.selectPreviousTab(nil)
+        NSApp.keyWindow?.selectPreviousTab(nil)
     }
 
     // MARK: - Font Actions
