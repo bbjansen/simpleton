@@ -21,7 +21,7 @@ final class QuickConnectPanel {
         dismiss()
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
             styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -31,7 +31,7 @@ final class QuickConnectPanel {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = false
-        panel.backgroundColor = NSColor(white: 0.12, alpha: 0.98)
+        panel.backgroundColor = NSColor(white: 0.11, alpha: 0.98)
         panel.hasShadow = true
         panel.becomesKeyOnlyIfNeeded = false
 
@@ -50,7 +50,7 @@ final class QuickConnectPanel {
         // Position centered on the parent window
         if let window = window {
             let windowFrame = window.frame
-            let x = windowFrame.midX - 250
+            let x = windowFrame.midX - 260
             let y = windowFrame.midY + 50
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         } else {
@@ -81,38 +81,43 @@ struct QuickConnectContentView: View {
     @State private var query = ""
     @State private var results: [Bookmark] = []
     @State private var selectedIndex = 0
+    @State private var isAppeared = false
 
     var body: some View {
         VStack(spacing: 0) {
             // Search field
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Quick connect...", text: $query)
-                    .textFieldStyle(.plain)
+                    .foregroundColor(Color.white.opacity(0.35))
+                    .font(.system(size: 13, weight: .medium))
+                AutoFocusTextField(text: $query, placeholder: "Quick connect...", onSubmit: selectCurrent)
                     .font(.system(size: 16))
-                    .onSubmit { selectCurrent() }
                     .onChange(of: query) { _ in search() }
 
-                Text("⌘K")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
+                Text("\u{2318}K")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color.white.opacity(0.3))
                     .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 3)
                     .background(Color.white.opacity(0.08))
-                    .cornerRadius(4)
+                    .cornerRadius(5)
             }
-            .padding(14)
-            .background(Color.white.opacity(0.05))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(Color.white.opacity(0.04))
 
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(Color.white.opacity(0.08))
 
             // Results
             if results.isEmpty && !query.isEmpty {
-                VStack {
+                VStack(spacing: 8) {
                     Spacer()
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 22))
+                        .foregroundColor(Color.white.opacity(0.12))
                     Text("No connections found")
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13))
+                        .foregroundColor(Color.white.opacity(0.35))
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
@@ -134,24 +139,46 @@ struct QuickConnectContentView: View {
             }
 
             // Footer
-            Divider().background(Color.white.opacity(0.1))
-            HStack(spacing: 16) {
-                Text("↑↓ navigate")
-                Text("↵ connect")
-                Text("esc close")
+            Divider().background(Color.white.opacity(0.08))
+            HStack(spacing: 20) {
+                footerHint(keys: "\u{2191}\u{2193}", label: "navigate")
+                footerHint(keys: "\u{21A9}", label: "connect")
+                footerHint(keys: "esc", label: "close")
             }
-            .font(.system(size: 10))
-            .foregroundColor(Color.white.opacity(0.3))
-            .padding(8)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
         }
-        .frame(width: 500, height: 400)
-        .background(Color(nsColor: NSColor(white: 0.12, alpha: 1)))
-        .onAppear { search() }
+        .frame(width: 520, height: 420)
+        .background(Color(nsColor: NSColor(white: 0.11, alpha: 1)))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .opacity(isAppeared ? 1 : 0)
+        .scaleEffect(isAppeared ? 1 : 0.97)
+        .onAppear {
+            search()
+            withAnimation(.easeOut(duration: 0.2)) {
+                isAppeared = true
+            }
+        }
         .onExitCommand { onDismiss() }
         .background(KeyEventHandler(
             onUpArrow: { moveSelection(-1) },
             onDownArrow: { moveSelection(1) }
         ))
+    }
+
+    private func footerHint(keys: String, label: String) -> some View {
+        HStack(spacing: 4) {
+            Text(keys)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.3))
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(Color.white.opacity(0.06))
+                .cornerRadius(3)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(Color.white.opacity(0.25))
+        }
     }
 
     private func search() {
@@ -185,20 +212,23 @@ struct QuickConnectRow: View {
     let bookmark: Bookmark
     let isSelected: Bool
 
+    @State private var isHovered = false
+
     var body: some View {
-        HStack {
-            Circle()
-                .fill(bookmark.pinned ? Color.green : Color.gray)
-                .frame(width: 6, height: 6)
+        HStack(spacing: 10) {
+            Image(systemName: bookmark.pinned ? "star.fill" : "network")
+                .font(.system(size: 10))
+                .foregroundColor(bookmark.pinned ? Color.yellow.opacity(0.8) : Color.white.opacity(0.3))
+                .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(bookmark.name)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
 
                 Text(SSHManager.connectionTitle(for: bookmark))
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color.white.opacity(0.35))
             }
 
             Spacer()
@@ -207,20 +237,78 @@ struct QuickConnectRow: View {
                 HStack(spacing: 4) {
                     ForEach(bookmark.tags.prefix(2), id: \.self) { tag in
                         Text(tag)
-                            .font(.system(size: 9))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
+                            .font(.system(size: 9, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
                             .background(Color.white.opacity(0.08))
-                            .cornerRadius(8)
+                            .cornerRadius(10)
                     }
                 }
-                .foregroundColor(.secondary)
+                .foregroundColor(Color.white.opacity(0.4))
             }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-        .cornerRadius(6)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? Color.white.opacity(0.06) : Color.clear))
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+// MARK: - Auto-focus TextField
+
+struct AutoFocusTextField: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.placeholderString = placeholder
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = NSFont.systemFont(ofSize: 16)
+        field.textColor = .white
+        field.delegate = context.coordinator
+        // Auto-focus after a brief delay to ensure the panel is key
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            field.window?.makeFirstResponder(field)
+        }
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        let parent: AutoFocusTextField
+        init(_ parent: AutoFocusTextField) { self.parent = parent }
+        func controlTextDidChange(_ obj: Notification) {
+            if let field = obj.object as? NSTextField {
+                parent.text = field.stringValue
+            }
+        }
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                parent.onSubmit()
+                return true
+            }
+            return false
+        }
     }
 }
 

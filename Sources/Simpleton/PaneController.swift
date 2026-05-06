@@ -187,39 +187,64 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     private func showExitBanner(exitCode: Int32) {
         removeBanner()
 
-        let banner = NSView(frame: NSRect(x: 0, y: 0, width: terminalView.bounds.width, height: 40))
+        let isCleanExit = exitCode == 0
+        let tintColor = isCleanExit
+            ? NSColor(red: 0.3, green: 0.8, blue: 0.5, alpha: 1)
+            : NSColor(red: 0.95, green: 0.35, blue: 0.35, alpha: 1)
+        let bgColor = isCleanExit
+            ? NSColor(red: 0.15, green: 0.22, blue: 0.17, alpha: 0.95)
+            : NSColor(red: 0.25, green: 0.13, blue: 0.13, alpha: 0.95)
+        let borderColor = isCleanExit
+            ? NSColor(red: 0.3, green: 0.8, blue: 0.5, alpha: 0.3)
+            : NSColor(red: 0.95, green: 0.35, blue: 0.35, alpha: 0.3)
+
+        let banner = NSView(frame: NSRect(x: 8, y: 0, width: terminalView.bounds.width - 16, height: 44))
         banner.wantsLayer = true
-        banner.layer?.backgroundColor = NSColor(white: 0.15, alpha: 0.95).cgColor
+        banner.layer?.backgroundColor = bgColor.cgColor
+        banner.layer?.cornerRadius = 8
+        banner.layer?.borderWidth = 1
+        banner.layer?.borderColor = borderColor.cgColor
         banner.autoresizingMask = [.width, .minYMargin]
 
-        let label = NSTextField(labelWithString: exitCode == 0 ? "Shell exited" : "Shell exited (code \(exitCode))")
+        let iconName = isCleanExit ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+        let icon = NSImageView(image: NSImage(systemSymbolName: iconName, accessibilityDescription: nil)!)
+        icon.contentTintColor = tintColor
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        banner.addSubview(icon)
+
+        let label = NSTextField(labelWithString: isCleanExit ? "Shell exited" : "Shell exited (code \(exitCode))")
         label.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        label.textColor = exitCode == 0 ? .secondaryLabelColor : NSColor(red: 0.95, green: 0.3, blue: 0.3, alpha: 1)
+        label.textColor = tintColor
         label.translatesAutoresizingMaskIntoConstraints = false
         banner.addSubview(label)
 
         let reopenButton = NSButton(title: "Reopen Shell", target: self, action: #selector(reopenShellClicked))
         reopenButton.bezelStyle = .inline
-        reopenButton.font = NSFont.systemFont(ofSize: 11)
+        reopenButton.font = NSFont.systemFont(ofSize: 11, weight: .medium)
         reopenButton.translatesAutoresizingMaskIntoConstraints = false
         banner.addSubview(reopenButton)
 
         let closeButton = NSButton(title: "Close Pane", target: self, action: #selector(closePaneClicked))
         closeButton.bezelStyle = .inline
-        closeButton.font = NSFont.systemFont(ofSize: 11)
+        closeButton.font = NSFont.systemFont(ofSize: 11, weight: .medium)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         banner.addSubview(closeButton)
 
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
+            icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+            icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 16),
+            icon.heightAnchor.constraint(equalToConstant: 16),
+            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
             label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-            closeButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -12),
+            closeButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
             closeButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
             reopenButton.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -8),
             reopenButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
         ])
 
-        banner.frame.origin.y = terminalView.bounds.height - 40
+        banner.frame.origin.y = terminalView.bounds.height - 52
         terminalView.addSubview(banner)
         bannerView = banner
     }
@@ -248,38 +273,59 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     private func showDisconnectedBanner(canReconnect: Bool) {
         removeBanner()
 
-        let banner = NSView(frame: NSRect(x: 0, y: 0, width: terminalView.bounds.width, height: 40))
+        let tintColor = NSColor(red: 0.95, green: 0.7, blue: 0.2, alpha: 1)
+        let bgColor = NSColor(red: 0.25, green: 0.2, blue: 0.1, alpha: 0.95)
+        let borderColor = NSColor(red: 0.95, green: 0.7, blue: 0.2, alpha: 0.25)
+
+        let banner = NSView(frame: NSRect(x: 8, y: 0, width: terminalView.bounds.width - 16, height: 44))
         banner.wantsLayer = true
-        banner.layer?.backgroundColor = NSColor(white: 0.15, alpha: 0.95).cgColor
+        banner.layer?.backgroundColor = bgColor.cgColor
+        banner.layer?.cornerRadius = 8
+        banner.layer?.borderWidth = 1
+        banner.layer?.borderColor = borderColor.cgColor
         banner.autoresizingMask = [.width, .minYMargin]
+
+        let icon = NSImageView(image: NSImage(systemSymbolName: "wifi.slash", accessibilityDescription: nil)!)
+        icon.contentTintColor = tintColor
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        banner.addSubview(icon)
 
         let label = NSTextField(labelWithString: "Disconnected")
         label.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        label.textColor = NSColor(red: 0.95, green: 0.6, blue: 0.1, alpha: 1)
+        label.textColor = tintColor
         label.translatesAutoresizingMaskIntoConstraints = false
         banner.addSubview(label)
 
         if canReconnect {
             let reconnectButton = NSButton(title: "Reconnect", target: self, action: #selector(reconnectClicked))
             reconnectButton.bezelStyle = .inline
-            reconnectButton.font = NSFont.systemFont(ofSize: 11)
+            reconnectButton.font = NSFont.systemFont(ofSize: 11, weight: .medium)
             reconnectButton.translatesAutoresizingMaskIntoConstraints = false
             banner.addSubview(reconnectButton)
 
             NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
+                icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+                icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: 16),
+                icon.heightAnchor.constraint(equalToConstant: 16),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
                 label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-                reconnectButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -12),
+                reconnectButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
                 reconnectButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
             ])
         } else {
             NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
+                icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+                icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: 16),
+                icon.heightAnchor.constraint(equalToConstant: 16),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
                 label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
             ])
         }
 
-        banner.frame.origin.y = terminalView.bounds.height - 40
+        banner.frame.origin.y = terminalView.bounds.height - 52
         terminalView.addSubview(banner)
         bannerView = banner
     }
@@ -287,31 +333,48 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     private func showReconnectingBanner(attempt: Int, delay: Double) {
         removeBanner()
 
-        let banner = NSView(frame: NSRect(x: 0, y: 0, width: terminalView.bounds.width, height: 40))
+        let tintColor = NSColor(red: 0.45, green: 0.65, blue: 1.0, alpha: 1)
+        let bgColor = NSColor(red: 0.12, green: 0.15, blue: 0.25, alpha: 0.95)
+        let borderColor = NSColor(red: 0.45, green: 0.65, blue: 1.0, alpha: 0.25)
+
+        let banner = NSView(frame: NSRect(x: 8, y: 0, width: terminalView.bounds.width - 16, height: 44))
         banner.wantsLayer = true
-        banner.layer?.backgroundColor = NSColor(white: 0.15, alpha: 0.95).cgColor
+        banner.layer?.backgroundColor = bgColor.cgColor
+        banner.layer?.cornerRadius = 8
+        banner.layer?.borderWidth = 1
+        banner.layer?.borderColor = borderColor.cgColor
         banner.autoresizingMask = [.width, .minYMargin]
+
+        let icon = NSImageView(image: NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil)!)
+        icon.contentTintColor = tintColor
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        banner.addSubview(icon)
 
         let label = NSTextField(labelWithString: "Reconnecting (attempt \(attempt))...")
         label.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        label.textColor = NSColor(red: 0.5, green: 0.7, blue: 1.0, alpha: 1)
+        label.textColor = tintColor
         label.translatesAutoresizingMaskIntoConstraints = false
         banner.addSubview(label)
 
         let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelReconnectClicked))
         cancelButton.bezelStyle = .inline
-        cancelButton.font = NSFont.systemFont(ofSize: 11)
+        cancelButton.font = NSFont.systemFont(ofSize: 11, weight: .medium)
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         banner.addSubview(cancelButton)
 
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
+            icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+            icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 16),
+            icon.heightAnchor.constraint(equalToConstant: 16),
+            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
             label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-            cancelButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -12),
+            cancelButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
             cancelButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
         ])
 
-        banner.frame.origin.y = terminalView.bounds.height - 40
+        banner.frame.origin.y = terminalView.bounds.height - 52
         terminalView.addSubview(banner)
         bannerView = banner
     }
@@ -319,23 +382,40 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     private func showErrorBanner(message: String) {
         removeBanner()
 
-        let banner = NSView(frame: NSRect(x: 0, y: 0, width: terminalView.bounds.width, height: 40))
+        let tintColor = NSColor(red: 0.95, green: 0.35, blue: 0.35, alpha: 1)
+        let bgColor = NSColor(red: 0.25, green: 0.13, blue: 0.13, alpha: 0.95)
+        let borderColor = NSColor(red: 0.95, green: 0.35, blue: 0.35, alpha: 0.25)
+
+        let banner = NSView(frame: NSRect(x: 8, y: 0, width: terminalView.bounds.width - 16, height: 44))
         banner.wantsLayer = true
-        banner.layer?.backgroundColor = NSColor(white: 0.15, alpha: 0.95).cgColor
+        banner.layer?.backgroundColor = bgColor.cgColor
+        banner.layer?.cornerRadius = 8
+        banner.layer?.borderWidth = 1
+        banner.layer?.borderColor = borderColor.cgColor
         banner.autoresizingMask = [.width, .minYMargin]
+
+        let icon = NSImageView(image: NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)!)
+        icon.contentTintColor = tintColor
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        banner.addSubview(icon)
 
         let label = NSTextField(labelWithString: message)
         label.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        label.textColor = NSColor(red: 0.95, green: 0.3, blue: 0.3, alpha: 1)
+        label.textColor = tintColor
         label.translatesAutoresizingMaskIntoConstraints = false
         banner.addSubview(label)
 
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
+            icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+            icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 16),
+            icon.heightAnchor.constraint(equalToConstant: 16),
+            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
             label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
         ])
 
-        banner.frame.origin.y = terminalView.bounds.height - 40
+        banner.frame.origin.y = terminalView.bounds.height - 52
         terminalView.addSubview(banner)
         bannerView = banner
     }
