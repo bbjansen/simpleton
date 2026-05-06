@@ -1,5 +1,6 @@
 // Sources/Simpleton/AppDelegate.swift
 import AppKit
+import SwiftUI
 import SwiftTerm
 import SimpletonCore
 
@@ -9,11 +10,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var config: AppConfig = AppConfig()
     private var theme: Theme = Theme(name: "default-dark")
     private var sshConfigWatcher: SSHConfigWatcher?
+    private var bookmarkStore: BookmarkStore?
+    private var quickConnectPanel: QuickConnectPanel?
+    private var commandPalettePanel: CommandPalettePanel?
+    private var preferencesController: PreferencesWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
         loadConfig()
+
+        // Initialize bookmark store
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        let store = BookmarkStore(directory: simpletonDir)
+        Task { try? await store.load() }
+        bookmarkStore = store
+
+        // Initialize panels
+        quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
+        commandPalettePanel = CommandPalettePanel()
+        preferencesController = PreferencesWindowController(config: config) { [weak self] newConfig in
+            self?.config = newConfig
+            self?.saveConfig(newConfig)
+        }
 
         // Start SSH config watcher
         sshConfigWatcher = SSHConfigWatcher()
@@ -97,6 +117,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func saveConfig(_ config: AppConfig) {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        try? AtomicFileWriter.writeJSON(ConfigFile(config: config), to: simpletonDir.appendingPathComponent("config.json"))
+    }
+
     // MARK: - Menu Bar
 
     private func buildMenuBar() {
@@ -107,6 +133,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Simpleton", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Preferences...", action: #selector(showPreferences), keyEquivalent: ",")
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Simpleton", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
@@ -116,6 +144,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let fileMenu = NSMenu(title: "File")
         fileMenu.addItem(withTitle: "New Window", action: #selector(createNewWindow), keyEquivalent: "n")
         fileMenu.addItem(withTitle: "New Tab", action: #selector(newTab), keyEquivalent: "t")
+        fileMenu.addItem(.separator())
+        fileMenu.addItem(withTitle: "New Connection...", action: #selector(showNewConnection), keyEquivalent: "")
         fileMenu.addItem(.separator())
         fileMenu.addItem(withTitle: "Close Pane", action: #selector(closePane), keyEquivalent: "w")
 
@@ -132,6 +162,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Find...", action: #selector(showScrollbackSearch), keyEquivalent: "f")
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
@@ -181,6 +213,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         splitMenuItem.submenu = splitMenu
         mainMenu.addItem(splitMenuItem)
 
+        // SSH menu
+        let sshMenuItem = NSMenuItem()
+        let sshMenu = NSMenu(title: "SSH")
+
+        let quickConnectItem = NSMenuItem(title: "Quick Connect...", action: #selector(showQuickConnect), keyEquivalent: "k")
+        sshMenu.addItem(quickConnectItem)
+
+        sshMenu.addItem(withTitle: "New Connection...", action: #selector(showNewConnection), keyEquivalent: "")
+
+        let toggleSidebarItem = NSMenuItem(title: "Toggle Sidebar", action: #selector(toggleSidebar), keyEquivalent: "S")
+        toggleSidebarItem.keyEquivalentModifierMask = [.command, .shift]
+        sshMenu.addItem(toggleSidebarItem)
+
+        sshMenuItem.submenu = sshMenu
+        mainMenu.addItem(sshMenuItem)
+
         // Window menu
         let windowMenuItem = NSMenuItem()
         let windowMenu = NSMenu(title: "Window")
@@ -196,6 +244,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         windowMenuItem.submenu = windowMenu
         mainMenu.addItem(windowMenuItem)
+
+        // Help menu
+        let helpMenuItem = NSMenuItem()
+        let helpMenu = NSMenu(title: "Help")
+        let paletteItem = NSMenuItem(title: "Command Palette...", action: #selector(showCommandPalette), keyEquivalent: "P")
+        paletteItem.keyEquivalentModifierMask = [.command, .shift]
+        helpMenu.addItem(paletteItem)
+        helpMenuItem.submenu = helpMenu
+        mainMenu.addItem(helpMenuItem)
 
         NSApp.mainMenu = mainMenu
         NSApp.windowsMenu = windowMenu
@@ -302,4 +359,101 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             pane.terminalView.font = pane.terminalView.font.withSize(defaultSize)
         }
     }
+
+    // MARK: - Quick Connect
+
+    @objc private func showQuickConnect() {
+        guard let store = bookmarkStore else { return }
+        if quickConnectPanel?.isVisible == true {
+            quickConnectPanel?.dismiss()
+            return
+        }
+        quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
+        quickConnectPanel?.show(relativeTo: NSApp.keyWindow) { [weak self] bookmark in
+            self?.connectToBookmark(bookmark)
+        }
+    }
+
+    // MARK: - Command Palette
+
+    @objc private func showCommandPalette() {
+        if commandPalettePanel?.isVisible == true {
+            commandPalettePanel?.dismiss()
+            return
+        }
+        let actions = buildPaletteActions()
+        commandPalettePanel?.show(relativeTo: NSApp.keyWindow, actions: actions)
+    }
+
+    private func buildPaletteActions() -> [PaletteAction] {
+        [
+            PaletteAction(title: "Split Right", shortcut: "⌘D", category: "Window") { [weak self] in self?.splitRight() },
+            PaletteAction(title: "Split Down", shortcut: "⌘⇧D", category: "Window") { [weak self] in self?.splitDown() },
+            PaletteAction(title: "Pick Layout", shortcut: "⌘⇧L", category: "Window") { [weak self] in self?.pickLayout() },
+            PaletteAction(title: "Close Pane", shortcut: "⌘W", category: "Window") { [weak self] in self?.closePane() },
+            PaletteAction(title: "New Tab", shortcut: "⌘T", category: "Window") { [weak self] in self?.newTab() },
+            PaletteAction(title: "New Window", shortcut: "⌘N", category: "Window") { [weak self] in self?.createNewWindow() },
+            PaletteAction(title: "Toggle Sidebar", shortcut: "⌘⇧S", category: "View") { [weak self] in self?.toggleSidebar() },
+            PaletteAction(title: "Quick Connect", shortcut: "⌘K", category: "SSH") { [weak self] in self?.showQuickConnect() },
+            PaletteAction(title: "New Connection", shortcut: nil, category: "SSH") { [weak self] in self?.showNewConnection() },
+            PaletteAction(title: "Preferences", shortcut: "⌘,", category: "App") { [weak self] in self?.showPreferences() },
+            PaletteAction(title: "Increase Font Size", shortcut: "⌘+", category: "View") { [weak self] in self?.increaseFontSize() },
+            PaletteAction(title: "Decrease Font Size", shortcut: "⌘-", category: "View") { [weak self] in self?.decreaseFontSize() },
+            PaletteAction(title: "Reset Font Size", shortcut: "⌘0", category: "View") { [weak self] in self?.resetFontSize() },
+        ]
+    }
+
+    // MARK: - Preferences
+
+    @objc private func showPreferences() {
+        preferencesController?.show()
+    }
+
+    // MARK: - New Connection
+
+    @objc private func showNewConnection() {
+        guard let window = NSApp.keyWindow else { return }
+        let newBookmark = Bookmark(name: "", host: "")
+        let formView = ConnectionFormView(
+            bookmark: newBookmark,
+            isNew: true,
+            onSave: { [weak self] bookmark in
+                window.endSheet(window.sheets.last ?? window)
+                Task {
+                    try? await self?.bookmarkStore?.add(bookmark)
+                }
+            },
+            onCancel: {
+                window.endSheet(window.sheets.last ?? window)
+            }
+        )
+        let sheetWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        sheetWindow.contentView = NSHostingView(rootView: formView)
+        window.beginSheet(sheetWindow)
+    }
+
+    // MARK: - Sidebar
+
+    @objc private func toggleSidebar() {
+        NotificationCenter.default.post(name: .simpletonToggleSidebar, object: nil)
+    }
+
+    // MARK: - Scrollback Search
+
+    @objc private func showScrollbackSearch() {
+        NotificationCenter.default.post(name: .simpletonShowSearch, object: nil)
+    }
+
+    // MARK: - Connect to Bookmark
+
+    private func connectToBookmark(_ bookmark: Bookmark) {
+        guard let window = NSApp.keyWindow,
+              let tabContainer = window.contentViewController as? TabContainerController else { return }
+        tabContainer.openSSHConnection(bookmark: bookmark)
+    }
+}
+
+extension Notification.Name {
+    static let simpletonToggleSidebar = Notification.Name("simpletonToggleSidebar")
+    static let simpletonShowSearch = Notification.Name("simpletonShowSearch")
 }
