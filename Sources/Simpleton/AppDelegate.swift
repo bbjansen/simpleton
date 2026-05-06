@@ -14,20 +14,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var quickConnectPanel: QuickConnectPanel?
     private var commandPalettePanel: CommandPalettePanel?
     private var preferencesController: PreferencesWindowController?
+    private var sessionManager: SessionManager?
+    private var workspaceManager: WorkspaceManager?
+    private var isFirstLaunch = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
-        loadConfig()
+        // Check App Translocation
+        AppTranslocationCheck.checkAndWarn()
 
-        // Initialize bookmark store
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        try? FileManager.default.createDirectory(at: simpletonDir, withIntermediateDirectories: true)
+
+        // 1. Load config
+        loadConfig()
+
+        // 2. Load bookmarks
         let store = BookmarkStore(directory: simpletonDir)
         Task { try? await store.load() }
         bookmarkStore = store
 
-        // Initialize panels
+        // 3. Start SSH config watcher
+        sshConfigWatcher = SSHConfigWatcher()
+        sshConfigWatcher?.onConfigChanged = { _ in }
+        sshConfigWatcher?.start()
+
+        // 4. Initialize panels
         quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
         commandPalettePanel = CommandPalettePanel()
         preferencesController = PreferencesWindowController(config: config) { [weak self] newConfig in
@@ -35,17 +49,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.saveConfig(newConfig)
         }
 
-        // Start SSH config watcher
-        sshConfigWatcher = SSHConfigWatcher()
-        sshConfigWatcher?.onConfigChanged = { entries in
-            let concrete = entries.filter(\.isConcrete)
-            if !concrete.isEmpty {
-                // Entries available for sidebar (Phase 5 will use this)
-            }
-        }
-        sshConfigWatcher?.start()
+        // Initialize workspace manager
+        let workspacesDir = simpletonDir.appendingPathComponent("workspaces")
+        workspaceManager = WorkspaceManager(directory: workspacesDir)
 
-        createNewWindow()
+        // 5. Session restore check
+        sessionManager = SessionManager(directory: simpletonDir)
+        let shouldRestore = config.general.restorePreviousSession && sessionManager!.didCrashLastSession()
+
+        // 6. UI launch
+        if shouldRestore, let savedState = sessionManager?.loadSavedState(), !savedState.windows.isEmpty {
+            showRestorePrompt(state: savedState)
+        } else {
+            createNewWindow()
+        }
+
+        // Set up session state provider
+        sessionManager?.setStateProvider { [weak self] in
+            self?.captureSessionState() ?? SessionState()
+        }
+        sessionManager?.startPeriodicSave()
+
+        // 7. Import wizard check
+        checkFirstLaunchWizard()
+
         buildMenuBar()
 
         NotificationCenter.default.addObserver(
@@ -54,10 +81,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .simpletonWindowClosed,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(splitChanged),
+            name: .simpletonSplitChanged,
+            object: nil
+        )
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        sessionManager?.saveCurrentState()
+        sessionManager?.stopAndMarkClean()
+    }
+
+    @objc private func splitChanged() {
+        sessionManager?.saveCurrentState()
     }
 
     // MARK: - Window Management
@@ -241,6 +283,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let prevTabItem = NSMenuItem(title: "Previous Tab", action: #selector(prevTab), keyEquivalent: "{")
         prevTabItem.keyEquivalentModifierMask = [.command, .shift]
         windowMenu.addItem(prevTabItem)
+
+        windowMenu.addItem(.separator())
+        let saveWorkspaceItem = NSMenuItem(title: "Save Workspace...", action: #selector(saveWorkspace), keyEquivalent: "S")
+        saveWorkspaceItem.keyEquivalentModifierMask = [.command, .option]
+        windowMenu.addItem(saveWorkspaceItem)
+
+        // Workspace submenu
+        let workspacesItem = NSMenuItem(title: "Workspaces", action: nil, keyEquivalent: "")
+        let workspacesMenu = NSMenu(title: "Workspaces")
+        let workspaceNames = workspaceManager?.listWorkspaces() ?? []
+        if workspaceNames.isEmpty {
+            let emptyItem = NSMenuItem(title: "No saved workspaces", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            workspacesMenu.addItem(emptyItem)
+        } else {
+            for name in workspaceNames {
+                let item = NSMenuItem(title: name, action: #selector(openWorkspace(_:)), keyEquivalent: "")
+                item.representedObject = name
+                workspacesMenu.addItem(item)
+            }
+        }
+        workspacesItem.submenu = workspacesMenu
+        windowMenu.addItem(workspacesItem)
 
         windowMenuItem.submenu = windowMenu
         mainMenu.addItem(windowMenuItem)
@@ -451,9 +516,166 @@ class AppDelegate: NSObject, NSApplicationDelegate {
               let tabContainer = window.contentViewController as? TabContainerController else { return }
         tabContainer.openSSHConnection(bookmark: bookmark)
     }
+
+    // MARK: - Session
+
+    private func captureSessionState() -> SessionState {
+        let windowStates = windowControllers.compactMap { wc -> WindowState? in
+            guard let window = wc.window else { return nil }
+            let frame = WindowFrame(
+                x: Double(window.frame.origin.x),
+                y: Double(window.frame.origin.y),
+                width: Double(window.frame.width),
+                height: Double(window.frame.height)
+            )
+            // Capture tab state from the window's content view controller
+            guard let tabContainer = window.contentViewController as? TabContainerController else { return nil }
+            let splitTree = captureTree(from: tabContainer.splitController)
+            let tab = TabState(title: window.title, splitTree: splitTree)
+            return WindowState(frame: frame, tabs: [tab])
+        }
+        return SessionState(cleanShutdown: false, savedAt: Date(), windows: windowStates)
+    }
+
+    private func captureTree(from splitController: SplitController) -> SessionSplitNode {
+        captureNode(splitController.tree, panes: splitController.panes)
+    }
+
+    private func captureNode(_ node: SplitNode, panes: [PaneID: PaneController]) -> SessionSplitNode {
+        switch node {
+        case .pane(let id):
+            let connection: PaneConnection
+            if let pane = panes[id] {
+                switch pane.connectionType {
+                case .local(_, let dir):
+                    connection = .local(workingDirectory: dir)
+                case .ssh(let bookmarkID):
+                    connection = .ssh(bookmarkId: bookmarkID)
+                }
+            } else {
+                connection = .local(workingDirectory: NSHomeDirectory())
+            }
+            return .pane(paneConn: connection)
+        case .split(let dir, let children, let ratios):
+            let childNodes = children.map { captureNode($0, panes: panes) }
+            return .split(direction: dir, children: childNodes, ratios: ratios)
+        }
+    }
+
+    private func showRestorePrompt(state: SessionState) {
+        let alert = NSAlert()
+        alert.messageText = "Restore previous session?"
+        alert.informativeText = "Simpleton didn't shut down cleanly. Would you like to restore your previous windows and tabs?"
+        alert.addButton(withTitle: "Restore")
+        alert.addButton(withTitle: "Start Fresh")
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            // Restore session — for now, just create default window
+            // Full restore (recreating splits from state) is a future enhancement
+            createNewWindow()
+        } else {
+            sessionManager?.clearSavedState()
+            createNewWindow()
+        }
+    }
+
+    // MARK: - Import Wizard
+
+    private func checkFirstLaunchWizard() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        let wizardDoneFile = simpletonDir.appendingPathComponent(".wizard-done")
+
+        guard !FileManager.default.fileExists(atPath: wizardDoneFile.path) else { return }
+
+        let entries = sshConfigWatcher?.concreteEntries ?? []
+        guard !entries.isEmpty else {
+            // No SSH config — mark wizard as done, skip
+            FileManager.default.createFile(atPath: wizardDoneFile.path, contents: nil)
+            return
+        }
+
+        // Show wizard as sheet on the key window
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.showImportWizard(entries: entries)
+            FileManager.default.createFile(atPath: wizardDoneFile.path, contents: nil)
+        }
+    }
+
+    private func showImportWizard(entries: [SSHConfigEntry]) {
+        guard let window = NSApp.keyWindow else { return }
+
+        let wizardView = ImportWizardView(
+            entries: entries,
+            onComplete: { [weak self] bookmarks, groups in
+                window.endSheet(window.sheets.last ?? window)
+                Task {
+                    for bookmark in bookmarks {
+                        try? await self?.bookmarkStore?.add(bookmark)
+                    }
+                }
+            },
+            onSkip: {
+                window.endSheet(window.sheets.last ?? window)
+            }
+        )
+
+        let sheetWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 550, height: 500),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        sheetWindow.contentView = NSHostingView(rootView: wizardView)
+        window.beginSheet(sheetWindow)
+    }
+
+    // MARK: - Workspaces
+
+    @objc private func saveWorkspace() {
+        guard let window = NSApp.keyWindow else { return }
+        let alert = NSAlert()
+        alert.messageText = "Save Workspace"
+        alert.informativeText = "Enter a name for this workspace:"
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
+        input.placeholderString = "Workspace name"
+        alert.accessoryView = input
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn, !input.stringValue.isEmpty else { return }
+            let name = input.stringValue
+
+            guard let self = self,
+                  let tabContainer = window.contentViewController as? TabContainerController else { return }
+
+            let frame = WindowFrame(
+                x: Double(window.frame.origin.x),
+                y: Double(window.frame.origin.y),
+                width: Double(window.frame.width),
+                height: Double(window.frame.height)
+            )
+            let splitTree = self.captureTree(from: tabContainer.splitController)
+            let tab = TabState(title: window.title, splitTree: splitTree)
+            let windowState = WindowState(frame: frame, tabs: [tab])
+            let workspace = Workspace(name: name, window: windowState)
+            try? self.workspaceManager?.save(workspace: workspace)
+        }
+    }
+
+    @objc private func openWorkspace(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+        guard let _ = workspaceManager?.load(name: name) else { return }
+
+        // For now, just create a new window (full workspace restore is future enhancement)
+        createNewWindow()
+    }
 }
 
 extension Notification.Name {
     static let simpletonToggleSidebar = Notification.Name("simpletonToggleSidebar")
     static let simpletonShowSearch = Notification.Name("simpletonShowSearch")
+    static let simpletonSplitChanged = Notification.Name("simpletonSplitChanged")
 }

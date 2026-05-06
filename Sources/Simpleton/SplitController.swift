@@ -60,6 +60,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
 
         // Focus the new pane
         setFocus(to: newPaneID)
+        NotificationCenter.default.post(name: .simpletonSplitChanged, object: nil)
     }
 
     /// Close a specific pane. If it's the last pane, calls onPaneClose.
@@ -84,6 +85,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         tree = newTree
         reconcile()
         setFocus(to: focusedPaneID)
+        NotificationCenter.default.post(name: .simpletonSplitChanged, object: nil)
     }
 
     /// Navigate focus in a direction.
@@ -114,6 +116,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         tree = newTree
         reconcile()
         setFocus(to: focusedPaneID)
+        NotificationCenter.default.post(name: .simpletonSplitChanged, object: nil)
     }
 
     // MARK: - Focus
