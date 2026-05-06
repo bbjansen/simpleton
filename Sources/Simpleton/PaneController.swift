@@ -25,6 +25,9 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Callback when the process exits.
     var onProcessExit: ((PaneController, Int32?) -> Void)?
 
+    /// Callback when this pane gains focus (user clicks it).
+    var onFocused: ((PaneController) -> Void)?
+
     /// Stored environment for shell restarts.
     var shellEnvironment: [String]?
 
@@ -35,6 +38,8 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     private var reconnectTimer: Timer?
     private var searchBar: ScrollbackSearchBar?
 
+    private var mouseMonitor: Any?
+
     init(id: PaneID = UUID(), frame: NSRect, connectionType: ConnectionType) {
         self.id = id
         self.connectionType = connectionType
@@ -42,10 +47,23 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         super.init()
         self.terminalView.processDelegate = self
         self.terminalView.autoresizingMask = [.width, .height]
+
+        // Track when user clicks this terminal pane to update focus
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self = self else { return event }
+            let locationInView = self.terminalView.convert(event.locationInWindow, from: nil)
+            if self.terminalView.bounds.contains(locationInView) && event.window === self.terminalView.window {
+                self.onFocused?(self)
+            }
+            return event
+        }
     }
 
     deinit {
         reconnectTimer?.invalidate()
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 
     /// Start a local shell process.

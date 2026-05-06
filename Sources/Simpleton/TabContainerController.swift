@@ -81,6 +81,11 @@ final class TabContainerController: NSViewController {
             pane.showSearch()
         }
 
+        // Track clicks to update focused pane
+        initialPane.onFocused = { [weak self] focusedPane in
+            self?.splitController.setFocus(to: focusedPane.id)
+        }
+
         // Start the initial shell
         let env = buildEnvironment()
         initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
@@ -207,6 +212,11 @@ final class TabContainerController: NSViewController {
             self?.view.window?.tab.title = title
         }
 
+        // Track clicks to update focused pane in split controller
+        pane.onFocused = { [weak self] focusedPane in
+            self?.splitController.setFocus(to: focusedPane.id)
+        }
+
         return pane
     }
 
@@ -240,6 +250,12 @@ final class TabContainerController: NSViewController {
             }
         }
 
+        // Refocus the terminal pane so user can type immediately after sidebar click
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.splitController.setFocus(to: self.splitController.focusedPaneID)
+        }
+
         // Record frecency
         Task {
             await bookmarkStore?.recordUse(bookmarkId: bookmark.id)
@@ -257,6 +273,10 @@ final class TabContainerController: NSViewController {
 
         pane.onTitleChange = { [weak self] title in
             self?.view.window?.tab.title = title
+        }
+
+        pane.onFocused = { [weak self] focusedPane in
+            self?.splitController.setFocus(to: focusedPane.id)
         }
 
         return pane
