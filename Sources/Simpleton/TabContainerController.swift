@@ -144,15 +144,21 @@ final class TabContainerController: NSViewController {
         guard let outer = outerSplitView else { return }
 
         if isSidebarVisible {
-            // Hide sidebar
-            sidebarHostController?.view.removeFromSuperview()
+            // Hide sidebar — remove as child view controller and from split view
+            if let host = sidebarHostController {
+                host.view.removeFromSuperview()
+                host.removeFromParent()
+            }
             isSidebarVisible = false
         } else {
             // Show sidebar
             setupSidebar()
-            guard let sidebarView = sidebarHostController?.view else { return }
-            sidebarView.frame = NSRect(x: 0, y: 0, width: 240, height: outer.bounds.height)
-            outer.insertArrangedSubview(sidebarView, at: 0)
+            guard let host = sidebarHostController else { return }
+            // Add as child view controller so the NSHostingView participates
+            // in the responder chain and receives mouse events correctly.
+            addChild(host)
+            host.view.frame = NSRect(x: 0, y: 0, width: 240, height: outer.bounds.height)
+            outer.insertArrangedSubview(host.view, at: 0)
             outer.setPosition(240, ofDividerAt: 0)
             isSidebarVisible = true
         }

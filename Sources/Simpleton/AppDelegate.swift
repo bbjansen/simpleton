@@ -87,6 +87,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .simpletonSplitChanged,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleShowNewConnection(_:)),
+            name: .simpletonShowNewConnection,
+            object: nil
+        )
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -435,9 +441,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             quickConnectPanel?.dismiss()
             return
         }
+        // Capture the terminal window BEFORE showing the panel, because the panel
+        // becomes key and NSApp.keyWindow would then point to the panel itself.
+        let parentWindow = NSApp.keyWindow
         quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
-        quickConnectPanel?.show(relativeTo: NSApp.keyWindow) { [weak self] bookmark in
-            self?.connectToBookmark(bookmark)
+        quickConnectPanel?.show(relativeTo: parentWindow) { [weak self] bookmark in
+            self?.connectToBookmark(bookmark, in: parentWindow)
         }
     }
 
@@ -479,7 +488,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - New Connection
 
     @objc private func showNewConnection() {
-        guard let window = NSApp.keyWindow else { return }
+        showNewConnectionSheet(on: NSApp.keyWindow)
+    }
+
+    @objc private func handleShowNewConnection(_ notification: Notification) {
+        // The notification may carry the originating window as its object
+        let window = (notification.object as? NSWindow) ?? NSApp.keyWindow
+        showNewConnectionSheet(on: window)
+    }
+
+    private func showNewConnectionSheet(on window: NSWindow?) {
+        guard let window = window else { return }
         let newBookmark = Bookmark(name: "", host: "")
         let formView = ConnectionFormView(
             bookmark: newBookmark,
@@ -513,8 +532,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Connect to Bookmark
 
-    private func connectToBookmark(_ bookmark: Bookmark) {
-        guard let window = NSApp.keyWindow,
+    private func connectToBookmark(_ bookmark: Bookmark, in targetWindow: NSWindow? = nil) {
+        // Use the provided window, falling back to the key window. Skip windows
+        // that aren't terminal windows (e.g. floating panels).
+        let candidates = [targetWindow, NSApp.keyWindow].compactMap { $0 }
+        guard let window = candidates.first(where: { $0.contentViewController is TabContainerController }),
               let tabContainer = window.contentViewController as? TabContainerController else { return }
         tabContainer.openSSHConnection(bookmark: bookmark)
     }
