@@ -24,7 +24,7 @@ struct SidebarView: View {
             // Search
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(Color.white.opacity(0.35))
+                    .foregroundColor(DT.textMuted)
                     .font(.system(size: 11, weight: .medium))
                 TextField("Search connections...", text: $searchQuery)
                     .textFieldStyle(.plain)
@@ -32,7 +32,7 @@ struct SidebarView: View {
                 if !searchQuery.isEmpty {
                     Button(action: { searchQuery = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color.white.opacity(0.3))
+                            .foregroundColor(DT.textFaint)
                             .font(.system(size: 10))
                     }
                     .buttonStyle(.plain)
@@ -40,12 +40,18 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(8)
+            .background(DT.elevated)
+            .overlay(
+                RoundedRectangle(cornerRadius: DT.radiusCard)
+                    .stroke(DT.border, lineWidth: 1)
+            )
+            .cornerRadius(DT.radiusCard)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
 
-            Divider().background(Color.white.opacity(0.08))
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
 
             if !searchQuery.isEmpty {
                 searchResults
@@ -55,28 +61,41 @@ struct SidebarView: View {
                 normalSidebar
             }
 
-            Divider().background(Color.white.opacity(0.08))
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
 
-            // Add connection button
+            // Add connection button — ghost style
             Button(action: onNewConnection) {
                 HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: "plus.circle")
                         .font(.system(size: 13))
                     Text("Add Connection")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(.accentColor)
+                .foregroundColor(DT.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(Color.accentColor.opacity(0.1))
-                .cornerRadius(8)
+                .background(Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DT.radiusCard)
+                        .stroke(DT.border, lineWidth: 1)
+                )
+                .cornerRadius(DT.radiusCard)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GhostButtonStyle())
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
         .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
-        .background(Color(nsColor: NSColor(white: 0.1, alpha: 1)))
+        .background(
+            LinearGradient(
+                colors: [DT.base, DT.surface],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
         .onAppear { refresh() }
     }
 
@@ -89,13 +108,13 @@ struct SidebarView: View {
             Spacer()
             Image(systemName: "network.slash")
                 .font(.system(size: 28))
-                .foregroundColor(Color.white.opacity(0.15))
+                .foregroundColor(DT.textFaint)
             Text("No connections yet")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(Color.white.opacity(0.4))
+                .foregroundColor(DT.textMuted)
             Text("Add one or import from\n~/.ssh/config")
                 .font(.system(size: 11))
-                .foregroundColor(Color.white.opacity(0.25))
+                .foregroundColor(DT.textFaint)
                 .multilineTextAlignment(.center)
             Spacer()
         }
@@ -129,8 +148,9 @@ struct SidebarView: View {
             let unimported = sshConfigEntries.filter { !importedHosts.contains($0.hostAlias) }
             if !unimported.isEmpty {
                 if !pinned.isEmpty || !recent.isEmpty {
-                    Divider()
-                        .background(Color.white.opacity(0.06))
+                    Rectangle()
+                        .fill(DT.border.opacity(0.3))
+                        .frame(height: 0.5)
                         .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 }
                 Section {
@@ -155,6 +175,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
     }
 
     private var searchResults: some View {
@@ -174,6 +195,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
     }
 
     private func connectSSHConfigEntry(_ entry: SSHConfigEntry) {
@@ -190,6 +212,25 @@ struct SidebarView: View {
     }
 }
 
+// MARK: - Ghost Button Style
+
+struct GhostButtonStyle: ButtonStyle {
+    @State private var isHovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: DT.radiusCard)
+                    .fill(isHovered ? DT.hover : Color.clear)
+            )
+            .onHover { hovering in
+                withAnimation(DT.hoverAnimation) {
+                    isHovered = hovering
+                }
+            }
+    }
+}
+
 // MARK: - Section Header
 
 struct SidebarSectionHeader: View {
@@ -197,9 +238,9 @@ struct SidebarSectionHeader: View {
 
     var body: some View {
         Text(title.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .tracking(1.2)
-            .foregroundColor(Color.white.opacity(0.3))
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(1.5)
+            .foregroundColor(DT.textMuted)
             .padding(.bottom, 2)
     }
 }
@@ -215,32 +256,37 @@ struct SidebarRow: View {
     var body: some View {
         Button(action: { onConnect(bookmark) }) {
             HStack(spacing: 8) {
+                // Connection status dot
+                Circle()
+                    .fill(DT.textFaint)
+                    .frame(width: 6, height: 6)
+
                 Image(systemName: bookmark.pinned ? "star.fill" : "network")
                     .font(.system(size: 10))
-                    .foregroundColor(bookmark.pinned ? Color.yellow.opacity(0.8) : Color.white.opacity(0.35))
+                    .foregroundColor(bookmark.pinned ? Color.yellow.opacity(0.8) : DT.textMuted)
                     .frame(width: 16)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(bookmark.name)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(isHovered ? .white : Color.white.opacity(0.85))
+                        .foregroundColor(isHovered ? DT.textPrimary : DT.textSecondary)
                         .lineLimit(1)
                     Text(bookmark.host)
                         .font(.system(size: 10))
-                        .foregroundColor(Color.white.opacity(0.35))
+                        .foregroundColor(DT.textMuted)
                         .lineLimit(1)
                 }
                 Spacer()
             }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.white.opacity(0.08) : Color.clear)
+                RoundedRectangle(cornerRadius: DT.radiusButton)
+                    .fill(isHovered ? DT.hover : Color.clear)
             )
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(DT.hoverAnimation) {
                 isHovered = hovering
             }
         }
@@ -258,39 +304,45 @@ struct SSHConfigRow: View {
     var body: some View {
         Button(action: { onConnect(entry) }) {
             HStack(spacing: 8) {
+                Circle()
+                    .fill(DT.textFaint)
+                    .frame(width: 6, height: 6)
+
                 Image(systemName: "doc.text")
                     .font(.system(size: 10))
-                    .foregroundColor(Color.blue.opacity(0.6))
+                    .foregroundColor(DT.accentBlue.opacity(0.7))
                     .frame(width: 16)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.hostAlias)
                         .font(.system(size: 12))
-                        .foregroundColor(isHovered ? .white : Color.white.opacity(0.75))
+                        .foregroundColor(isHovered ? DT.textPrimary : DT.textSecondary)
                         .lineLimit(1)
                     Text(entry.hostname ?? entry.hostAlias)
                         .font(.system(size: 10))
-                        .foregroundColor(Color.white.opacity(0.3))
+                        .foregroundColor(DT.textMuted)
                         .lineLimit(1)
                 }
                 Spacer()
-                Text("ssh")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.blue.opacity(0.5))
+
+                // "imported" badge
+                Text("imported")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(DT.textFaint)
                     .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(4)
+                    .padding(.vertical, 2)
+                    .background(DT.textFaint.opacity(0.15))
+                    .cornerRadius(DT.radiusPill)
             }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.white.opacity(0.08) : Color.clear)
+                RoundedRectangle(cornerRadius: DT.radiusButton)
+                    .fill(isHovered ? DT.hover : Color.clear)
             )
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(DT.hoverAnimation) {
                 isHovered = hovering
             }
         }
