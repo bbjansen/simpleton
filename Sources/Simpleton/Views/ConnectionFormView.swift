@@ -23,17 +23,19 @@ struct ConnectionFormView: View {
                         .font(.system(size: 16, weight: .semibold))
                     Text(isNew ? "Configure a new SSH connection" : "Modify connection settings")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DT.textTertiary)
                 }
                 Spacer()
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
 
-            Divider()
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
 
             Form {
-                Section("Connection") {
+                Section {
                     TextField("Name", text: $bookmark.name)
                     TextField("Host", text: $bookmark.host)
                     Stepper("Port: \(bookmark.port)", value: $bookmark.port, in: 1...65535)
@@ -41,9 +43,11 @@ struct ConnectionFormView: View {
                         get: { bookmark.user ?? "" },
                         set: { bookmark.user = $0.isEmpty ? nil : $0 }
                     ))
+                } header: {
+                    FormSectionHeader(title: "Connection")
                 }
 
-                Section("Authentication") {
+                Section {
                     Picker("Method", selection: Binding(
                         get: { authMethodTag },
                         set: { setAuthMethod($0) }
@@ -64,11 +68,21 @@ struct ConnectionFormView: View {
                     if case .password = bookmark.auth {
                         SecureField("Password (stored in Keychain)", text: $password)
                     }
+                } header: {
+                    FormSectionHeader(title: "Authentication")
                 }
 
-                Section("Jump Hosts") {
+                Section {
                     ForEach(Array(bookmark.jumpHosts.enumerated()), id: \.offset) { index, host in
-                        HStack {
+                        HStack(spacing: 8) {
+                            // Numbered circle showing chain order
+                            Text("\(index + 1)")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(DT.textTertiary)
+                                .frame(width: 20, height: 20)
+                                .background(DT.elevated)
+                                .clipShape(Circle())
+
                             TextField("Jump host \(index + 1)", text: Binding(
                                 get: { host },
                                 set: { bookmark.jumpHosts[index] = $0 }
@@ -84,14 +98,16 @@ struct ConnectionFormView: View {
                         Label("Add jump host", systemImage: "plus")
                             .foregroundColor(.accentColor)
                     }
+                } header: {
+                    FormSectionHeader(title: "Jump Hosts")
                 }
 
-                Section("Port Forwards") {
+                Section {
                     ForEach(Array(bookmark.portForwards.enumerated()), id: \.offset) { index, pf in
                         HStack {
                             Text(pf.direction == .local ? "L" : "R")
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(pf.direction == .local ? .blue : .orange)
+                                .foregroundColor(pf.direction == .local ? DT.accentBlue : .orange)
                                 .frame(width: 16)
                             Text("\(pf.localPort):\(pf.remoteHost):\(pf.remotePort)")
                                 .font(.system(size: 12, design: .monospaced))
@@ -104,9 +120,11 @@ struct ConnectionFormView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                } header: {
+                    FormSectionHeader(title: "Port Forwards")
                 }
 
-                Section("Organization") {
+                Section {
                     TextField("Tags (comma-separated)", text: Binding(
                         get: { bookmark.tags.joined(separator: ", ") },
                         set: { bookmark.tags = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } }
@@ -114,24 +132,28 @@ struct ConnectionFormView: View {
                     Toggle("Pinned", isOn: $bookmark.pinned)
                     TextField("Notes", text: $bookmark.notes, axis: .vertical)
                         .lineLimit(3)
+                } header: {
+                    FormSectionHeader(title: "Organization")
                 }
 
                 if let error = validationError {
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
+                            .foregroundColor(DT.accentRed)
                             .font(.system(size: 11))
                         Text(error)
-                            .foregroundColor(.red)
-                            .font(.caption)
+                            .foregroundColor(DT.accentRed)
+                            .font(.system(size: 11))
                     }
                 }
             }
             .formStyle(.grouped)
 
-            Divider()
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
 
-            // Footer buttons
+            // Footer buttons — Save filled, Cancel ghost
             HStack(spacing: 12) {
                 Button("Cancel") { onCancel() }
                     .keyboardShortcut(.cancelAction)
@@ -146,6 +168,7 @@ struct ConnectionFormView: View {
             .padding(.vertical, 14)
         }
         .frame(width: 480, height: 600)
+        .background(DT.base)
     }
 
     private var authMethodTag: String {
@@ -185,5 +208,18 @@ struct ConnectionFormView: View {
         bookmark.jumpHosts = bookmark.jumpHosts.filter { !$0.isEmpty }
         validationError = nil
         onSave(bookmark)
+    }
+}
+
+// MARK: - Form Section Header
+
+struct FormSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(1.2)
+            .foregroundColor(DT.textTertiary)
     }
 }

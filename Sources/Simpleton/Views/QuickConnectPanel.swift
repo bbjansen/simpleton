@@ -31,9 +31,17 @@ final class QuickConnectPanel {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = false
-        panel.backgroundColor = NSColor(white: 0.11, alpha: 0.98)
+        panel.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.078, alpha: 0.98)
         panel.hasShadow = true
         panel.becomesKeyOnlyIfNeeded = false
+
+        // Strong shadow for Spotlight/Raycast feel
+        if let shadow = NSShadow() as NSShadow? {
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
+            shadow.shadowBlurRadius = 40
+            shadow.shadowOffset = NSSize(width: 0, height: -10)
+            panel.setValue(shadow, forKey: "shadow")
+        }
 
         let contentView = QuickConnectContentView(
             bookmarkStore: bookmarkStore,
@@ -85,28 +93,29 @@ struct QuickConnectContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search field
+            // Search field — large, no border, just bottom divider
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(Color.white.opacity(0.35))
-                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(DT.textMuted)
+                    .font(.system(size: 15, weight: .medium))
                 AutoFocusTextField(text: $query, placeholder: "Quick connect...", onSubmit: selectCurrent)
-                    .font(.system(size: 16))
+                    .font(.system(size: 18))
                     .onChange(of: query) { _ in search() }
 
                 Text("\u{2318}K")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.3))
+                    .foregroundColor(DT.textTertiary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.08))
+                    .background(DT.elevated)
                     .cornerRadius(5)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color.white.opacity(0.04))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
 
-            Divider().background(Color.white.opacity(0.08))
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
 
             // Results
             if results.isEmpty && !query.isEmpty {
@@ -114,22 +123,27 @@ struct QuickConnectContentView: View {
                     Spacer()
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 22))
-                        .foregroundColor(Color.white.opacity(0.12))
+                        .foregroundColor(DT.textFaint)
                     Text("No connections found")
                         .font(.system(size: 13))
-                        .foregroundColor(Color.white.opacity(0.35))
+                        .foregroundColor(DT.textMuted)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
             } else {
                 ScrollViewReader { proxy in
-                    List(Array(results.enumerated()), id: \.element.id) { index, bookmark in
-                        QuickConnectRow(bookmark: bookmark, isSelected: index == selectedIndex)
-                            .id(bookmark.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture { onSelect(bookmark) }
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(Array(results.enumerated()), id: \.element.id) { index, bookmark in
+                                QuickConnectRow(bookmark: bookmark, isSelected: index == selectedIndex)
+                                    .id(bookmark.id)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { onSelect(bookmark) }
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
                     }
-                    .listStyle(.plain)
                     .onChange(of: selectedIndex) { newIndex in
                         if newIndex < results.count {
                             proxy.scrollTo(results[newIndex].id, anchor: .center)
@@ -139,7 +153,9 @@ struct QuickConnectContentView: View {
             }
 
             // Footer
-            Divider().background(Color.white.opacity(0.08))
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
             HStack(spacing: 20) {
                 footerHint(keys: "\u{2191}\u{2193}", label: "navigate")
                 footerHint(keys: "\u{21A9}", label: "connect")
@@ -149,8 +165,12 @@ struct QuickConnectContentView: View {
             .padding(.horizontal, 14)
         }
         .frame(width: 520, height: 420)
-        .background(Color(nsColor: NSColor(white: 0.11, alpha: 1)))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(DT.base)
+        .clipShape(RoundedRectangle(cornerRadius: DT.radiusPanel))
+        .overlay(
+            RoundedRectangle(cornerRadius: DT.radiusPanel)
+                .stroke(DT.panelBorder, lineWidth: 0.5)
+        )
         .opacity(isAppeared ? 1 : 0)
         .scaleEffect(isAppeared ? 1 : 0.97)
         .onAppear {
@@ -170,14 +190,14 @@ struct QuickConnectContentView: View {
         HStack(spacing: 4) {
             Text(keys)
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.3))
+                .foregroundColor(DT.textFaint)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
-                .background(Color.white.opacity(0.06))
+                .background(DT.elevated)
                 .cornerRadius(3)
             Text(label)
                 .font(.system(size: 10))
-                .foregroundColor(Color.white.opacity(0.25))
+                .foregroundColor(DT.textFaint)
         }
     }
 
@@ -217,18 +237,18 @@ struct QuickConnectRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: bookmark.pinned ? "star.fill" : "network")
-                .font(.system(size: 10))
-                .foregroundColor(bookmark.pinned ? Color.yellow.opacity(0.8) : Color.white.opacity(0.3))
-                .frame(width: 16)
+                .font(.system(size: 11))
+                .foregroundColor(bookmark.pinned ? Color.yellow.opacity(0.8) : DT.textMuted)
+                .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(bookmark.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(DT.textPrimary)
 
                 Text(SSHManager.connectionTitle(for: bookmark))
-                    .font(.system(size: 11))
-                    .foregroundColor(Color.white.opacity(0.35))
+                    .font(.system(size: 12))
+                    .foregroundColor(DT.textTertiary)
             }
 
             Spacer()
@@ -237,24 +257,25 @@ struct QuickConnectRow: View {
                 HStack(spacing: 4) {
                     ForEach(bookmark.tags.prefix(2), id: \.self) { tag in
                         Text(tag)
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: 8, weight: .medium))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.white.opacity(0.08))
-                            .cornerRadius(10)
+                            .foregroundColor(DT.accentIndigo.opacity(0.9))
+                            .background(DT.accentIndigo.opacity(0.15))
+                            .cornerRadius(DT.radiusPill)
                     }
                 }
-                .foregroundColor(Color.white.opacity(0.4))
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(height: 48)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? Color.white.opacity(0.06) : Color.clear))
+            RoundedRectangle(cornerRadius: DT.radiusCard)
+                .fill(isSelected ? DT.accentIndigo.opacity(0.12) : (isHovered ? DT.hover : Color.clear))
         )
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) {
+            withAnimation(DT.hoverAnimation) {
                 isHovered = hovering
             }
         }
@@ -274,7 +295,7 @@ struct AutoFocusTextField: NSViewRepresentable {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = NSFont.systemFont(ofSize: 16)
+        field.font = NSFont.systemFont(ofSize: 18, weight: .light)
         field.textColor = .white
         field.delegate = context.coordinator
         // Auto-focus after a brief delay to ensure the panel is key

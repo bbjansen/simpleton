@@ -31,9 +31,16 @@ final class CommandPalettePanel {
         panel.level = .floating
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
-        panel.backgroundColor = NSColor(white: 0.11, alpha: 0.98)
+        panel.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.078, alpha: 0.98)
         panel.hasShadow = true
         panel.becomesKeyOnlyIfNeeded = false
+
+        if let shadow = NSShadow() as NSShadow? {
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
+            shadow.shadowBlurRadius = 40
+            shadow.shadowOffset = NSSize(width: 0, height: -10)
+            panel.setValue(shadow, forKey: "shadow")
+        }
 
         let contentView = CommandPaletteContentView(
             actions: actions,
@@ -87,29 +94,35 @@ struct CommandPaletteContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search field
+            // Search field — large, no border, bottom divider only
             HStack(spacing: 10) {
                 Image(systemName: "command")
-                    .foregroundColor(Color.white.opacity(0.35))
-                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(DT.textMuted)
+                    .font(.system(size: 14, weight: .medium))
                 AutoFocusTextField(text: $query, placeholder: "Type a command...", onSubmit: selectCurrent)
-                    .font(.system(size: 16))
+                    .font(.system(size: 18))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color.white.opacity(0.04))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
 
-            Divider().background(Color.white.opacity(0.08))
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
 
             // Results
             ScrollViewReader { proxy in
-                List(Array(filtered.enumerated()), id: \.element.id) { index, action in
-                    CommandPaletteRow(action: action, isSelected: index == selectedIndex)
-                        .contentShape(Rectangle())
-                        .onTapGesture { onSelect(action) }
-                        .id(action.id)
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(Array(filtered.enumerated()), id: \.element.id) { index, action in
+                            CommandPaletteRow(action: action, isSelected: index == selectedIndex)
+                                .contentShape(Rectangle())
+                                .onTapGesture { onSelect(action) }
+                                .id(action.id)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
                 }
-                .listStyle(.plain)
                 .onChange(of: selectedIndex) { newIndex in
                     if newIndex < filtered.count {
                         proxy.scrollTo(filtered[newIndex].id, anchor: .center)
@@ -118,7 +131,9 @@ struct CommandPaletteContentView: View {
             }
 
             // Footer
-            Divider().background(Color.white.opacity(0.08))
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
             HStack(spacing: 20) {
                 footerHint(keys: "\u{2191}\u{2193}", label: "navigate")
                 footerHint(keys: "\u{21A9}", label: "select")
@@ -128,8 +143,12 @@ struct CommandPaletteContentView: View {
             .padding(.horizontal, 14)
         }
         .frame(width: 520, height: 420)
-        .background(Color(nsColor: NSColor(white: 0.11, alpha: 1)))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(DT.base)
+        .clipShape(RoundedRectangle(cornerRadius: DT.radiusPanel))
+        .overlay(
+            RoundedRectangle(cornerRadius: DT.radiusPanel)
+                .stroke(DT.panelBorder, lineWidth: 0.5)
+        )
         .opacity(isAppeared ? 1 : 0)
         .scaleEffect(isAppeared ? 1 : 0.97)
         .onAppear {
@@ -153,14 +172,14 @@ struct CommandPaletteContentView: View {
         HStack(spacing: 4) {
             Text(keys)
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.3))
+                .foregroundColor(DT.textFaint)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
-                .background(Color.white.opacity(0.06))
+                .background(DT.elevated)
                 .cornerRadius(3)
             Text(label)
                 .font(.system(size: 10))
-                .foregroundColor(Color.white.opacity(0.25))
+                .foregroundColor(DT.textFaint)
         }
     }
 
@@ -168,20 +187,6 @@ struct CommandPaletteContentView: View {
         let items = filtered
         guard selectedIndex < items.count else { return }
         onSelect(items[selectedIndex])
-    }
-}
-
-// MARK: - Category badge colors
-
-private func categoryColor(for category: String) -> Color {
-    switch category.lowercased() {
-    case "window": return .blue
-    case "ssh": return .green
-    case "view": return .purple
-    case "edit": return .orange
-    case "file": return .cyan
-    case "help": return .yellow
-    default: return .gray
     }
 }
 
@@ -196,38 +201,39 @@ struct CommandPaletteRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.title)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isSelected ? .white : Color.white.opacity(0.85))
+                    .foregroundColor(isSelected ? DT.textPrimary : DT.textSecondary)
             }
 
-            // Category badge
+            // Category badge — colored pill
             Text(action.category)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(categoryColor(for: action.category).opacity(0.9))
+                .foregroundColor(DT.categoryColor(for: action.category).opacity(0.9))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(categoryColor(for: action.category).opacity(0.15))
-                .cornerRadius(10)
+                .background(DT.categoryColor(for: action.category).opacity(0.15))
+                .cornerRadius(DT.radiusPill)
 
             Spacer()
 
             if let shortcut = action.shortcut {
                 Text(shortcut)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.3))
+                    .foregroundColor(DT.textTertiary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.06))
+                    .background(DT.elevated)
                     .cornerRadius(4)
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(height: 48)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? Color.white.opacity(0.06) : Color.clear))
+            RoundedRectangle(cornerRadius: DT.radiusCard)
+                .fill(isSelected ? DT.accentIndigo.opacity(0.12) : (isHovered ? DT.hover : Color.clear))
         )
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) {
+            withAnimation(DT.hoverAnimation) {
                 isHovered = hovering
             }
         }
