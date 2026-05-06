@@ -100,7 +100,7 @@ struct QuickConnectContentView: View {
                     .font(.system(size: 15, weight: .medium))
                 AutoFocusTextField(text: $query, placeholder: "Quick connect...", onSubmit: selectCurrent)
                     .font(.system(size: 18))
-                    .onChange(of: query) { _ in search() }
+                    .onChange(of: query) { search() }
 
                 Text("\u{2318}K")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -144,7 +144,7 @@ struct QuickConnectContentView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
                     }
-                    .onChange(of: selectedIndex) { newIndex in
+                    .onChange(of: selectedIndex) { _, newIndex in
                         if newIndex < results.count {
                             proxy.scrollTo(results[newIndex].id, anchor: .center)
                         }

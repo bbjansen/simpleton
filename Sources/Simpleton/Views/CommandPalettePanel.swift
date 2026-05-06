@@ -123,7 +123,7 @@ struct CommandPaletteContentView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                 }
-                .onChange(of: selectedIndex) { newIndex in
+                .onChange(of: selectedIndex) { _, newIndex in
                     if newIndex < filtered.count {
                         proxy.scrollTo(filtered[newIndex].id, anchor: .center)
                     }
@@ -156,7 +156,7 @@ struct CommandPaletteContentView: View {
                 isAppeared = true
             }
         }
-        .onChange(of: query) { _ in selectedIndex = 0 }
+        .onChange(of: query) { selectedIndex = 0 }
         .onExitCommand { onDismiss() }
         .background(KeyEventHandler(
             onUpArrow: {

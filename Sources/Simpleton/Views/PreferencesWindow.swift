@@ -77,7 +77,7 @@ struct GeneralTab: View {
         Form {
             Section {
                 TextField("Shell path", text: $config.general.shell)
-                    .onChange(of: config.general.shell) { _ in onChanged(config) }
+                    .onChange(of: config.general.shell) { onChanged(config) }
                 Text("Path to the shell executable (e.g. /bin/zsh)")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
@@ -85,7 +85,7 @@ struct GeneralTab: View {
                     Text("Environment ($SHELL)").tag(ShellDetection.environment)
                     Text("Directory Services (dscl)").tag(ShellDetection.dscl)
                 }
-                .onChange(of: config.general.shellDetection) { _ in onChanged(config) }
+                .onChange(of: config.general.shellDetection) { onChanged(config) }
                 Text("How to detect the default shell when the path above is empty")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
@@ -95,19 +95,19 @@ struct GeneralTab: View {
 
             Section {
                 Toggle("Restore previous session", isOn: $config.general.restorePreviousSession)
-                    .onChange(of: config.general.restorePreviousSession) { _ in onChanged(config) }
+                    .onChange(of: config.general.restorePreviousSession) { onChanged(config) }
                 Text("Re-open tabs and connections from your last session")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Toggle("Confirm before closing", isOn: $config.general.confirmBeforeClosing)
-                    .onChange(of: config.general.confirmBeforeClosing) { _ in onChanged(config) }
+                    .onChange(of: config.general.confirmBeforeClosing) { onChanged(config) }
             } header: {
                 PrefsSectionHeader(title: "Startup")
             }
 
             Section {
                 TextField("TERM variable", text: $config.general.termVariable)
-                    .onChange(of: config.general.termVariable) { _ in onChanged(config) }
+                    .onChange(of: config.general.termVariable) { onChanged(config) }
                 Text("The TERM environment variable sent to remote hosts (default: xterm-256color)")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
@@ -127,12 +127,12 @@ struct AppearanceTab: View {
         Form {
             Section {
                 TextField("Font family", text: $config.appearance.fontFamily)
-                    .onChange(of: config.appearance.fontFamily) { _ in onChanged(config) }
+                    .onChange(of: config.appearance.fontFamily) { onChanged(config) }
                 Text("Use a monospaced font for best results (e.g. SF Mono, Menlo, JetBrains Mono)")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Stepper("Size: \(config.appearance.fontSize)", value: $config.appearance.fontSize, in: 8...32)
-                    .onChange(of: config.appearance.fontSize) { _ in onChanged(config) }
+                    .onChange(of: config.appearance.fontSize) { onChanged(config) }
             } header: {
                 PrefsSectionHeader(title: "Font")
             }
@@ -143,9 +143,9 @@ struct AppearanceTab: View {
                     Text("Beam").tag(CursorStyle.beam)
                     Text("Underline").tag(CursorStyle.underline)
                 }
-                .onChange(of: config.appearance.cursorStyle) { _ in onChanged(config) }
+                .onChange(of: config.appearance.cursorStyle) { onChanged(config) }
                 Toggle("Blink cursor", isOn: $config.appearance.cursorBlink)
-                    .onChange(of: config.appearance.cursorBlink) { _ in onChanged(config) }
+                    .onChange(of: config.appearance.cursorBlink) { onChanged(config) }
             } header: {
                 PrefsSectionHeader(title: "Cursor")
             }
@@ -154,12 +154,12 @@ struct AppearanceTab: View {
                 Slider(value: $config.appearance.windowOpacity, in: 0.5...1.0, step: 0.05) {
                     Text("Opacity: \(config.appearance.windowOpacity, specifier: "%.0f%%")")
                 }
-                .onChange(of: config.appearance.windowOpacity) { _ in onChanged(config) }
+                .onChange(of: config.appearance.windowOpacity) { onChanged(config) }
                 Text("Lower values create a translucent terminal window")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Toggle("Thin strokes (non-Retina)", isOn: $config.appearance.thinStrokes)
-                    .onChange(of: config.appearance.thinStrokes) { _ in onChanged(config) }
+                    .onChange(of: config.appearance.thinStrokes) { onChanged(config) }
             } header: {
                 PrefsSectionHeader(title: "Window")
             }
@@ -176,7 +176,7 @@ struct TerminalTab: View {
         Form {
             Section {
                 Stepper("Lines: \(config.terminal.scrollbackLines)", value: $config.terminal.scrollbackLines, in: 1000...100000, step: 1000)
-                    .onChange(of: config.terminal.scrollbackLines) { _ in onChanged(config) }
+                    .onChange(of: config.terminal.scrollbackLines) { onChanged(config) }
                 Text("Number of lines to keep in the scrollback buffer")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
@@ -186,12 +186,12 @@ struct TerminalTab: View {
 
             Section {
                 Toggle("Copy on select", isOn: $config.terminal.copyOnSelect)
-                    .onChange(of: config.terminal.copyOnSelect) { _ in onChanged(config) }
+                    .onChange(of: config.terminal.copyOnSelect) { onChanged(config) }
                 Text("Automatically copy selected text to the clipboard")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Toggle("Paste on right-click", isOn: $config.terminal.pasteOnRightClick)
-                    .onChange(of: config.terminal.pasteOnRightClick) { _ in onChanged(config) }
+                    .onChange(of: config.terminal.pasteOnRightClick) { onChanged(config) }
             } header: {
                 PrefsSectionHeader(title: "Clipboard")
             }
@@ -202,14 +202,14 @@ struct TerminalTab: View {
                     Text("Audio").tag(BellBehavior.audio)
                     Text("None").tag(BellBehavior.none)
                 }
-                .onChange(of: config.terminal.bellBehavior) { _ in onChanged(config) }
+                .onChange(of: config.terminal.bellBehavior) { onChanged(config) }
                 Toggle("Mouse reporting", isOn: $config.terminal.mouseReporting)
-                    .onChange(of: config.terminal.mouseReporting) { _ in onChanged(config) }
+                    .onChange(of: config.terminal.mouseReporting) { onChanged(config) }
                 Text("Forward mouse events to terminal applications (e.g. vim, tmux)")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Toggle("Close pane on clean exit", isOn: $config.terminal.closeOnCleanExit)
-                    .onChange(of: config.terminal.closeOnCleanExit) { _ in onChanged(config) }
+                    .onChange(of: config.terminal.closeOnCleanExit) { onChanged(config) }
                 Text("Automatically close the pane when the shell exits with code 0")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
@@ -232,7 +232,7 @@ struct SSHPrefsTab: View {
                     get: { config.ssh.defaultUser ?? "" },
                     set: { config.ssh.defaultUser = $0.isEmpty ? nil : $0 }
                 ))
-                .onChange(of: config.ssh.defaultUser) { _ in onChanged(config) }
+                .onChange(of: config.ssh.defaultUser) { onChanged(config) }
                 Text("Username to use when none is specified in the connection")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
@@ -242,28 +242,28 @@ struct SSHPrefsTab: View {
 
             Section {
                 Stepper("Keepalive: \(config.ssh.keepaliveInterval)s", value: $config.ssh.keepaliveInterval, in: 0...300, step: 10)
-                    .onChange(of: config.ssh.keepaliveInterval) { _ in onChanged(config) }
+                    .onChange(of: config.ssh.keepaliveInterval) { onChanged(config) }
                 Text("Interval in seconds between keepalive packets (0 to disable)")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Toggle("Auto-reconnect", isOn: $config.ssh.autoReconnect)
-                    .onChange(of: config.ssh.autoReconnect) { _ in onChanged(config) }
+                    .onChange(of: config.ssh.autoReconnect) { onChanged(config) }
                 Stepper("Max reconnect attempts: \(config.ssh.maxReconnectAttempts)", value: $config.ssh.maxReconnectAttempts, in: 1...50)
-                    .onChange(of: config.ssh.maxReconnectAttempts) { _ in onChanged(config) }
+                    .onChange(of: config.ssh.maxReconnectAttempts) { onChanged(config) }
             } header: {
                 PrefsSectionHeader(title: "Connection")
             }
 
             Section {
                 Toggle("Agent forwarding", isOn: $config.ssh.agentForwarding)
-                    .onChange(of: config.ssh.agentForwarding) { _ in onChanged(config) }
+                    .onChange(of: config.ssh.agentForwarding) { onChanged(config) }
                 Text("Forward the local SSH agent to remote hosts")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Toggle("X11 forwarding", isOn: $config.ssh.x11Forwarding)
-                    .onChange(of: config.ssh.x11Forwarding) { _ in onChanged(config) }
+                    .onChange(of: config.ssh.x11Forwarding) { onChanged(config) }
                 Toggle("ControlMaster multiplexing", isOn: $config.ssh.controlMaster)
-                    .onChange(of: config.ssh.controlMaster) { _ in onChanged(config) }
+                    .onChange(of: config.ssh.controlMaster) { onChanged(config) }
                 Text("Share a single TCP connection across multiple SSH sessions to the same host")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
