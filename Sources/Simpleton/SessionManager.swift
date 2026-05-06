@@ -14,6 +14,10 @@ final class SessionManager {
         self.directory = directory
     }
 
+    deinit {
+        saveTimer?.invalidate()
+    }
+
     /// Set the state provider — called to get the current session state for saving.
     func setStateProvider(_ provider: @escaping () -> SessionState) {
         self.stateProvider = provider

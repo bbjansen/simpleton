@@ -105,7 +105,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         for (id, pane) in panes where id != focusedPaneID {
             pane.terminalView.removeFromSuperview()
         }
-        let keptPane = panes[focusedPaneID]!
+        guard let keptPane = panes[focusedPaneID] else { return }
         panes = [focusedPaneID: keptPane]
 
         // Create new pane controllers for new IDs

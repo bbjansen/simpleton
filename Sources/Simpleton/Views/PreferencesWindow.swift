@@ -37,6 +37,9 @@ final class PreferencesWindowController {
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            self?.window = nil
+        }
     }
 }
 

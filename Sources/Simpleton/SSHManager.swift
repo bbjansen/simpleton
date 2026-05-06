@@ -69,6 +69,13 @@ enum SSHManager {
             args.append("-X")
         }
 
+        // ControlMaster multiplexing
+        if config.ssh.controlMaster {
+            args.append(contentsOf: ["-o", "ControlMaster=auto"])
+            args.append(contentsOf: ["-o", "ControlPath=~/.ssh/simpleton-%r@%h:%p"])
+            args.append(contentsOf: ["-o", "ControlPersist=600"])
+        }
+
         // Destination (user@host)
         let user = bookmark.user ?? config.ssh.defaultUser
         if let user = user {

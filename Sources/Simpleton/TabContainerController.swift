@@ -11,6 +11,7 @@ final class TabContainerController: NSViewController {
     private let theme: Theme
     private var closeObserver: NSObjectProtocol?
     private var sidebarToggleObserver: NSObjectProtocol?
+    private var searchObserver: NSObjectProtocol?
 
     /// The outer NSSplitView: sidebar | terminal content
     private var outerSplitView: NSSplitView?
@@ -67,6 +68,17 @@ final class TabContainerController: NSViewController {
             self?.toggleSidebar()
         }
 
+        // Observe search requests
+        searchObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonShowSearch,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self,
+                  let pane = self.splitController.panes[self.splitController.focusedPaneID] else { return }
+            pane.showSearch()
+        }
+
         // Start the initial shell
         let env = buildEnvironment()
         initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
@@ -79,6 +91,9 @@ final class TabContainerController: NSViewController {
             NotificationCenter.default.removeObserver(observer)
         }
         if let observer = sidebarToggleObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = searchObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }

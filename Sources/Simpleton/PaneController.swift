@@ -33,7 +33,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     private var sshConfig: AppConfig?
     private var reconnectAttempts = 0
     private var reconnectTimer: Timer?
-    private var connectionTracker: ConnectionStateTracker?
+    private var searchBar: ScrollbackSearchBar?
 
     init(id: PaneID = UUID(), frame: NSRect, connectionType: ConnectionType) {
         self.id = id
@@ -42,6 +42,10 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         super.init()
         self.terminalView.processDelegate = self
         self.terminalView.autoresizingMask = [.width, .height]
+    }
+
+    deinit {
+        reconnectTimer?.invalidate()
     }
 
     /// Start a local shell process.
@@ -83,13 +87,6 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         state = .connecting
         reconnectAttempts = 0
 
-        // Set up connection state tracking
-        let tracker = ConnectionStateTracker()
-        tracker.onStateChange = { [weak self] newState in
-            self?.state = newState
-        }
-        connectionTracker = tracker
-
         terminalView.startProcess(
             executable: command.executable,
             args: command.arguments,
@@ -103,7 +100,6 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     func reconnectSSH() {
         guard let bookmark = sshBookmark, let config = sshConfig else { return }
         removeBanner()
-        connectionTracker?.reset()
         state = .connecting
 
         guard let command = SSHManager.buildCommand(from: bookmark, config: config) else { return }
@@ -120,7 +116,6 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Start auto-reconnect with exponential backoff.
     private func startAutoReconnect(config: AppConfig) {
         guard config.ssh.autoReconnect,
-              connectionTracker?.wasAuthenticated == true,
               reconnectAttempts < config.ssh.maxReconnectAttempts else {
             showDisconnectedBanner(canReconnect: true)
             return
@@ -344,6 +339,30 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     @objc private func cancelReconnectClicked() {
         cancelAutoReconnect()
         showDisconnectedBanner(canReconnect: true)
+    }
+
+    // MARK: - Search
+
+    func showSearch() {
+        guard searchBar == nil else {
+            searchBar?.activate()
+            return
+        }
+        let bar = ScrollbackSearchBar(terminalView: terminalView)
+        bar.autoresizingMask = [.width, .minYMargin]
+        bar.frame = NSRect(x: 0, y: terminalView.bounds.height - 32, width: terminalView.bounds.width, height: 32)
+        bar.onDismiss = { [weak self] in
+            self?.hideSearch()
+        }
+        terminalView.addSubview(bar)
+        searchBar = bar
+        bar.activate()
+    }
+
+    func hideSearch() {
+        searchBar?.removeFromSuperview()
+        searchBar = nil
+        terminalView.window?.makeFirstResponder(terminalView)
     }
 }
 

@@ -55,7 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 5. Session restore check
         sessionManager = SessionManager(directory: simpletonDir)
-        let shouldRestore = config.general.restorePreviousSession && sessionManager!.didCrashLastSession()
+        let shouldRestore = config.general.restorePreviousSession && sessionManager?.didCrashLastSession() ?? false
 
         // 6. UI launch
         if shouldRestore, let savedState = sessionManager?.loadSavedState(), !savedState.windows.isEmpty {
