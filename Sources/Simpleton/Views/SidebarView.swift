@@ -11,6 +11,7 @@ struct SidebarView: View {
 
     @State private var pinned: [Bookmark] = []
     @State private var recent: [Bookmark] = []
+    @State private var sshConfigEntries: [SSHConfigEntry] = []
     @State private var smartGroups: [SmartGroup] = []
     @State private var searchQuery = ""
 
@@ -51,6 +52,10 @@ struct SidebarView: View {
         .onAppear { refresh() }
     }
 
+    private var allBookmarks: [Bookmark] {
+        pinned + recent
+    }
+
     private var normalSidebar: some View {
         List {
             if !pinned.isEmpty {
@@ -69,6 +74,34 @@ struct SidebarView: View {
                 }
             }
 
+            // Show ~/.ssh/config entries that aren't already bookmarks
+            let importedHosts = Set(allBookmarks.compactMap(\.sshConfigHost))
+            let unimported = sshConfigEntries.filter { !importedHosts.contains($0.hostAlias) }
+            if !unimported.isEmpty {
+                Section("From ~/.ssh/config") {
+                    ForEach(unimported, id: \.hostAlias) { entry in
+                        Button(action: { connectSSHConfigEntry(entry) }) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.5))
+                                    .frame(width: 6, height: 6)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(entry.hostAlias)
+                                        .font(.system(size: 12))
+                                        .lineLimit(1)
+                                    Text(entry.hostname ?? entry.hostAlias)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
             if !smartGroups.isEmpty {
                 Section("Smart Groups") {
                     ForEach(smartGroups) { group in
@@ -83,15 +116,35 @@ struct SidebarView: View {
     }
 
     private var searchResults: some View {
-        List {
-            ForEach(pinned + recent) { bookmark in
-                if bookmark.name.localizedCaseInsensitiveContains(searchQuery)
-                    || bookmark.host.localizedCaseInsensitiveContains(searchQuery) {
-                    SidebarRow(bookmark: bookmark, onConnect: onConnect)
+        let q = searchQuery.lowercased()
+        let matchingBookmarks = allBookmarks.filter {
+            $0.name.lowercased().contains(q) || $0.host.lowercased().contains(q)
+        }
+        let matchingSSH = sshConfigEntries.filter {
+            $0.hostAlias.lowercased().contains(q) || ($0.hostname?.lowercased().contains(q) ?? false)
+        }
+        return List {
+            ForEach(matchingBookmarks) { bookmark in
+                SidebarRow(bookmark: bookmark, onConnect: onConnect)
+            }
+            ForEach(matchingSSH, id: \.hostAlias) { entry in
+                Button(action: { connectSSHConfigEntry(entry) }) {
+                    HStack(spacing: 6) {
+                        Circle().fill(Color.blue.opacity(0.5)).frame(width: 6, height: 6)
+                        Text(entry.hostAlias).font(.system(size: 12)).lineLimit(1)
+                        Spacer()
+                    }
                 }
+                .buttonStyle(.plain)
             }
         }
         .listStyle(.sidebar)
+    }
+
+    private func connectSSHConfigEntry(_ entry: SSHConfigEntry) {
+        // Convert the SSH config entry to a bookmark on-the-fly and connect
+        let bookmark = entry.toBookmark()
+        onConnect(bookmark)
     }
 
     private func refresh() {
@@ -99,6 +152,7 @@ struct SidebarView: View {
             pinned = await bookmarkStore.pinnedBookmarks()
             recent = await bookmarkStore.allBookmarks().filter { !$0.pinned }
         }
+        sshConfigEntries = sshConfigWatcher?.concreteEntries ?? []
     }
 }
 
