@@ -106,6 +106,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func createNewWindow() {
         let wc = WindowController(config: config, theme: theme)
+        wc.bookmarkStore = bookmarkStore
+        wc.sshConfigWatcher = sshConfigWatcher
         windowControllers.append(wc)
         wc.window?.center()
         wc.window?.makeKeyAndOrderFront(nil)
@@ -678,4 +680,5 @@ extension Notification.Name {
     static let simpletonToggleSidebar = Notification.Name("simpletonToggleSidebar")
     static let simpletonShowSearch = Notification.Name("simpletonShowSearch")
     static let simpletonSplitChanged = Notification.Name("simpletonSplitChanged")
+    static let simpletonShowNewConnection = Notification.Name("simpletonShowNewConnection")
 }

@@ -10,9 +10,17 @@ final class TabContainerController: NSViewController {
     private let config: AppConfig
     private let theme: Theme
     private var closeObserver: NSObjectProtocol?
+    private var sidebarToggleObserver: NSObjectProtocol?
+
+    /// The outer NSSplitView: sidebar | terminal content
+    private var outerSplitView: NSSplitView?
+    private var sidebarHostController: SidebarHostController?
+    private var isSidebarVisible = false
 
     /// Reference to the bookmark store for frecency updates.
-    var bookmarkStore: BookmarkStore?
+    var bookmarkStore: BookmarkStore? {
+        didSet { setupSidebar() }
+    }
 
     /// SSH config watcher reference.
     var sshConfigWatcher: SSHConfigWatcher?
@@ -50,6 +58,15 @@ final class TabContainerController: NSViewController {
             self.splitController.closePane(paneID)
         }
 
+        // Observe sidebar toggle
+        sidebarToggleObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonToggleSidebar,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.toggleSidebar()
+        }
+
         // Start the initial shell
         let env = buildEnvironment()
         initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
@@ -61,22 +78,75 @@ final class TabContainerController: NSViewController {
         if let observer = closeObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        if let observer = sidebarToggleObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
-        container.autoresizingMask = [.width, .height]
+        let frame = NSRect(x: 0, y: 0, width: 800, height: 600)
 
-        splitController.rootView.frame = container.bounds
+        // Outer split view: sidebar | terminal content
+        let outer = NSSplitView(frame: frame)
+        outer.isVertical = true
+        outer.dividerStyle = .thin
+        outer.autoresizingMask = [.width, .height]
+        outerSplitView = outer
+
+        // Terminal content (always present)
+        splitController.rootView.frame = frame
         splitController.rootView.autoresizingMask = [.width, .height]
-        container.addSubview(splitController.rootView)
+        outer.addSubview(splitController.rootView)
 
-        self.view = container
+        self.view = outer
     }
 
     override func viewDidAppear() {
         super.viewDidAppear()
         splitController.setFocus(to: splitController.focusedPaneID)
+    }
+
+    // MARK: - Sidebar
+
+    private func setupSidebar() {
+        guard let store = bookmarkStore, sidebarHostController == nil else { return }
+        let host = SidebarHostController(
+            bookmarkStore: store,
+            sshConfigWatcher: sshConfigWatcher,
+            config: config
+        )
+        host.onConnect = { [weak self] bookmark in
+            self?.openSSHConnection(bookmark: bookmark)
+        }
+        host.onNewConnection = { [weak self] in
+            guard let window = self?.view.window else { return }
+            NotificationCenter.default.post(name: .simpletonShowNewConnection, object: window)
+        }
+        sidebarHostController = host
+    }
+
+    func toggleSidebar() {
+        guard let outer = outerSplitView else { return }
+
+        if isSidebarVisible {
+            // Hide sidebar
+            sidebarHostController?.view.removeFromSuperview()
+            isSidebarVisible = false
+        } else {
+            // Show sidebar
+            setupSidebar()
+            guard let sidebarView = sidebarHostController?.view else { return }
+            sidebarView.frame = NSRect(x: 0, y: 0, width: 240, height: outer.bounds.height)
+            outer.insertArrangedSubview(sidebarView, at: 0)
+            outer.setPosition(240, ofDividerAt: 0)
+            isSidebarVisible = true
+        }
+
+        // Refocus terminal
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.splitController.setFocus(to: self.splitController.focusedPaneID)
+        }
     }
 
     // MARK: - Pane Factory

@@ -10,6 +10,14 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     private let theme: Theme
     private var tabContainer: TabContainerController
 
+    /// Set these after init to propagate to all TabContainerControllers.
+    var bookmarkStore: BookmarkStore? {
+        didSet { tabContainer.bookmarkStore = bookmarkStore }
+    }
+    var sshConfigWatcher: SSHConfigWatcher? {
+        didSet { tabContainer.sshConfigWatcher = sshConfigWatcher }
+    }
+
     init(config: AppConfig, theme: Theme) {
         self.config = config
         self.theme = theme
@@ -58,6 +66,8 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     /// Create a new tab in this window.
     func newTab() {
         let newTabContainer = TabContainerController(config: config, theme: theme)
+        newTabContainer.bookmarkStore = bookmarkStore
+        newTabContainer.sshConfigWatcher = sshConfigWatcher
         let newWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
