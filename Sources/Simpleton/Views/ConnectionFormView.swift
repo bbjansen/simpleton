@@ -14,12 +14,21 @@ struct ConnectionFormView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                Text(isNew ? "New Connection" : "Edit Connection")
-                    .font(.headline)
+            HStack(spacing: 10) {
+                Image(systemName: isNew ? "plus.circle.fill" : "pencil.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isNew ? "New Connection" : "Edit Connection")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text(isNew ? "Configure a new SSH connection" : "Modify connection settings")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
                 Spacer()
             }
-            .padding()
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
 
             Divider()
 
@@ -65,13 +74,15 @@ struct ConnectionFormView: View {
                                 set: { bookmark.jumpHosts[index] = $0 }
                             ))
                             Button(action: { bookmark.jumpHosts.remove(at: index) }) {
-                                Image(systemName: "minus.circle")
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red.opacity(0.7))
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     Button(action: { bookmark.jumpHosts.append("") }) {
                         Label("Add jump host", systemImage: "plus")
+                            .foregroundColor(.accentColor)
                     }
                 }
 
@@ -79,13 +90,16 @@ struct ConnectionFormView: View {
                     ForEach(Array(bookmark.portForwards.enumerated()), id: \.offset) { index, pf in
                         HStack {
                             Text(pf.direction == .local ? "L" : "R")
-                                .font(.system(size: 11, design: .monospaced))
-                                .frame(width: 14)
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(pf.direction == .local ? .blue : .orange)
+                                .frame(width: 16)
                             Text("\(pf.localPort):\(pf.remoteHost):\(pf.remotePort)")
                                 .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.primary)
                             Spacer()
                             Button(action: { bookmark.portForwards.remove(at: index) }) {
-                                Image(systemName: "minus.circle")
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red.opacity(0.7))
                             }
                             .buttonStyle(.plain)
                         }
@@ -103,9 +117,14 @@ struct ConnectionFormView: View {
                 }
 
                 if let error = validationError {
-                    Text(error)
-                        .foregroundColor(.red)
-                        .font(.caption)
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                            .font(.system(size: 11))
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
                 }
             }
             .formStyle(.grouped)
@@ -113,15 +132,18 @@ struct ConnectionFormView: View {
             Divider()
 
             // Footer buttons
-            HStack {
+            HStack(spacing: 12) {
                 Button("Cancel") { onCancel() }
                     .keyboardShortcut(.cancelAction)
+                    .buttonStyle(.bordered)
                 Spacer()
                 Button(isNew ? "Create" : "Save") { save() }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
                     .disabled(bookmark.name.isEmpty || bookmark.host.isEmpty)
             }
-            .padding()
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
         }
         .frame(width: 480, height: 600)
     }
