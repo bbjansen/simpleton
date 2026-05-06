@@ -142,7 +142,6 @@ struct SidebarView: View {
     }
 
     private func connectSSHConfigEntry(_ entry: SSHConfigEntry) {
-        // Convert the SSH config entry to a bookmark on-the-fly and connect
         let bookmark = entry.toBookmark()
         onConnect(bookmark)
     }

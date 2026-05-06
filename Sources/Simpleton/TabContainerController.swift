@@ -24,7 +24,9 @@ final class TabContainerController: NSViewController {
     }
 
     /// SSH config watcher reference.
-    var sshConfigWatcher: SSHConfigWatcher?
+    var sshConfigWatcher: SSHConfigWatcher? {
+        didSet { setupSidebar() }
+    }
 
     init(config: AppConfig, theme: Theme) {
         self.config = config
@@ -124,7 +126,18 @@ final class TabContainerController: NSViewController {
     // MARK: - Sidebar
 
     private func setupSidebar() {
-        guard let store = bookmarkStore, sidebarHostController == nil else { return }
+        guard let store = bookmarkStore else { return }
+
+        // Recreate the host controller when dependencies change (e.g. sshConfigWatcher
+        // was nil on the first call but is now available). If the sidebar is currently
+        // visible, swap the view in the outer split view.
+        let wasVisible = isSidebarVisible
+        if let oldHost = sidebarHostController, wasVisible {
+            oldHost.view.removeFromSuperview()
+            oldHost.removeFromParent()
+            isSidebarVisible = false
+        }
+
         let host = SidebarHostController(
             bookmarkStore: store,
             sshConfigWatcher: sshConfigWatcher,
@@ -138,6 +151,11 @@ final class TabContainerController: NSViewController {
             NotificationCenter.default.post(name: .simpletonShowNewConnection, object: window)
         }
         sidebarHostController = host
+
+        // If the sidebar was showing before the rebuild, re-show it.
+        if wasVisible {
+            toggleSidebar()
+        }
     }
 
     func toggleSidebar() {

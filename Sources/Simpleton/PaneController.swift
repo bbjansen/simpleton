@@ -64,6 +64,8 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Restart the shell (after exit, when user clicks "Reopen").
     func restartShell(shell: String, environment: [String]? = nil, workingDirectory: String? = nil) {
         removeBanner()
+        // Ensure any previous process is stopped before starting a new one.
+        terminalView.terminate()
         state = .running
         terminalView.startProcess(
             executable: shell,
@@ -80,6 +82,10 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
             showErrorBanner(message: "Invalid connection settings for \(bookmark.name)")
             return
         }
+
+        // Kill any existing process — LocalProcess.startProcess silently
+        // returns when `running` is true, so we must terminate first.
+        terminalView.terminate()
 
         sshBookmark = bookmark
         sshConfig = config
@@ -103,6 +109,9 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         state = .connecting
 
         guard let command = SSHManager.buildCommand(from: bookmark, config: config) else { return }
+
+        // Ensure any previous process is stopped before starting a new one.
+        terminalView.terminate()
 
         terminalView.startProcess(
             executable: command.executable,
