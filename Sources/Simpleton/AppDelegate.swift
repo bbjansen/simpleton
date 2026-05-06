@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var preferencesController: PreferencesWindowController?
     private var sessionManager: SessionManager?
     private var workspaceManager: WorkspaceManager?
+    private var workspacesMenu: NSMenu?
     private var isFirstLaunch = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -297,21 +298,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         saveWorkspaceItem.keyEquivalentModifierMask = [.command, .option]
         windowMenu.addItem(saveWorkspaceItem)
 
-        // Workspace submenu
+        // Workspace submenu (dynamic — rebuilt each time the menu opens)
         let workspacesItem = NSMenuItem(title: "Workspaces", action: nil, keyEquivalent: "")
         let workspacesMenu = NSMenu(title: "Workspaces")
-        let workspaceNames = workspaceManager?.listWorkspaces() ?? []
-        if workspaceNames.isEmpty {
-            let emptyItem = NSMenuItem(title: "No saved workspaces", action: nil, keyEquivalent: "")
-            emptyItem.isEnabled = false
-            workspacesMenu.addItem(emptyItem)
-        } else {
-            for name in workspaceNames {
-                let item = NSMenuItem(title: name, action: #selector(openWorkspace(_:)), keyEquivalent: "")
-                item.representedObject = name
-                workspacesMenu.addItem(item)
-            }
-        }
+        workspacesMenu.delegate = self
+        self.workspacesMenu = workspacesMenu
         workspacesItem.submenu = workspacesMenu
         windowMenu.addItem(workspacesItem)
 
@@ -595,12 +586,93 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            // Restore session — for now, just create default window
-            // Full restore (recreating splits from state) is a future enhancement
-            createNewWindow()
+            restoreSession(state: state)
         } else {
             sessionManager?.clearSavedState()
             createNewWindow()
+        }
+    }
+
+    private func restoreSession(state: SessionState) {
+        for windowState in state.windows {
+            let wc = WindowController(config: config, theme: theme)
+            wc.bookmarkStore = bookmarkStore
+            wc.sshConfigWatcher = sshConfigWatcher
+            windowControllers.append(wc)
+
+            // Apply window frame
+            if let window = wc.window {
+                let frame = NSRect(
+                    x: windowState.frame.x,
+                    y: windowState.frame.y,
+                    width: windowState.frame.width,
+                    height: windowState.frame.height
+                )
+                window.setFrame(frame, display: true)
+            }
+
+            // Restore the first tab's split tree
+            if let firstTab = windowState.tabs.first,
+               let tabContainer = wc.window?.contentViewController as? TabContainerController {
+                restoreSplitTree(firstTab.splitTree, in: tabContainer)
+            }
+
+            wc.window?.makeKeyAndOrderFront(nil)
+            wc.showWindow(nil)
+        }
+
+        if windowControllers.isEmpty {
+            createNewWindow()
+        }
+    }
+
+    private func restoreSplitTree(_ node: SessionSplitNode, in tabContainer: TabContainerController) {
+        // For the initial pane (already exists), reconfigure it based on the first pane in the tree
+        switch node {
+        case .pane(let conn):
+            // The initial pane is already running a local shell.
+            // If the saved connection was SSH, start SSH instead.
+            if case .ssh(let bookmarkId) = conn {
+                Task { @MainActor in
+                    if let bookmark = await bookmarkStore?.bookmark(for: bookmarkId) {
+                        tabContainer.openSSHConnection(bookmark: bookmark)
+                    }
+                }
+            }
+            // For local connections, the pane is already running — nothing to do.
+
+        case .split(let direction, let children, _):
+            // Apply the layout by splitting the current pane
+            // First child reuses the existing pane, subsequent children create new splits
+            if children.count >= 2 {
+                // Split the current pane for each additional child
+                for _ in 1..<children.count {
+                    tabContainer.splitController.splitFocusedPane(direction: direction)
+                }
+                // Now configure each pane based on saved connections
+                let paneIDs = tabContainer.splitController.tree.allPaneIDs
+                for (index, child) in children.enumerated() {
+                    if index < paneIDs.count, case .pane(let conn) = flattenFirstPane(child) {
+                        if case .ssh(let bookmarkId) = conn {
+                            Task { @MainActor [paneIDs] in
+                                if let bookmark = await self.bookmarkStore?.bookmark(for: bookmarkId),
+                                   let pane = tabContainer.splitController.panes[paneIDs[index]] {
+                                    pane.startSSH(bookmark: bookmark, config: self.config)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Extract the first pane connection from a session split node tree.
+    private func flattenFirstPane(_ node: SessionSplitNode) -> SessionSplitNode {
+        switch node {
+        case .pane: return node
+        case .split(_, let children, _):
+            return children.first.map { flattenFirstPane($0) } ?? node
         }
     }
 
@@ -690,11 +762,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openWorkspace(_ sender: NSMenuItem) {
-        guard let name = sender.representedObject as? String else { return }
-        guard let _ = workspaceManager?.load(name: name) else { return }
+        guard let name = sender.representedObject as? String,
+              let workspace = workspaceManager?.load(name: name) else { return }
 
-        // For now, just create a new window (full workspace restore is future enhancement)
-        createNewWindow()
+        // Create a new window and restore the workspace state
+        let state = SessionState(windows: [workspace.window])
+        restoreSession(state: state)
+    }
+}
+
+// MARK: - NSMenuDelegate
+
+extension AppDelegate: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === workspacesMenu else { return }
+        menu.removeAllItems()
+        let names = workspaceManager?.listWorkspaces() ?? []
+        if names.isEmpty {
+            let emptyItem = NSMenuItem(title: "No saved workspaces", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            menu.addItem(emptyItem)
+        } else {
+            for name in names {
+                let item = NSMenuItem(title: name, action: #selector(openWorkspace(_:)), keyEquivalent: "")
+                item.representedObject = name
+                menu.addItem(item)
+            }
+        }
     }
 }
 
