@@ -36,12 +36,13 @@ final class PreferencesWindowController {
         })
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 550),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         window.title = "Preferences"
+        window.appearance = NSAppearance(named: .darkAqua)
         window.contentView = NSHostingView(rootView: prefsView)
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -88,7 +89,7 @@ struct PreferencesView: View {
                 .tag(6)
         }
         .padding(24)
-        .frame(width: 600, height: 500)
+        .frame(width: 700, height: 550)
     }
 }
 
