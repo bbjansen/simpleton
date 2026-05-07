@@ -8,22 +8,31 @@ final class AIExplainPanel {
     private var panel: NSPanel?
 
     func show(title: String, aiService: AIService, system: String, user: String, relativeTo window: NSWindow?) {
-        dismiss()
+        // Hide any currently visible panel first (orderOut, not close)
+        panel?.orderOut(nil)
 
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 350),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isFloatingPanel = true
-        panel.level = .floating
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.backgroundColor = NSColor(white: 0.1, alpha: 0.98)
-        panel.hasShadow = true
-        panel.appearance = NSAppearance(named: .darkAqua)
+        // Create the panel once and reuse the NSPanel shell; always rebuild content
+        // because each invocation has different title/prompt/AI context.
+        if panel == nil {
+            let newPanel = NSPanel(
+                contentRect: NSRect(x: 0, y: 0, width: 450, height: 350),
+                styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            newPanel.isFloatingPanel = true
+            newPanel.level = .floating
+            newPanel.titleVisibility = .hidden
+            newPanel.titlebarAppearsTransparent = true
+            newPanel.backgroundColor = NSColor(white: 0.1, alpha: 0.98)
+            newPanel.hasShadow = true
+            newPanel.appearance = NSAppearance(named: .darkAqua)
+            self.panel = newPanel
+        }
 
+        guard let panel = panel else { return }
+
+        // Rebuild content view with fresh prompt/context each time
         let contentView = AIExplainContentView(
             title: title,
             aiService: aiService,
@@ -42,12 +51,12 @@ final class AIExplainPanel {
         }
 
         panel.makeKeyAndOrderFront(nil)
-        self.panel = panel
     }
 
     func dismiss() {
-        panel?.close()
-        panel = nil
+        // orderOut hides the panel without deallocating it, preventing use-after-free
+        // in AppKit window animation blocks during close.
+        panel?.orderOut(nil)
     }
 }
 

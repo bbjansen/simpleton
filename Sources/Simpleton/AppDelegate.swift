@@ -509,7 +509,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Quick Connect
 
     @objc private func showQuickConnect() {
-        guard let store = bookmarkStore else { return }
+        guard bookmarkStore != nil else { return }
         if quickConnectPanel?.isVisible == true {
             quickConnectPanel?.dismiss()
             return
@@ -517,7 +517,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Capture the terminal window BEFORE showing the panel, because the panel
         // becomes key and NSApp.keyWindow would then point to the panel itself.
         let parentWindow = NSApp.keyWindow
-        quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
+        // Reuse the existing panel instance; do NOT recreate it here.
         quickConnectPanel?.show(relativeTo: parentWindow) { [weak self] bookmark in
             self?.connectToBookmark(bookmark, in: parentWindow)
         }

@@ -48,7 +48,12 @@ final class PreferencesWindowController {
         window.makeKeyAndOrderFront(nil)
         self.window = window
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
-            self?.window = nil
+            // Delay releasing the window reference so AppKit animation blocks that were
+            // captured during the close sequence finish before the window is deallocated,
+            // preventing EXC_BAD_ACCESS in _NSWindowTransformAnimation / _Block_release.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.window = nil
+            }
         }
     }
 }

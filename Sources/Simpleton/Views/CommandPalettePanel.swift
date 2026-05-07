@@ -19,29 +19,36 @@ final class CommandPalettePanel {
 
     func show(relativeTo window: NSWindow?, actions: [PaletteAction]) {
         self.actions = actions
-        dismiss()
 
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isFloatingPanel = true
-        panel.level = .floating
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.078, alpha: 0.98)
-        panel.hasShadow = true
-        panel.becomesKeyOnlyIfNeeded = false
+        // Create the panel once and reuse it; update content view with fresh actions each show
+        if panel == nil {
+            let newPanel = NSPanel(
+                contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
+                styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            newPanel.isFloatingPanel = true
+            newPanel.level = .floating
+            newPanel.titleVisibility = .hidden
+            newPanel.titlebarAppearsTransparent = true
+            newPanel.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.078, alpha: 0.98)
+            newPanel.hasShadow = true
+            newPanel.becomesKeyOnlyIfNeeded = false
 
-        if let shadow = NSShadow() as NSShadow? {
-            shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
-            shadow.shadowBlurRadius = 40
-            shadow.shadowOffset = NSSize(width: 0, height: -10)
-            panel.setValue(shadow, forKey: "shadow")
+            if let shadow = NSShadow() as NSShadow? {
+                shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
+                shadow.shadowBlurRadius = 40
+                shadow.shadowOffset = NSSize(width: 0, height: -10)
+                newPanel.setValue(shadow, forKey: "shadow")
+            }
+
+            self.panel = newPanel
         }
 
+        guard let panel = panel else { return }
+
+        // Rebuild content view with current actions each time so the list is fresh
         let contentView = CommandPaletteContentView(
             actions: actions,
             onSelect: { [weak self] action in
@@ -62,12 +69,12 @@ final class CommandPalettePanel {
         }
 
         panel.makeKeyAndOrderFront(nil)
-        self.panel = panel
     }
 
     func dismiss() {
-        panel?.close()
-        panel = nil
+        // orderOut hides the panel without deallocating it, preventing use-after-free
+        // in AppKit window animation blocks during close.
+        panel?.orderOut(nil)
     }
 
     var isVisible: Bool {

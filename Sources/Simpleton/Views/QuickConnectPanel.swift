@@ -18,42 +18,47 @@ final class QuickConnectPanel {
 
     func show(relativeTo window: NSWindow?, onSelect: @escaping (Bookmark) -> Void) {
         self.onSelect = onSelect
-        dismiss()
 
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isFloatingPanel = true
-        panel.level = .floating
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = false
-        panel.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.078, alpha: 0.98)
-        panel.hasShadow = true
-        panel.becomesKeyOnlyIfNeeded = false
+        // Create the panel once and reuse it
+        if panel == nil {
+            let newPanel = NSPanel(
+                contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
+                styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            newPanel.isFloatingPanel = true
+            newPanel.level = .floating
+            newPanel.titleVisibility = .hidden
+            newPanel.titlebarAppearsTransparent = true
+            newPanel.isMovableByWindowBackground = false
+            newPanel.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.078, alpha: 0.98)
+            newPanel.hasShadow = true
+            newPanel.becomesKeyOnlyIfNeeded = false
 
-        // Strong shadow for Spotlight/Raycast feel
-        if let shadow = NSShadow() as NSShadow? {
-            shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
-            shadow.shadowBlurRadius = 40
-            shadow.shadowOffset = NSSize(width: 0, height: -10)
-            panel.setValue(shadow, forKey: "shadow")
+            // Strong shadow for Spotlight/Raycast feel
+            if let shadow = NSShadow() as NSShadow? {
+                shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
+                shadow.shadowBlurRadius = 40
+                shadow.shadowOffset = NSSize(width: 0, height: -10)
+                newPanel.setValue(shadow, forKey: "shadow")
+            }
+
+            let contentView = QuickConnectContentView(
+                bookmarkStore: bookmarkStore,
+                onSelect: { [weak self] bookmark in
+                    self?.dismiss()
+                    self?.onSelect?(bookmark)
+                },
+                onDismiss: { [weak self] in
+                    self?.dismiss()
+                }
+            )
+            newPanel.contentView = NSHostingView(rootView: contentView)
+            self.panel = newPanel
         }
 
-        let contentView = QuickConnectContentView(
-            bookmarkStore: bookmarkStore,
-            onSelect: { [weak self] bookmark in
-                self?.dismiss()
-                self?.onSelect?(bookmark)
-            },
-            onDismiss: { [weak self] in
-                self?.dismiss()
-            }
-        )
-        panel.contentView = NSHostingView(rootView: contentView)
+        guard let panel = panel else { return }
 
         // Position centered on the parent window
         if let window = window {
@@ -66,12 +71,12 @@ final class QuickConnectPanel {
         }
 
         panel.makeKeyAndOrderFront(nil)
-        self.panel = panel
     }
 
     func dismiss() {
-        panel?.close()
-        panel = nil
+        // orderOut hides the panel without deallocating it, preventing use-after-free
+        // in AppKit window animation blocks during close.
+        panel?.orderOut(nil)
     }
 
     var isVisible: Bool {
