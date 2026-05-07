@@ -69,32 +69,76 @@ struct PreferencesView: View {
 
     @State private var selectedTab = 0
 
-    var body: some View {
-        TabView(selection: $selectedTab) {
-            GeneralTab(config: $config, onChanged: onChanged)
-                .tabItem { Label("General", systemImage: "gearshape") }.tag(0)
-            AppearanceTab(config: $config, onChanged: onChanged)
-                .tabItem { Label("Appearance", systemImage: "paintbrush.pointed") }.tag(1)
-            TerminalTab(config: $config, onChanged: onChanged)
-                .tabItem { Label("Terminal", systemImage: "terminal") }.tag(2)
-            SSHPrefsTab(config: $config, onChanged: onChanged)
-                .tabItem { Label("SSH", systemImage: "network") }.tag(3)
-            KeysTab()
-                .tabItem { Label("Keys", systemImage: "keyboard") }.tag(4)
-            if let pm = pluginManager {
-                PluginsPreferencesTab(pluginManager: pm)
-                    .tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }
-                    .tag(5)
-            }
-            AIPreferencesTab(config: aiConfig, onChanged: { newAIConfig in
-                aiConfig = newAIConfig
-                onAIConfigChanged(newAIConfig)
-            })
-                .tabItem { Label("AI", systemImage: "sparkles") }
-                .tag(6)
+    private var tabs: [(id: Int, label: String, icon: String)] {
+        var t: [(Int, String, String)] = [
+            (0, "General", "gearshape"),
+            (1, "Appearance", "paintbrush.pointed"),
+            (2, "Terminal", "terminal"),
+            (3, "SSH", "network"),
+            (4, "Keys", "keyboard"),
+        ]
+        if pluginManager != nil {
+            t.append((5, "Plugins", "puzzlepiece.extension"))
         }
-        .padding(24)
-        .frame(width: 700, height: 550)
+        t.append((6, "AI", "sparkles"))
+        return t
+    }
+
+    var body: some View {
+        HSplitView {
+            // Sidebar navigation
+            VStack(spacing: 2) {
+                ForEach(tabs, id: \.id) { tab in
+                    Button(action: { selectedTab = tab.id }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 13))
+                                .frame(width: 20)
+                                .foregroundColor(selectedTab == tab.id ? .white : .secondary)
+                            Text(tab.label)
+                                .font(.system(size: 13))
+                                .foregroundColor(selectedTab == tab.id ? .white : .primary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(selectedTab == tab.id ? Color.accentColor.opacity(0.8) : Color.clear)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+            .padding(12)
+            .frame(width: 160)
+            .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
+
+            // Content
+            ScrollView {
+                Group {
+                    switch selectedTab {
+                    case 0: GeneralTab(config: $config, onChanged: onChanged)
+                    case 1: AppearanceTab(config: $config, onChanged: onChanged)
+                    case 2: TerminalTab(config: $config, onChanged: onChanged)
+                    case 3: SSHPrefsTab(config: $config, onChanged: onChanged)
+                    case 4: KeysTab()
+                    case 5:
+                        if let pm = pluginManager {
+                            PluginsPreferencesTab(pluginManager: pm)
+                        }
+                    case 6:
+                        AIPreferencesTab(config: aiConfig, onChanged: { newAIConfig in
+                            aiConfig = newAIConfig
+                            onAIConfigChanged(newAIConfig)
+                        })
+                    default: EmptyView()
+                    }
+                }
+                .padding(24)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: 700, height: 500)
     }
 }
 
