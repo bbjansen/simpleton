@@ -17,6 +17,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     var sshConfigWatcher: SSHConfigWatcher? {
         didSet { tabContainer.sshConfigWatcher = sshConfigWatcher }
     }
+    var pluginManager: PluginManager? {
+        didSet { tabContainer.pluginManager = pluginManager }
+    }
 
     init(config: AppConfig, theme: Theme) {
         self.config = config
@@ -69,6 +72,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         let newTabContainer = TabContainerController(config: config, theme: theme)
         newTabContainer.bookmarkStore = bookmarkStore
         newTabContainer.sshConfigWatcher = sshConfigWatcher
+        newTabContainer.pluginManager = pluginManager
         let newWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
