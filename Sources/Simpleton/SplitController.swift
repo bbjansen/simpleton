@@ -28,6 +28,10 @@ final class SplitController: NSObject, NSSplitViewDelegate {
     /// Called when focused pane changes.
     var onFocusChange: ((PaneID) -> Void)?
 
+    /// Saved tree for pane zoom (Cmd+Shift+Enter).
+    private var savedTree: SplitNode?
+    private(set) var zoomedPaneID: PaneID?
+
     init(initialPaneController: PaneController) {
         self.tree = .pane(initialPaneController.id)
         self.focusedPaneID = initialPaneController.id
@@ -117,6 +121,27 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         reconcile()
         setFocus(to: focusedPaneID)
         NotificationCenter.default.post(name: .simpletonSplitChanged, object: nil)
+    }
+
+    // MARK: - Zoom
+
+    func toggleZoom() {
+        if let _ = zoomedPaneID {
+            // Unzoom: restore saved tree
+            guard let saved = savedTree else { return }
+            tree = saved
+            savedTree = nil
+            zoomedPaneID = nil
+            reconcile()
+            setFocus(to: focusedPaneID)
+        } else {
+            // Zoom: save tree, show only focused pane
+            guard tree.paneCount > 1 else { return }
+            savedTree = tree
+            zoomedPaneID = focusedPaneID
+            tree = .pane(focusedPaneID)
+            reconcile()
+        }
     }
 
     // MARK: - Focus

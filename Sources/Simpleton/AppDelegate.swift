@@ -244,6 +244,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         splitMenu.addItem(.separator())
 
+        let zoomItem = NSMenuItem(title: "Toggle Fullscreen Pane", action: #selector(togglePaneZoom), keyEquivalent: "\r")
+        zoomItem.keyEquivalentModifierMask = [.command, .shift]
+        splitMenu.addItem(zoomItem)
+
+        splitMenu.addItem(.separator())
+
         // Focus navigation
         let focusLeftItem = NSMenuItem(title: "Focus Left", action: #selector(focusLeft), keyEquivalent: String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!)))
         focusLeftItem.keyEquivalentModifierMask = [.command, .option]
@@ -306,6 +312,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         workspacesItem.submenu = workspacesMenu
         windowMenu.addItem(workspacesItem)
 
+        windowMenu.addItem(.separator())
+        for i in 1...9 {
+            let tabItem = NSMenuItem(title: "Tab \(i)", action: #selector(switchToTabN(_:)), keyEquivalent: String(i))
+            tabItem.tag = i
+            windowMenu.addItem(tabItem)
+        }
+
         windowMenuItem.submenu = windowMenu
         mainMenu.addItem(windowMenuItem)
 
@@ -355,6 +368,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let layout = PredefinedLayouts.all[index]
             sc.applyLayout(layout)
         }
+    }
+
+    @objc private func togglePaneZoom() {
+        activeSplitController?.toggleZoom()
+    }
+
+    @objc private func switchToTabN(_ sender: NSMenuItem) {
+        guard let window = NSApp.keyWindow,
+              let tabbedWindows = window.tabbedWindows,
+              sender.tag > 0, sender.tag <= tabbedWindows.count else { return }
+        tabbedWindows[sender.tag - 1].makeKeyAndOrderFront(nil)
     }
 
     // MARK: - Focus Navigation
