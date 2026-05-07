@@ -31,6 +31,9 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Stored environment for shell restarts.
     var shellEnvironment: [String]?
 
+    /// Plugin manager reference for firing events.
+    var pluginManager: PluginManager?
+
     /// SSH reconnection state.
     private var sshBookmark: Bookmark?
     private var sshConfig: AppConfig?

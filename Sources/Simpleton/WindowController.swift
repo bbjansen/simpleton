@@ -17,6 +17,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     var sshConfigWatcher: SSHConfigWatcher? {
         didSet { tabContainer.sshConfigWatcher = sshConfigWatcher }
     }
+    var pluginManager: PluginManager? {
+        didSet { tabContainer.pluginManager = pluginManager }
+    }
 
     init(config: AppConfig, theme: Theme) {
         self.config = config

@@ -28,6 +28,9 @@ final class TabContainerController: NSViewController {
         didSet { setupSidebar() }
     }
 
+    /// Plugin manager reference — propagated to panes.
+    var pluginManager: PluginManager?
+
     init(config: AppConfig, theme: Theme) {
         self.config = config
         self.theme = theme

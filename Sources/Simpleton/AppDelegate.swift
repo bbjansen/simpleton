@@ -18,6 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var workspaceManager: WorkspaceManager?
     private var workspacesMenu: NSMenu?
     private var isFirstLaunch = false
+    private var pluginManager: PluginManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -42,17 +43,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         sshConfigWatcher?.onConfigChanged = { _ in }
         sshConfigWatcher?.start()
 
-        // 4. Initialize panels
-        quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
-        commandPalettePanel = CommandPalettePanel()
-        preferencesController = PreferencesWindowController(config: config) { [weak self] newConfig in
-            self?.config = newConfig
-            self?.saveConfig(newConfig)
-        }
-
         // Initialize workspace manager
         let workspacesDir = simpletonDir.appendingPathComponent("workspaces")
         workspaceManager = WorkspaceManager(directory: workspacesDir)
+
+        // Initialize plugin manager
+        pluginManager = PluginManager(baseDirectory: simpletonDir)
+        pluginManager?.pasteHandler = { [weak self] text in
+            // Paste into focused terminal
+            guard let sc = self?.activeSplitController,
+                  let pane = sc.panes[sc.focusedPaneID] else { return }
+            let bytes = Array(text.utf8)
+            pane.terminalView.send(data: bytes[...])
+        }
+        pluginManager?.commandHandler = { [weak self] commandId in
+            self?.pluginManager?.executeCommand(id: commandId)
+        }
+        pluginManager?.loadAll()
+
+        // Fire startup event
+        pluginManager?.fireEvent(.onStartup, context: [
+            "version": "1.0.0",
+            "configDir": simpletonDir.path
+        ])
+
+        // 4. Initialize panels
+        quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
+        commandPalettePanel = CommandPalettePanel()
+        preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager) { [weak self] newConfig in
+            self?.config = newConfig
+            self?.saveConfig(newConfig)
+        }
 
         // 5. Session restore check
         sessionManager = SessionManager(directory: simpletonDir)
@@ -101,6 +122,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        pluginManager?.fireEvent(.onShutdown, context: ["version": "1.0.0"])
+        pluginManager?.unloadAll()
         sessionManager?.saveCurrentState()
         sessionManager?.stopAndMarkClean()
     }
@@ -115,6 +138,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let wc = WindowController(config: config, theme: theme)
         wc.bookmarkStore = bookmarkStore
         wc.sshConfigWatcher = sshConfigWatcher
+        wc.pluginManager = pluginManager
         windowControllers.append(wc)
         wc.window?.center()
         wc.window?.makeKeyAndOrderFront(nil)
@@ -477,7 +501,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func buildPaletteActions() -> [PaletteAction] {
-        [
+        var actions = [
             PaletteAction(title: "Split Right", shortcut: "⌘D", category: "Window") { [weak self] in self?.splitRight() },
             PaletteAction(title: "Split Down", shortcut: "⌘⇧D", category: "Window") { [weak self] in self?.splitDown() },
             PaletteAction(title: "Pick Layout", shortcut: "⌘⇧L", category: "Window") { [weak self] in self?.pickLayout() },
@@ -491,13 +515,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PaletteAction(title: "Increase Font Size", shortcut: "⌘+", category: "View") { [weak self] in self?.increaseFontSize() },
             PaletteAction(title: "Decrease Font Size", shortcut: "⌘-", category: "View") { [weak self] in self?.decreaseFontSize() },
             PaletteAction(title: "Reset Font Size", shortcut: "⌘0", category: "View") { [weak self] in self?.resetFontSize() },
+            PaletteAction(title: "Change Theme", shortcut: nil, category: "App") { [weak self] in self?.showThemePicker() },
         ]
+
+        // Plugin commands
+        if let pm = pluginManager {
+            for (pluginName, cmd) in pm.pluginCommands {
+                actions.append(PaletteAction(
+                    title: cmd.title,
+                    shortcut: cmd.shortcut,
+                    category: "Plugin: \(pluginName)"
+                ) { [weak self] in
+                    self?.pluginManager?.executeCommand(id: cmd.id)
+                })
+            }
+        }
+
+        return actions
     }
 
     // MARK: - Preferences
 
     @objc private func showPreferences() {
         preferencesController?.show()
+    }
+
+    // MARK: - Theme Picker
+
+    @objc private func showThemePicker() {
+        guard let window = NSApp.keyWindow,
+              let themes = pluginManager?.themeDiscovery.themes else { return }
+        let alert = NSAlert()
+        alert.messageText = "Choose Theme"
+        for theme in themes {
+            alert.addButton(withTitle: theme.name)
+        }
+        alert.addButton(withTitle: "Cancel")
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            let index = Int(response.rawValue) - Int(NSApplication.ModalResponse.alertFirstButtonReturn.rawValue)
+            guard let self = self, index >= 0, index < themes.count else { return }
+            let selectedTheme = themes[index]
+            self.theme = selectedTheme
+            self.applyThemeToAllPanes(selectedTheme)
+        }
+    }
+
+    private func applyThemeToAllPanes(_ theme: Theme) {
+        for wc in windowControllers {
+            guard let tabContainer = wc.window?.contentViewController as? TabContainerController else { continue }
+            for pane in tabContainer.splitController.panes.values {
+                ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
+            }
+        }
     }
 
     // MARK: - New Connection
@@ -622,6 +692,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let wc = WindowController(config: config, theme: theme)
             wc.bookmarkStore = bookmarkStore
             wc.sshConfigWatcher = sshConfigWatcher
+            wc.pluginManager = pluginManager
             windowControllers.append(wc)
 
             // Apply window frame
