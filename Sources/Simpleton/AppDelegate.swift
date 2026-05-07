@@ -19,6 +19,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var workspacesMenu: NSMenu?
     private var isFirstLaunch = false
     private var pluginManager: PluginManager?
+    private var aiService: AIService?
+    private var aiExplainPanel: AIExplainPanel?
+    private var aiConfig: AIConfig = AIConfig()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -61,6 +64,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         pluginManager?.loadAll()
 
+        // Load AI config
+        let aiConfigFile = simpletonDir.appendingPathComponent("ai-config.json")
+        if FileManager.default.fileExists(atPath: aiConfigFile.path),
+           let data = try? Data(contentsOf: aiConfigFile),
+           let file = try? JSONDecoder().decode(AIConfigFile.self, from: data) {
+            aiConfig = file.config
+        }
+        aiService = AIService(config: aiConfig)
+        aiExplainPanel = AIExplainPanel()
+
         // Fire startup event
         pluginManager?.fireEvent(.onStartup, context: [
             "version": "1.0.0",
@@ -70,10 +83,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 4. Initialize panels
         quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
         commandPalettePanel = CommandPalettePanel()
-        preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager) { [weak self] newConfig in
+        preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager, aiConfig: aiConfig, onConfigChanged: { [weak self] newConfig in
             self?.config = newConfig
             self?.saveConfig(newConfig)
-        }
+        }, onAIConfigChanged: { [weak self] newAIConfig in
+            self?.aiConfig = newAIConfig
+            self?.aiService?.updateConfig(newAIConfig)
+            self?.saveAIConfig(newAIConfig)
+        })
 
         // 5. Session restore check
         sessionManager = SessionManager(directory: simpletonDir)
@@ -113,6 +130,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(handleShowNewConnection(_:)),
             name: .simpletonShowNewConnection,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleExplainError(_:)),
+            name: .simpletonExplainError,
             object: nil
         )
     }
@@ -309,6 +332,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         sshMenuItem.submenu = sshMenu
         mainMenu.addItem(sshMenuItem)
+
+        // AI menu
+        let aiMenuItem = NSMenuItem()
+        let aiMenu = NSMenu(title: "AI")
+        let chatItem = NSMenuItem(title: "AI Chat", action: #selector(toggleAIChat), keyEquivalent: "A")
+        chatItem.keyEquivalentModifierMask = [.command, .shift]
+        aiMenu.addItem(chatItem)
+        aiMenu.addItem(withTitle: "AI: Explain Selection", action: #selector(explainSelection), keyEquivalent: "")
+        aiMenu.addItem(withTitle: "AI: Explain Error", action: #selector(explainLastError), keyEquivalent: "")
+        aiMenuItem.submenu = aiMenu
+        mainMenu.addItem(aiMenuItem)
 
         // Window menu
         let windowMenuItem = NSMenuItem()
@@ -516,6 +550,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PaletteAction(title: "Decrease Font Size", shortcut: "⌘-", category: "View") { [weak self] in self?.decreaseFontSize() },
             PaletteAction(title: "Reset Font Size", shortcut: "⌘0", category: "View") { [weak self] in self?.resetFontSize() },
             PaletteAction(title: "Change Theme", shortcut: nil, category: "App") { [weak self] in self?.showThemePicker() },
+            PaletteAction(title: "AI: Chat", shortcut: "\u{2318}\u{21e7}A", category: "AI") { [weak self] in self?.toggleAIChat() },
+            PaletteAction(title: "AI: Explain Selection", shortcut: nil, category: "AI") { [weak self] in self?.explainSelection() },
+            PaletteAction(title: "AI: Explain Error", shortcut: nil, category: "AI") { [weak self] in self?.explainLastError() },
         ]
 
         // Plugin commands
@@ -607,6 +644,78 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleSidebar() {
         NotificationCenter.default.post(name: .simpletonToggleSidebar, object: nil)
+    }
+
+    // MARK: - AI Actions
+
+    @objc private func toggleAIChat() {
+        NotificationCenter.default.post(name: .simpletonToggleAIChat, object: aiService)
+    }
+
+    @objc private func explainSelection() {
+        guard let ai = aiService, ai.isEnabled,
+              let sc = activeSplitController,
+              let pane = sc.panes[sc.focusedPaneID] else { return }
+
+        let selected = pane.terminalView.getSelection() ?? ""
+        guard !selected.isEmpty else { return }
+
+        aiExplainPanel?.show(
+            title: "Explain Selection",
+            aiService: ai,
+            system: "You are a helpful terminal assistant. Explain the following terminal output or command concisely.",
+            user: selected,
+            relativeTo: NSApp.keyWindow
+        )
+    }
+
+    @objc private func explainLastError() {
+        guard let ai = aiService, ai.isEnabled,
+              let sc = activeSplitController,
+              let pane = sc.panes[sc.focusedPaneID] else { return }
+
+        let context = AIContextBuilder.build(terminalView: pane.terminalView, recentOutputLines: 50)
+        let output = context.recentOutput ?? "(no output captured)"
+
+        aiExplainPanel?.show(
+            title: "Explain Error",
+            aiService: ai,
+            system: "You are a helpful terminal assistant. Explain this error and suggest a fix. Be concise.",
+            user: "The command failed. Here is the recent terminal output:\n\n\(output)",
+            relativeTo: NSApp.keyWindow
+        )
+    }
+
+    @objc private func handleExplainError(_ notification: Notification) {
+        guard let paneID = notification.object as? PaneID,
+              let ai = aiService, ai.isEnabled else { return }
+
+        // Find the pane across all window controllers
+        for wc in windowControllers {
+            guard let tabContainer = wc.window?.contentViewController as? TabContainerController,
+                  let pane = tabContainer.splitController.panes[paneID] else { continue }
+
+            let context = AIContextBuilder.build(terminalView: pane.terminalView, recentOutputLines: 50)
+            let output = context.recentOutput ?? "(no output captured)"
+
+            aiExplainPanel?.show(
+                title: "Explain Error",
+                aiService: ai,
+                system: "You are a helpful terminal assistant. Explain this error and suggest a fix. Be concise.",
+                user: "The command failed. Here is the recent terminal output:\n\n\(output)",
+                relativeTo: pane.terminalView.window
+            )
+            break
+        }
+    }
+
+    private func saveAIConfig(_ config: AIConfig) {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        let aiConfigFile = simpletonDir.appendingPathComponent("ai-config.json")
+        if let data = try? JSONEncoder().encode(AIConfigFile(config: config)) {
+            try? data.write(to: aiConfigFile)
+        }
     }
 
     // MARK: - Scrollback Search

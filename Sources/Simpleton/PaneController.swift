@@ -311,18 +311,39 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         let closeButton = makeButton(title: "Close Pane", target: self, action: #selector(closePaneClicked))
         banner.addSubview(closeButton)
 
-        NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
-            icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: DT.Banner.iconSize),
-            icon.heightAnchor.constraint(equalToConstant: DT.Banner.iconSize),
-            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
-            label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-            closeButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
-            closeButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-            reopenButton.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -8),
-            reopenButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-        ])
+        // Add "Explain" button for non-zero exit codes (AI feature)
+        if !isCleanExit {
+            let explainButton = makeButton(title: "Explain", target: self, action: #selector(explainErrorClicked))
+            banner.addSubview(explainButton)
+
+            NSLayoutConstraint.activate([
+                icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+                icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: DT.Banner.iconSize),
+                icon.heightAnchor.constraint(equalToConstant: DT.Banner.iconSize),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+                label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                closeButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
+                closeButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                reopenButton.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -8),
+                reopenButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                explainButton.trailingAnchor.constraint(equalTo: reopenButton.leadingAnchor, constant: -8),
+                explainButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+                icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: DT.Banner.iconSize),
+                icon.heightAnchor.constraint(equalToConstant: DT.Banner.iconSize),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+                label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                closeButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
+                closeButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+                reopenButton.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -8),
+                reopenButton.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+            ])
+        }
 
         positionAndAddBanner(banner)
     }
@@ -344,6 +365,10 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         // Find the SplitController that owns this pane by walking up the responder chain
         // For now, post a notification that the TabContainerController can handle
         NotificationCenter.default.post(name: .simpletonPaneCloseRequested, object: self.id)
+    }
+
+    @objc private func explainErrorClicked() {
+        NotificationCenter.default.post(name: .simpletonExplainError, object: self.id)
     }
 
     // MARK: - SSH Banners
@@ -478,4 +503,6 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
 extension Notification.Name {
     static let simpletonPaneCloseRequested = Notification.Name("simpletonPaneCloseRequested")
+    static let simpletonToggleAIChat = Notification.Name("simpletonToggleAIChat")
+    static let simpletonExplainError = Notification.Name("simpletonExplainError")
 }

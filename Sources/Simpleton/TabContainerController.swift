@@ -12,6 +12,9 @@ final class TabContainerController: NSViewController {
     private var closeObserver: NSObjectProtocol?
     private var sidebarToggleObserver: NSObjectProtocol?
     private var searchObserver: NSObjectProtocol?
+    private var aiChatObserver: NSObjectProtocol?
+    private var aiChatController: AIChatPanelController?
+    private var isAIChatVisible = false
 
     /// The outer NSSplitView: sidebar | terminal content
     private var outerSplitView: NSSplitView?
@@ -84,6 +87,16 @@ final class TabContainerController: NSViewController {
             pane.showSearch()
         }
 
+        // Observe AI chat toggle
+        aiChatObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonToggleAIChat,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let aiService = notification.object as? AIService else { return }
+            self?.toggleAIChat(aiService: aiService)
+        }
+
         // Track clicks to update focused pane
         initialPane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)
@@ -118,6 +131,9 @@ final class TabContainerController: NSViewController {
             NotificationCenter.default.removeObserver(observer)
         }
         if let observer = searchObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = aiChatObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -201,6 +217,60 @@ final class TabContainerController: NSViewController {
             outer.insertArrangedSubview(host.view, at: 0)
             outer.setPosition(240, ofDividerAt: 0)
             isSidebarVisible = true
+        }
+
+        // Refocus terminal
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.splitController.setFocus(to: self.splitController.focusedPaneID)
+        }
+    }
+
+    // MARK: - AI Chat Panel
+
+    private func toggleAIChat(aiService: AIService) {
+        guard let outer = outerSplitView else { return }
+
+        if isAIChatVisible {
+            // Hide AI chat panel
+            if let chatController = aiChatController {
+                chatController.view.removeFromSuperview()
+                chatController.removeFromParent()
+            }
+            aiChatController = nil
+            isAIChatVisible = false
+        } else {
+            // Show AI chat panel on the right side
+            let chatController = AIChatPanelController(aiService: aiService)
+            chatController.contextProvider = { [weak self] in
+                guard let self = self,
+                      let pane = self.splitController.panes[self.splitController.focusedPaneID] else {
+                    return AIContext(os: "macOS", recentCommands: [])
+                }
+                return AIContextBuilder.build(terminalView: pane.terminalView, includeSelection: true)
+            }
+            chatController.onInsertCommand = { [weak self] cmd in
+                guard let self = self,
+                      let pane = self.splitController.panes[self.splitController.focusedPaneID] else { return }
+                let bytes = Array(cmd.utf8)
+                pane.terminalView.send(data: bytes[...])
+            }
+            chatController.onDismiss = { [weak self] in
+                self?.toggleAIChat(aiService: aiService)
+            }
+
+            addChild(chatController)
+            chatController.view.frame = NSRect(x: 0, y: 0, width: 320, height: outer.bounds.height)
+            outer.addArrangedSubview(chatController.view)
+
+            // Position the divider so the chat panel is 320pt wide on the right
+            let dividerIndex = outer.arrangedSubviews.count - 2
+            if dividerIndex >= 0 {
+                outer.setPosition(outer.bounds.width - 320, ofDividerAt: dividerIndex)
+            }
+
+            self.aiChatController = chatController
+            isAIChatVisible = true
         }
 
         // Refocus terminal
