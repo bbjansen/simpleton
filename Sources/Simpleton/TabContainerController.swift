@@ -98,6 +98,14 @@ final class TabContainerController: NSViewController {
         // Start the initial shell
         let env = buildEnvironment()
         initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
+
+        // Fire tab open event (defer to avoid firing before window exists)
+        DispatchQueue.main.async { [weak self] in
+            self?.pluginManager?.fireEvent(.onTabOpen, context: [
+                "tabId": UUID().uuidString,
+                "windowId": self?.view.window?.windowNumber ?? 0,
+            ])
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -212,6 +220,7 @@ final class TabContainerController: NSViewController {
             frame: NSRect(x: 0, y: 0, width: 400, height: 300),
             connectionType: .local(shell: shell, workingDirectory: workingDir)
         )
+        pane.pluginManager = pluginManager
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
 
         let env = buildEnvironment()
@@ -277,6 +286,7 @@ final class TabContainerController: NSViewController {
             frame: NSRect(x: 0, y: 0, width: 400, height: 300),
             connectionType: .ssh(bookmarkID: bookmark.id)
         )
+        pane.pluginManager = pluginManager
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
         pane.startSSH(bookmark: bookmark, config: config)
 

@@ -121,6 +121,16 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
             execName: nil,
             currentDirectory: nil
         )
+
+        // Fire plugin event (treat startProcess as authenticated for now —
+        // full auth detection requires ConnectionStateTracker which is Phase B)
+        pluginManager?.fireEvent(.onSSHAuthenticated, context: [
+            "host": bookmark.host,
+            "user": bookmark.user ?? "",
+            "port": bookmark.port,
+            "bookmarkId": bookmark.id.uuidString,
+            "bookmarkName": bookmark.name,
+        ])
     }
 
     /// Attempt to reconnect an SSH session.
@@ -190,6 +200,17 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
             // SSH session ended
             state = .disconnected
             onProcessExit?(self, exitCode)
+
+            if let bookmark = sshBookmark {
+                pluginManager?.fireEvent(.onSSHDisconnected, context: [
+                    "host": bookmark.host,
+                    "user": bookmark.user ?? "",
+                    "port": bookmark.port,
+                    "bookmarkId": bookmark.id.uuidString,
+                    "exitCode": code,
+                ])
+            }
+
             if let config = sshConfig {
                 startAutoReconnect(config: config)
             } else {
@@ -200,6 +221,12 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
             state = .exited(code: code)
             onProcessExit?(self, exitCode)
             showExitBanner(exitCode: code)
+
+            pluginManager?.fireEvent(.onPaneExit, context: [
+                "paneId": id.uuidString,
+                "exitCode": code,
+                "connectionType": "local",
+            ])
         }
     }
 
