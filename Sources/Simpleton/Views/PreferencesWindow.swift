@@ -9,9 +9,11 @@ final class PreferencesWindowController {
     private var window: NSWindow?
     private var config: AppConfig
     private var onConfigChanged: ((AppConfig) -> Void)?
+    private var pluginManager: PluginManager?
 
-    init(config: AppConfig, onConfigChanged: @escaping (AppConfig) -> Void) {
+    init(config: AppConfig, pluginManager: PluginManager? = nil, onConfigChanged: @escaping (AppConfig) -> Void) {
         self.config = config
+        self.pluginManager = pluginManager
         self.onConfigChanged = onConfigChanged
     }
 
@@ -21,7 +23,7 @@ final class PreferencesWindowController {
             return
         }
 
-        let prefsView = PreferencesView(config: config) { [weak self] newConfig in
+        let prefsView = PreferencesView(config: config, pluginManager: pluginManager) { [weak self] newConfig in
             self?.config = newConfig
             self?.onConfigChanged?(newConfig)
         }
@@ -47,6 +49,7 @@ final class PreferencesWindowController {
 
 struct PreferencesView: View {
     @State var config: AppConfig
+    let pluginManager: PluginManager?
     let onChanged: (AppConfig) -> Void
 
     @State private var selectedTab = 0
@@ -63,6 +66,11 @@ struct PreferencesView: View {
                 .tabItem { Label("SSH", systemImage: "network") }.tag(3)
             KeysTab()
                 .tabItem { Label("Keys", systemImage: "keyboard") }.tag(4)
+            if let pm = pluginManager {
+                PluginsPreferencesTab(pluginManager: pm)
+                    .tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }
+                    .tag(5)
+            }
         }
         .padding(24)
         .frame(width: 600, height: 500)
