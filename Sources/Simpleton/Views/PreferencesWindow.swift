@@ -10,11 +10,15 @@ final class PreferencesWindowController {
     private var config: AppConfig
     private var onConfigChanged: ((AppConfig) -> Void)?
     private var pluginManager: PluginManager?
+    private var aiConfig: AIConfig
+    private var onAIConfigChanged: ((AIConfig) -> Void)?
 
-    init(config: AppConfig, pluginManager: PluginManager? = nil, onConfigChanged: @escaping (AppConfig) -> Void) {
+    init(config: AppConfig, pluginManager: PluginManager? = nil, aiConfig: AIConfig = AIConfig(), onConfigChanged: @escaping (AppConfig) -> Void, onAIConfigChanged: ((AIConfig) -> Void)? = nil) {
         self.config = config
         self.pluginManager = pluginManager
+        self.aiConfig = aiConfig
         self.onConfigChanged = onConfigChanged
+        self.onAIConfigChanged = onAIConfigChanged
     }
 
     func show() {
@@ -23,10 +27,13 @@ final class PreferencesWindowController {
             return
         }
 
-        let prefsView = PreferencesView(config: config, pluginManager: pluginManager) { [weak self] newConfig in
+        let prefsView = PreferencesView(config: config, pluginManager: pluginManager, aiConfig: aiConfig, onChanged: { [weak self] newConfig in
             self?.config = newConfig
             self?.onConfigChanged?(newConfig)
-        }
+        }, onAIConfigChanged: { [weak self] newAIConfig in
+            self?.aiConfig = newAIConfig
+            self?.onAIConfigChanged?(newAIConfig)
+        })
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
@@ -50,7 +57,9 @@ final class PreferencesWindowController {
 struct PreferencesView: View {
     @State var config: AppConfig
     let pluginManager: PluginManager?
+    @State var aiConfig: AIConfig
     let onChanged: (AppConfig) -> Void
+    let onAIConfigChanged: (AIConfig) -> Void
 
     @State private var selectedTab = 0
 
@@ -71,6 +80,12 @@ struct PreferencesView: View {
                     .tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }
                     .tag(5)
             }
+            AIPreferencesTab(config: aiConfig, onChanged: { newAIConfig in
+                aiConfig = newAIConfig
+                onAIConfigChanged(newAIConfig)
+            })
+                .tabItem { Label("AI", systemImage: "sparkles") }
+                .tag(6)
         }
         .padding(24)
         .frame(width: 600, height: 500)
