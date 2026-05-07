@@ -86,6 +86,12 @@ final class TabContainerController: NSViewController {
             self?.splitController.setFocus(to: focusedPane.id)
         }
 
+        // Wire title changes to tab title
+        initialPane.onTitleChange = { [weak self] title in
+            self?.view.window?.tab.title = title
+            self?.view.window?.title = title
+        }
+
         // Start the initial shell
         let env = buildEnvironment()
         initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)

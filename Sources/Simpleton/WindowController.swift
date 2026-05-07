@@ -32,6 +32,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         window.minSize = NSSize(width: 400, height: 300)
         window.tabbingMode = .preferred
         window.tabbingIdentifier = "com.simpleton.terminal"
+        window.appearance = NSAppearance(named: .darkAqua)
 
         self.tabContainer = TabContainerController(config: config, theme: theme)
 
@@ -77,6 +78,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         newWindow.title = "Simpleton"
         newWindow.tabbingMode = .preferred
         newWindow.tabbingIdentifier = "com.simpleton.terminal"
+        newWindow.appearance = NSAppearance(named: .darkAqua)
         newWindow.contentViewController = newTabContainer
 
         newTabContainer.splitController.onPaneClose = { [weak newWindow] _ in
