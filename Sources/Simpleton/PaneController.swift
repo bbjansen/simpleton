@@ -3,6 +3,44 @@ import AppKit
 import SwiftTerm
 import SimpletonCore
 
+// MARK: - Drag-and-Drop File Path Paste
+
+/// Transparent overlay that accepts file URL drags and sends quoted paths
+/// into the terminal. Returns nil from hitTest so mouse events pass through.
+final class TerminalDropTarget: NSView {
+    weak var targetTerminal: LocalProcessTerminalView?
+
+    init(terminal: LocalProcessTerminalView) {
+        self.targetTerminal = terminal
+        super.init(frame: terminal.bounds)
+        autoresizingMask = [.width, .height]
+        registerForDraggedTypes([.fileURL])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { .copy }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard let items = sender.draggingPasteboard.pasteboardItems else { return false }
+        let paths = items.compactMap { item -> String? in
+            guard let urlString = item.string(forType: .fileURL),
+                  let url = URL(string: urlString) else { return nil }
+            // Shell-quote the path
+            let escaped = url.path.replacingOccurrences(of: "'", with: "'\\''")
+            return "'\(escaped)'"
+        }
+        guard !paths.isEmpty else { return false }
+        let text = paths.joined(separator: " ")
+        let bytes = Array(text.utf8)
+        targetTerminal?.send(data: bytes[...])
+        return true
+    }
+}
+
 /// Owns a single terminal pane — its LocalProcessTerminalView, process lifecycle,
 /// and exit/disconnect state. This is the bridge between the logical SplitNode.pane(id)
 /// and the actual NSView + PTY process.
@@ -50,6 +88,20 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         super.init()
         self.terminalView.processDelegate = self
         self.terminalView.autoresizingMask = [.width, .height]
+
+        // Add drag-and-drop overlay for file paths
+        let dropTarget = TerminalDropTarget(terminal: terminalView)
+        terminalView.addSubview(dropTarget)
+
+        // Build right-click context menu
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Copy", action: #selector(contextCopy(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Paste", action: #selector(contextPaste(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Select All", action: #selector(contextSelectAll(_:)), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Search Scrollback", action: #selector(contextSearchScrollback(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Clear Scrollback", action: #selector(contextClearScrollback(_:)), keyEquivalent: "")
+        terminalView.menu = menu
 
         // Track when user clicks this terminal pane to update focus
         mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
@@ -113,6 +165,8 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         connectionType = .ssh(bookmarkID: bookmark.id)
         state = .connecting
         reconnectAttempts = 0
+
+        onTitleChange?(statusTitle(bookmark.name))
 
         terminalView.startProcess(
             executable: command.executable,
@@ -183,7 +237,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     }
 
     func setTerminalTitle(source: LocalProcessTerminalView, title: String) {
-        onTitleChange?(title)
+        onTitleChange?(statusTitle(title))
     }
 
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
@@ -474,6 +528,59 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     @objc private func cancelReconnectClicked() {
         cancelAutoReconnect()
         showDisconnectedBanner(canReconnect: true)
+    }
+
+    // MARK: - Status Title
+
+    /// Prefixes a title with a status emoji reflecting the pane's current state.
+    private func statusTitle(_ title: String) -> String {
+        let emoji: String
+        switch state {
+        case .running:
+            if case .ssh = connectionType {
+                emoji = "\u{1F7E2}" // green circle — running SSH
+            } else {
+                return title // no prefix for local shells
+            }
+        case .connecting:
+            emoji = "\u{1F7E1}" // yellow circle
+        case .disconnected:
+            emoji = "\u{1F534}" // red circle
+        case .exited:
+            emoji = "\u{23F9}\u{FE0F}" // stop button
+        case .authRequired:
+            emoji = "\u{1F7E1}" // yellow circle
+        }
+        return "\(emoji) \(title)"
+    }
+
+    // MARK: - Context Menu Actions
+
+    @objc private func contextCopy(_ sender: Any?) {
+        if let selected = terminalView.getSelection(), !selected.isEmpty {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(selected, forType: .string)
+        }
+    }
+
+    @objc private func contextPaste(_ sender: Any?) {
+        if let text = NSPasteboard.general.string(forType: .string) {
+            let bytes = Array(text.utf8)
+            terminalView.send(data: bytes[...])
+        }
+    }
+
+    @objc private func contextSelectAll(_ sender: Any?) {
+        terminalView.selectAll()
+    }
+
+    @objc private func contextSearchScrollback(_ sender: Any?) {
+        showSearch()
+    }
+
+    @objc private func contextClearScrollback(_ sender: Any?) {
+        // Send escape sequences to clear screen and scrollback buffer
+        terminalView.feed(text: "\u{001b}[2J\u{001b}[3J\u{001b}[H")
     }
 
     // MARK: - Search

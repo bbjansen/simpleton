@@ -68,7 +68,29 @@ final class SplitController: NSObject, NSSplitViewDelegate {
     }
 
     /// Close a specific pane. If it's the last pane, calls onPaneClose.
+    /// Shows a confirmation alert when the pane has a running process.
     func closePane(_ paneID: PaneID) {
+        // Confirm before closing a pane with a running process
+        if let pane = panes[paneID], pane.state == .running,
+           let window = pane.terminalView.window {
+            let alert = NSAlert()
+            alert.messageText = "Close this pane?"
+            alert.informativeText = "A process is still running in this pane. Are you sure you want to close it?"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Close")
+            alert.addButton(withTitle: "Cancel")
+            alert.beginSheetModal(for: window) { [weak self] response in
+                if response == .alertFirstButtonReturn {
+                    self?.performClosePane(paneID)
+                }
+            }
+            return
+        }
+        performClosePane(paneID)
+    }
+
+    /// Internal close logic after any confirmation has been accepted.
+    private func performClosePane(_ paneID: PaneID) {
         guard let newTree = SplitTreeOperations.closePane(in: tree, paneID: paneID) else {
             // Last pane — notify delegate
             onPaneClose?(paneID)
@@ -151,6 +173,19 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         if let pane = panes[paneID] {
             pane.terminalView.window?.makeFirstResponder(pane.terminalView)
             onFocusChange?(paneID)
+        }
+
+        // Highlight the focused pane with a blue border when there are 2+ panes
+        let showBorder = panes.count >= 2
+        for (id, pane) in panes {
+            pane.terminalView.wantsLayer = true
+            if showBorder && id == paneID {
+                pane.terminalView.layer?.borderWidth = 2
+                pane.terminalView.layer?.borderColor = NSColor.systemBlue.cgColor
+            } else {
+                pane.terminalView.layer?.borderWidth = 0
+                pane.terminalView.layer?.borderColor = nil
+            }
         }
     }
 
