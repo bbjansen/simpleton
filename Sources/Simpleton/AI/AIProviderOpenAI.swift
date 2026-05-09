@@ -38,10 +38,16 @@ struct OpenAIProvider: AIProviderProtocol {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let first = choices.first,
-              let message = first["message"] as? [String: Any],
-              let content = message["content"] as? String else {
+              let message = first["message"] as? [String: Any] else {
             throw AIError.invalidResponse
         }
+        // Some models (e.g. Qwen) put thinking in "reasoning" and answer in "content"
+        let content = message["content"] as? String ?? ""
+        let reasoning = message["reasoning"] as? String
+        if content.isEmpty, let reasoning = reasoning {
+            return reasoning
+        }
+        guard !content.isEmpty else { throw AIError.invalidResponse }
         return content
     }
 
@@ -71,8 +77,18 @@ struct OpenAIProvider: AIProviderProtocol {
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
 
-                    guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                        throw AIError.providerError("Streaming failed")
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw AIError.providerError("No response from server")
+                    }
+                    guard httpResponse.statusCode == 200 else {
+                        // Try to read error body for better message
+                        var errorMsg = "Streaming failed (\(httpResponse.statusCode))"
+                        var bodyData = Data()
+                        for try await byte in bytes { bodyData.append(byte); if bodyData.count > 500 { break } }
+                        if let body = String(data: bodyData, encoding: .utf8), body.contains("not found") {
+                            errorMsg = "Model '\(model)' not found. Check Preferences > AI > Model name."
+                        }
+                        throw AIError.providerError(errorMsg)
                     }
 
                     for try await line in bytes.lines {
@@ -84,9 +100,13 @@ struct OpenAIProvider: AIProviderProtocol {
                               let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
 
                         if let choices = event["choices"] as? [[String: Any]],
-                           let delta = choices.first?["delta"] as? [String: Any],
-                           let content = delta["content"] as? String {
-                            continuation.yield(content)
+                           let delta = choices.first?["delta"] as? [String: Any] {
+                            // Check both "content" and "reasoning" (Qwen-style thinking models)
+                            if let content = delta["content"] as? String, !content.isEmpty {
+                                continuation.yield(content)
+                            } else if let reasoning = delta["reasoning"] as? String, !reasoning.isEmpty {
+                                continuation.yield(reasoning)
+                            }
                         }
                     }
                     continuation.finish()
