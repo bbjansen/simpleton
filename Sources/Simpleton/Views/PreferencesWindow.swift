@@ -7,6 +7,7 @@ import SimpletonCore
 final class PreferencesWindowController {
 
     private var window: NSWindow?
+    private var closeObserver: NSObjectProtocol?
     private var config: AppConfig
     private var onConfigChanged: ((AppConfig) -> Void)?
     private var pluginManager: PluginManager?
@@ -47,7 +48,13 @@ final class PreferencesWindowController {
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
-        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+        closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            // Remove the observer immediately so it cannot fire again during the
+            // delayed teardown, preventing a retain-cycle crash.
+            if let obs = self?.closeObserver {
+                NotificationCenter.default.removeObserver(obs)
+                self?.closeObserver = nil
+            }
             // Delay releasing the window reference so AppKit animation blocks that were
             // captured during the close sequence finish before the window is deallocated,
             // preventing EXC_BAD_ACCESS in _NSWindowTransformAnimation / _Block_release.

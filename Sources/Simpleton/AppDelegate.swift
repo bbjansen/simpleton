@@ -140,6 +140,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard config.general.confirmBeforeClosing else { return .terminateNow }
+
+        // Count active SSH sessions across all windows/tabs
+        var activeSSHCount = 0
+        for wc in windowControllers {
+            guard let window = wc.window else { continue }
+            let allWindows = window.tabbedWindows ?? [window]
+            for w in allWindows {
+                guard let tabContainer = w.contentViewController as? TabContainerController else { continue }
+                for pane in tabContainer.splitController.panes.values {
+                    if case .ssh = pane.connectionType, pane.state == .running {
+                        activeSSHCount += 1
+                    }
+                }
+            }
+        }
+
+        guard activeSSHCount > 0 else { return .terminateNow }
+
+        let alert = NSAlert()
+        alert.messageText = "Quit Simpleton?"
+        alert.informativeText = "There \(activeSSHCount == 1 ? "is" : "are") \(activeSSHCount) active SSH session\(activeSSHCount == 1 ? "" : "s"). Are you sure you want to quit?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+        let response = alert.runModal()
+        return response == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
     }
