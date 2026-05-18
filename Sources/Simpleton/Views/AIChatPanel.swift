@@ -363,6 +363,8 @@ struct AIChatPanelView: View {
         - **recall_memory(query, count?)**: Search project memory semantically. Returns the most relevant saved memories. Use when you need to recall past decisions, fixes, or conventions.
         - **list_memories(type?)**: List all saved memories, optionally filtered by type.
         - **forget_memory(id)**: Delete a memory entry by ID (full UUID or first 8 chars).
+        - **list_skills(category?)**: List available skills. Optionally filter by keyword. Shows slug, description, and parameters.
+        - **run_skill(slug, params?)**: Invoke a skill by its slug (e.g., "system-health"). Pass params as an object. Missing params auto-fill from terminal context. Returns task instructions to execute.
 
         ## Interactive commands
         Some commands require interactive input (y/n prompts, selection menus, passwords).
@@ -411,7 +413,7 @@ struct AIChatPanelView: View {
 
         // Use agent session so the AI can execute commands across panes
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
-            let session = AgentSession(aiService: aiService, memoryStore: memoryStore)
+            let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore)
             configureSession(session, conversation: conv)
             conv.activeSession = session
             conv.isRunning = true
@@ -484,7 +486,7 @@ struct AIChatPanelView: View {
         skillValues = [:]
         aiSuggestedKeys = []
 
-        let session = AgentSession(aiService: aiService, memoryStore: memoryStore)
+        let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore)
 
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
             configureSession(session, conversation: conv)

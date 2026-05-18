@@ -7,6 +7,7 @@ struct ToolContext {
     let focusedPane: PaneController
     let processRunner: ProcessRunner
     var memoryStore: MemoryStore?
+    var skillStore: SkillStore?
 }
 
 protocol ToolHandler {
