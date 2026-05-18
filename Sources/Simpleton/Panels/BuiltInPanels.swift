@@ -113,4 +113,18 @@ extension PanelDefinition {
             onInsert: context.onInsertCommand
         ))
     }
+
+    static let environment = PanelDefinition(
+        id: PanelProfile.PanelID.environment,
+        name: "Environment",
+        icon: "list.bullet.rectangle",
+        description: "Shell environment variables",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: EnvironmentPanelView(
+            shell: context.appConfig.general.shell,
+            currentPaneProvider: context.currentPane
+        ))
+    }
 }
