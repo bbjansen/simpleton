@@ -30,6 +30,8 @@ final class AgentSession: ObservableObject {
     var onError: ((String) -> Void)?
 
     private let aiService: AIService
+    private let processRunner = ProcessRunner()
+    private let promptBuilder = PromptBuilder()
     private var isCancelled = false
     private var pendingApprovalContinuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>?
     private var turnCount = 0
@@ -195,7 +197,7 @@ final class AgentSession: ObservableObject {
                     let attrs = try? FileManager.default.attributesOfItem(atPath: fullPath)
                     let size = attrs?[.size] as? UInt64 ?? 0
                     let suffix = isDir.boolValue ? "/" : ""
-                    lines.append("\(item)\(suffix)  \(isDir.boolValue ? "dir" : formatFileSize(size))")
+                    lines.append("\(item)\(suffix)  \(isDir.boolValue ? "dir" : processRunner.formatFileSize(size))")
                 }
                 turns.append(.toolResult(toolCallID: id, output: lines.isEmpty ? "[Empty directory]" : lines.joined(separator: "\n")))
             } catch {
@@ -242,7 +244,7 @@ final class AgentSession: ObservableObject {
             Host: \(Host.current().localizedName ?? "unknown")
             CPU cores: \(info.processorCount)
             Memory: \(info.physicalMemory / (1024 * 1024 * 1024)) GB
-            Uptime: \(formatUptime(info.systemUptime))
+            Uptime: \(processRunner.formatUptime(info.systemUptime))
             User: \(NSUserName())
             Home: \(NSHomeDirectory())
             Shell: \(ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
@@ -283,7 +285,7 @@ final class AgentSession: ObservableObject {
 
         case "get_git_status":
             let dir = args["directory"] as? String
-            let result = runSubprocess("/usr/bin/git", args: ["status", "--short"], cwd: dir)
+            let result = processRunner.run("/usr/bin/git", args: ["status", "--short"], cwd: dir)
             turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[Clean working tree]" : result))
             return .continued
 
@@ -293,14 +295,14 @@ final class AgentSession: ObservableObject {
             var gitArgs = ["diff"]
             if staged { gitArgs.append("--cached") }
             gitArgs.append("--stat")
-            let result = runSubprocess("/usr/bin/git", args: gitArgs, cwd: dir)
+            let result = processRunner.run("/usr/bin/git", args: gitArgs, cwd: dir)
             turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[No changes]" : result))
             return .continued
 
         case "get_git_log":
             let dir = args["directory"] as? String
             let count = args["count"] as? Int ?? 10
-            let result = runSubprocess("/usr/bin/git", args: ["log", "--oneline", "-\(min(count, 50))"], cwd: dir)
+            let result = processRunner.run("/usr/bin/git", args: ["log", "--oneline", "-\(min(count, 50))"], cwd: dir)
             turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[No commits]" : result))
             return .continued
 
@@ -396,7 +398,7 @@ final class AgentSession: ObservableObject {
                 return .continued
             }
             let host = args["host"] as? String ?? "localhost"
-            let result = runSubprocess("/usr/sbin/lsof", args: ["-i", ":\(port)", "-P", "-n"])
+            let result = processRunner.run("/usr/sbin/lsof", args: ["-i", ":\(port)", "-P", "-n"])
             if result.isEmpty {
                 turns.append(.toolResult(toolCallID: id, output: "Port \(port) on \(host): not in use"))
             } else {
@@ -409,7 +411,7 @@ final class AgentSession: ObservableObject {
                 turns.append(.toolResult(toolCallID: id, output: "Missing 'name' parameter"))
                 return .continued
             }
-            let result = runSubprocess("/usr/bin/pgrep", args: ["-fl", name])
+            let result = processRunner.run("/usr/bin/pgrep", args: ["-fl", name])
             turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "No processes matching '\(name)'" : result))
             return .continued
 
@@ -434,44 +436,6 @@ final class AgentSession: ObservableObject {
             turns.append(.toolResult(toolCallID: id, output: "Unknown tool: \(name)"))
             return .continued
         }
-    }
-
-    private func runSubprocess(_ executable: String, args: [String], cwd: String? = nil) -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = args
-        if let cwd = cwd {
-            process.currentDirectoryURL = URL(fileURLWithPath: NSString(string: cwd).expandingTildeInPath)
-        }
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            let maxChars = 8000
-            if output.count > maxChars {
-                return String(output.prefix(maxChars)) + "\n[... truncated]"
-            }
-            return output.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            return "Error: \(error.localizedDescription)"
-        }
-    }
-
-    private func formatFileSize(_ bytes: UInt64) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return "\(bytes / 1024) KB" }
-        return "\(bytes / (1024 * 1024)) MB"
-    }
-
-    private func formatUptime(_ seconds: TimeInterval) -> String {
-        let hours = Int(seconds) / 3600
-        let mins = (Int(seconds) % 3600) / 60
-        if hours > 24 { return "\(hours / 24)d \(hours % 24)h" }
-        return "\(hours)h \(mins)m"
     }
 
     /// Handle run_command tool call with approval flow.
@@ -600,8 +564,8 @@ final class AgentSession: ObservableObject {
 
     func run(skill: Skill, params: [String: String], conversation: TabConversation, focusedPane: PaneController, autopilot: Bool) async {
         isCancelled = false
-        let system = buildSystemPrompt(skill: skill, params: params, conversation: conversation, focusedPane: focusedPane)
-        let initialMessage = "Run the \(skill.name) skill.\(buildParamSummary(params: params))"
+        let system = promptBuilder.buildSystemPrompt(skill: skill, params: params, conversation: conversation, focusedPane: focusedPane)
+        let initialMessage = "Run the \(skill.name) skill.\(promptBuilder.buildParamSummary(params: params))"
         var turns: [ConversationTurn] = [.user(initialMessage)]
 
         while !isCancelled {
@@ -635,8 +599,8 @@ final class AgentSession: ObservableObject {
 
     func run(skill: Skill, params: [String: String], pane: PaneController, autopilot: Bool) async {
         isCancelled = false
-        let system = buildSystemPromptLegacy(skill: skill, params: params, pane: pane)
-        let initialMessage = "Run the \(skill.name) skill.\(buildParamSummary(params: params))"
+        let system = promptBuilder.buildSystemPromptLegacy(skill: skill, params: params, pane: pane)
+        let initialMessage = "Run the \(skill.name) skill.\(promptBuilder.buildParamSummary(params: params))"
         var turns: [ConversationTurn] = [.user(initialMessage)]
 
         while !isCancelled {
@@ -761,64 +725,4 @@ final class AgentSession: ObservableObject {
         return ("[Timed out waiting for command output after \(maxWait/1000)s]", nil)
     }
 
-    // MARK: - System Prompts
-
-    private func buildSystemPrompt(skill: Skill, params: [String: String], conversation: TabConversation, focusedPane: PaneController) -> String {
-        var prompt = skill.systemPrompt
-        for (key, value) in params {
-            prompt = prompt.replacingOccurrences(of: "{\(key)}", with: value)
-        }
-
-        let ctxStr: String
-        if let composite = conversation.buildCompositeContext() {
-            ctxStr = AIContextBuilder.formatCompositeForPrompt(composite)
-        } else {
-            let ctx = AIContextBuilder.build(terminalView: focusedPane.terminalView, cwd: focusedPane.currentDirectory, shell: nil, includeSelection: false)
-            ctxStr = AIContextBuilder.formatForPrompt(ctx)
-        }
-
-        return """
-        You are an autonomous terminal agent. Complete the following task step by step using run_command.
-        When the task is fully done, respond with a plain text summary (no tool call).
-
-        TASK: \(prompt)
-
-        CONTEXT:
-        \(ctxStr)
-        """
-    }
-
-    private func buildSystemPromptLegacy(skill: Skill, params: [String: String], pane: PaneController) -> String {
-        var prompt = skill.systemPrompt
-        for (key, value) in params {
-            prompt = prompt.replacingOccurrences(of: "{\(key)}", with: value)
-        }
-        let ctx = AIContextBuilder.build(terminalView: pane.terminalView, cwd: pane.currentDirectory, shell: nil, includeSelection: false)
-        let ctxStr = AIContextBuilder.formatForPrompt(ctx)
-        return """
-        You are an autonomous terminal agent. Complete the following task step by step using run_command.
-        When the task is fully done, respond with a plain text summary (no tool call).
-
-        TASK: \(prompt)
-
-        CONTEXT:
-        \(ctxStr)
-        """
-    }
-
-    private func buildParamSummary(params: [String: String]) -> String {
-        guard !params.isEmpty else { return "" }
-        let list = params.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
-        return " Parameters: \(list)."
-    }
-
-    /// Extract pane number from tool call explanation.
-    private func extractPaneNumber(from explanation: String) -> Int? {
-        let pattern = "(?i)pane\\s*:?\\s*(\\d+)"
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: explanation, range: NSRange(location: 0, length: (explanation as NSString).length)),
-              match.numberOfRanges >= 2 else { return nil }
-        let numStr = (explanation as NSString).substring(with: match.range(at: 1))
-        return Int(numStr)
-    }
 }
