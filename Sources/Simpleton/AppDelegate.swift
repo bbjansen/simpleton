@@ -24,6 +24,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var aiConfig: AIConfig = AIConfig()
     private var skillStore: SkillStore?
     private var panelRegistry: PanelRegistry?
+    private var terminalActions: TerminalActions!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -148,6 +149,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menuResult = MenuBarBuilder.build(target: self, workspacesMenuDelegate: self)
         self.workspacesMenu = menuResult.workspacesMenu
+
+        terminalActions = TerminalActions(
+            activeSplitController: { [weak self] in self?.activeSplitController },
+            activeWindowController: { [weak self] in self?.activeWindowController },
+            windowControllers: { [weak self] in self?.windowControllers ?? [] },
+            config: { [weak self] in self?.config ?? AppConfig() }
+        )
 
         NotificationCenter.default.addObserver(
             self,
@@ -303,116 +311,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Split Actions
 
-    @objc func splitRight() {
-        activeSplitController?.splitFocusedPane(direction: .vertical)
-    }
-
-    @objc func splitDown() {
-        activeSplitController?.splitFocusedPane(direction: .horizontal)
-    }
-
-    @objc func closePane() {
-        guard let sc = activeSplitController else { return }
-        sc.closePane(sc.focusedPaneID)
-    }
-
-    @objc func pickLayout() {
-        guard let window = NSApp.keyWindow,
-              let sc = activeSplitController else { return }
-
-        let alert = NSAlert()
-        alert.messageText = "Pick Layout"
-        alert.informativeText = "Choose a layout for this tab."
-        for layout in PredefinedLayouts.all {
-            alert.addButton(withTitle: layout.name)
-        }
-        alert.addButton(withTitle: "Cancel")
-
-        alert.beginSheetModal(for: window) { response in
-            let index = Int(response.rawValue) - Int(NSApplication.ModalResponse.alertFirstButtonReturn.rawValue)
-            guard index >= 0, index < PredefinedLayouts.all.count else { return }
-            let layout = PredefinedLayouts.all[index]
-            sc.applyLayout(layout)
-        }
-    }
-
-    @objc func togglePaneZoom() {
-        activeSplitController?.toggleZoom()
-    }
+    @objc func splitRight() { terminalActions.splitRight() }
+    @objc func splitDown() { terminalActions.splitDown() }
+    @objc func closePane() { terminalActions.closePane() }
+    @objc func pickLayout() { terminalActions.pickLayout() }
+    @objc func togglePaneZoom() { terminalActions.togglePaneZoom() }
 
     @objc func switchToTabN(_ sender: NSMenuItem) {
-        guard let window = NSApp.keyWindow,
-              let tabbedWindows = window.tabbedWindows,
-              sender.tag > 0, sender.tag <= tabbedWindows.count else { return }
-        tabbedWindows[sender.tag - 1].makeKeyAndOrderFront(nil)
+        terminalActions.switchToTabN(tag: sender.tag)
     }
 
     // MARK: - Focus Navigation
 
-    @objc func focusLeft() {
-        activeSplitController?.moveFocus(.left)
-    }
-    @objc func focusRight() {
-        activeSplitController?.moveFocus(.right)
-    }
-    @objc func focusUp() {
-        activeSplitController?.moveFocus(.up)
-    }
-    @objc func focusDown() {
-        activeSplitController?.moveFocus(.down)
-    }
+    @objc func focusLeft() { terminalActions.focusLeft() }
+    @objc func focusRight() { terminalActions.focusRight() }
+    @objc func focusUp() { terminalActions.focusUp() }
+    @objc func focusDown() { terminalActions.focusDown() }
 
     // MARK: - Tab Actions
 
-    @objc func newTab() {
-        // Find the WindowController that owns the key window (or its tab group)
-        guard let keyWindow = NSApp.keyWindow else { return }
-        if let wc = windowControllers.first(where: { $0.window === keyWindow || $0.window?.tabbedWindows?.contains(keyWindow) == true }) {
-            wc.newTab()
-        } else {
-            activeWindowController?.newTab()
-        }
-    }
-
-    @objc func closeTab() {
-        NSApp.keyWindow?.close()
-    }
-
-    @objc func nextTab() {
-        NSApp.keyWindow?.selectNextTab(nil)
-    }
-
-    @objc func prevTab() {
-        NSApp.keyWindow?.selectPreviousTab(nil)
-    }
+    @objc func newTab() { terminalActions.newTab() }
+    @objc func closeTab() { terminalActions.closeTab() }
+    @objc func nextTab() { terminalActions.nextTab() }
+    @objc func prevTab() { terminalActions.prevTab() }
 
     // MARK: - Font Actions
 
-    @objc func increaseFontSize() {
-        guard let sc = activeSplitController else { return }
-        for pane in sc.panes.values {
-            let size = pane.terminalView.font.pointSize
-            pane.terminalView.font = pane.terminalView.font.withSize(size + 1)
-        }
-    }
-
-    @objc func decreaseFontSize() {
-        guard let sc = activeSplitController else { return }
-        for pane in sc.panes.values {
-            let size = pane.terminalView.font.pointSize
-            if size > 8 {
-                pane.terminalView.font = pane.terminalView.font.withSize(size - 1)
-            }
-        }
-    }
-
-    @objc func resetFontSize() {
-        guard let sc = activeSplitController else { return }
-        let defaultSize = CGFloat(config.appearance.fontSize)
-        for pane in sc.panes.values {
-            pane.terminalView.font = pane.terminalView.font.withSize(defaultSize)
-        }
-    }
+    @objc func increaseFontSize() { terminalActions.increaseFontSize() }
+    @objc func decreaseFontSize() { terminalActions.decreaseFontSize() }
+    @objc func resetFontSize() { terminalActions.resetFontSize() }
 
     // MARK: - Quick Connect
 
