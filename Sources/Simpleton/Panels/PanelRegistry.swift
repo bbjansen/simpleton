@@ -76,6 +76,13 @@ final class PanelRegistry: ObservableObject {
         activeProfile = profile
     }
 
+    /// Rebind the cached AI Chat panel to a new TabConversation.
+    /// Called when the active tab changes.
+    func rebindAIChat(to conversation: TabConversation?) {
+        guard let controller = controllers[PanelProfile.PanelID.aiChat] as? AIChatPanelController else { return }
+        controller.conversation = conversation
+    }
+
     // MARK: - Private
 
     private func persistUserProfiles() throws {
