@@ -26,6 +26,14 @@ struct ToolHandlerRegistry {
         }
     }
 
+    /// Register a handler for a set of dynamically-discovered tool names.
+    /// Used by MCPToolBridge whose tools are not known at compile time.
+    mutating func registerDynamic(handler: ToolHandler, toolNames: Set<String>) {
+        for name in toolNames {
+            handlers[name] = handler
+        }
+    }
+
     func handler(for toolName: String) -> ToolHandler? {
         handlers[toolName]
     }

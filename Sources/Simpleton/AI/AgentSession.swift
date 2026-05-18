@@ -75,7 +75,7 @@ final class AgentSession: ObservableObject {
     var maxTurns = 25
     private var warningTurn: Int { max(maxTurns - 10, 10) }
 
-    init(aiService: AIService, memoryStore: MemoryStore? = nil, skillStore: SkillStore? = nil, eventBus: WorkspaceEventBus? = nil) {
+    init(aiService: AIService, memoryStore: MemoryStore? = nil, skillStore: SkillStore? = nil, eventBus: WorkspaceEventBus? = nil, mcpClients: [MCPClient] = []) {
         self.aiService = aiService
         self.memoryStore = memoryStore
         self.skillStore = skillStore
@@ -91,7 +91,14 @@ final class AgentSession: ObservableObject {
         if skillStore != nil {
             handlers.append(SkillTools())
         }
-        self.toolRegistry = ToolHandlerRegistry(handlers)
+        var registry = ToolHandlerRegistry(handlers)
+        // Register MCP tools dynamically if any clients are connected
+        let connectedClients = mcpClients.filter(\.isConnected)
+        if !connectedClients.isEmpty {
+            let bridge = MCPToolBridge(clients: connectedClients)
+            registry.registerDynamic(handler: bridge, toolNames: bridge.allToolNames)
+        }
+        self.toolRegistry = registry
     }
 
     func cancel() {

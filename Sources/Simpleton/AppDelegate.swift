@@ -210,6 +210,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             aiService: { [weak self] in self?.aiService },
             skillStore: { [weak self] in self?.skillStore },
             memoryStore: { [weak self] in self?.memoryStore },
+            mcpConfigStore: { [weak self] in self?.mcpConfigStore },
             eventBus: { [weak self] in self?.workspaceEventBus },
             workspaceManager: { [weak self] in self?.workspaceManager },
             clearSavedState: { [weak self] in self?.sessionManager?.clearSavedState() },

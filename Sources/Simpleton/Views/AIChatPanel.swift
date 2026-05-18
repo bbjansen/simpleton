@@ -345,6 +345,9 @@ struct AIChatPanelView: View {
                 crossTabSection = "\n\n\(summary)"
             }
         }
+        // Capture MCP config for async connection in Task blocks
+        let mcpStore = mcpConfigStore
+        let currentMCPClients = mcpClients
         let system = """
         You are a powerful terminal agent embedded in a native macOS terminal emulator. You have full access to the user's terminal panes and can execute commands, read output, and orchestrate multi-step workflows.
 
@@ -427,16 +430,28 @@ struct AIChatPanelView: View {
 
         // Use agent session so the AI can execute commands across panes
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
-            let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus)
-            configureSession(session, conversation: conv)
-            conv.activeSession = session
             conv.isRunning = true
             Task {
+                // Connect MCP servers lazily on first message
+                let connectedClients = await Self.connectMCPClients(
+                    existing: currentMCPClients, store: mcpStore
+                )
+                if connectedClients.count != currentMCPClients.count {
+                    mcpClients = connectedClients
+                }
+
+                let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus, mcpClients: connectedClients)
+                await MainActor.run {
+                    configureSession(session, conversation: conv)
+                    conv.activeSession = session
+                }
+
+                let mcpSection = Self.buildMCPSection(clients: connectedClients)
                 let projectSection = await Self.buildProjectSection(indexer: indexer, directory: projectDir)
                 await session.chat(
                     message: text,
                     history: history,
-                    systemPrompt: system + projectSection,
+                    systemPrompt: system + mcpSection + projectSection,
                     conversation: conv,
                     focusedPane: resolved.pane,
                     autopilotMode: autopilotMode
@@ -503,7 +518,7 @@ struct AIChatPanelView: View {
         skillValues = [:]
         aiSuggestedKeys = []
 
-        let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus)
+        let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus, mcpClients: mcpClients)
 
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
             configureSession(session, conversation: conv)
@@ -532,6 +547,35 @@ struct AIChatPanelView: View {
         guard let indexer, let directory else { return "" }
         guard let index = await indexer.index(for: directory) else { return "" }
         return "\n\n## Project context\n\(index.promptSummary)"
+    }
+
+    /// Connect MCP servers lazily. Returns existing clients if already connected,
+    /// or creates new connections from the config store.
+    private static func connectMCPClients(existing: [MCPClient], store: MCPConfigStore?) async -> [MCPClient] {
+        // If we already have connected clients, return them
+        if !existing.isEmpty { return existing }
+        guard let store = store, !store.enabledServers.isEmpty else { return [] }
+
+        var clients: [MCPClient] = []
+        for config in store.enabledServers {
+            let client = MCPClient(config: config)
+            do {
+                try await client.connect()
+                clients.append(client)
+            } catch {
+                print("[MCP] Failed to connect \(config.name): \(error)")
+            }
+        }
+        return clients
+    }
+
+    /// Build the MCP tool descriptions section for the system prompt.
+    private static func buildMCPSection(clients: [MCPClient]) -> String {
+        guard !clients.isEmpty else { return "" }
+        let bridge = MCPToolBridge(clients: clients)
+        let descriptions = bridge.toolDescriptions()
+        guard !descriptions.isEmpty else { return "" }
+        return "\n\n## External tools (MCP servers)\n\(descriptions)"
     }
 }
 

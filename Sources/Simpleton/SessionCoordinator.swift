@@ -15,6 +15,7 @@ final class SessionCoordinator {
     private let aiService: () -> AIService?
     private let skillStore: () -> SkillStore?
     private let memoryStore: () -> MemoryStore?
+    private let mcpConfigStore: () -> MCPConfigStore?
     private let eventBus: () -> WorkspaceEventBus?
     private let workspaceManager: () -> WorkspaceManager?
     private let clearSavedState: () -> Void
@@ -32,6 +33,7 @@ final class SessionCoordinator {
         aiService: @escaping () -> AIService?,
         skillStore: @escaping () -> SkillStore?,
         memoryStore: @escaping () -> MemoryStore?,
+        mcpConfigStore: @escaping () -> MCPConfigStore?,
         eventBus: @escaping () -> WorkspaceEventBus?,
         workspaceManager: @escaping () -> WorkspaceManager?,
         clearSavedState: @escaping () -> Void,
@@ -48,6 +50,7 @@ final class SessionCoordinator {
         self.aiService = aiService
         self.skillStore = skillStore
         self.memoryStore = memoryStore
+        self.mcpConfigStore = mcpConfigStore
         self.eventBus = eventBus
         self.workspaceManager = workspaceManager
         self.clearSavedState = clearSavedState
@@ -127,6 +130,7 @@ final class SessionCoordinator {
             wc.aiService = aiService()
             wc.skillStore = skillStore()
             wc.memoryStore = memoryStore()
+            wc.mcpConfigStore = mcpConfigStore()
             wc.eventBus = eventBus()
             addWindowController(wc)
 
