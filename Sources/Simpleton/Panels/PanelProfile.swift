@@ -84,23 +84,23 @@ extension PanelProfile {
         PanelProfile(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
             name: "General",
-            leftPanelIDs: ["connections"],
+            leftPanelIDs: ["connections", "history", "file-browser"],
             rightPanelIDs: ["ai-chat"],
-            leftActivePanelID: nil,
+            leftActivePanelID: "connections",
             rightActivePanelID: nil
         ),
         PanelProfile(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
             name: "Developer",
-            leftPanelIDs: ["connections", "snippets", "notes"],
-            rightPanelIDs: ["ai-chat", "skills"],
-            leftActivePanelID: nil,
+            leftPanelIDs: ["connections", "snippets", "notes", "history", "environment", "file-browser", "processes", "ssh-tunnels"],
+            rightPanelIDs: ["ai-chat"],
+            leftActivePanelID: "connections",
             rightActivePanelID: "ai-chat"
         ),
         PanelProfile(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
             name: "DevOps",
-            leftPanelIDs: ["connections", "notes"],
+            leftPanelIDs: ["connections", "notes", "ssh-tunnels", "processes", "git", "docker"],
             rightPanelIDs: ["ai-chat"],
             leftActivePanelID: "connections",
             rightActivePanelID: nil
