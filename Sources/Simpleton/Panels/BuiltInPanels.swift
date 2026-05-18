@@ -76,13 +76,7 @@ final class SkillsPanelDefinition: PanelDefinition {
     let isBuiltIn = true
 
     func makeViewController(context: PanelContext) -> NSViewController {
-        let vc = NSViewController()
-        vc.view = NSHostingView(rootView:
-            Text("Skills panel — coming soon")
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        )
-        return vc
+        SkillsPanelController(context: context)
     }
 }
 
