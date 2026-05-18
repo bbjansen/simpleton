@@ -1,5 +1,7 @@
 // Sources/Simpleton/TabContainerController.swift
 import AppKit
+import SwiftUI
+import Combine
 import SimpletonCore
 
 /// View controller for one tab's content. Owns a SplitController and manages
@@ -10,39 +12,46 @@ final class TabContainerController: NSViewController {
     private let config: AppConfig
     private let theme: Theme
     private var closeObserver: NSObjectProtocol?
-    private var sidebarToggleObserver: NSObjectProtocol?
     private var searchObserver: NSObjectProtocol?
-    private var aiChatObserver: NSObjectProtocol?
-    private var skillPickerObserver: NSObjectProtocol?
-    private var aiChatController: AIChatPanelController?
-    private var isAIChatVisible = false
+    // Notification shims — kept so existing menu items continue to work
+    private var sidebarShimObserver: NSObjectProtocol?
+    private var aiChatShimObserver: NSObjectProtocol?
+    private var skillPickerShimObserver: NSObjectProtocol?
 
-    /// The outer NSSplitView: sidebar | terminal content
-    private var outerSplitView: NSSplitView?
-    private var sidebarHostController: SidebarHostController?
-    private var isSidebarVisible = false
+    // Auto Layout panel management
+    private var contentSplit: NSSplitView?
+    private var leftBarHost: NSHostingView<ActivityBarView>?
+    private var rightBarHost: NSHostingView<ActivityBarView>?
+    private var leftPanelVC: NSViewController?
+    private var leftPanelID: String?
+    private var rightPanelVC: NSViewController?
+    private var rightPanelID: String?
+    private var cancellables = Set<AnyCancellable>()
 
-    /// Reference to the bookmark store for frecency updates.
-    var bookmarkStore: BookmarkStore? {
-        didSet { setupSidebar() }
+    /// Set before the window is shown. Propagated from AppDelegate → WindowController → here.
+    var panelRegistry: PanelRegistry? {
+        didSet {
+            subscribeToRegistry()
+            if isViewLoaded { rebuildActivityBars() }
+        }
     }
 
-    /// SSH config watcher reference.
-    var sshConfigWatcher: SSHConfigWatcher? {
-        didSet { setupSidebar() }
-    }
-
-    /// Plugin manager reference — propagated to panes.
+    /// Set from WindowController after init.
+    var bookmarkStore: BookmarkStore?
+    var sshConfigWatcher: SSHConfigWatcher?
     var pluginManager: PluginManager?
-
-    /// Skill store reference — passed to the AI chat panel.
     var skillStore: SkillStore?
+    var aiService: AIService?
+
+    private var appSupportDir: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first!.appendingPathComponent("Simpleton")
+    }
 
     init(config: AppConfig, theme: Theme) {
         self.config = config
         self.theme = theme
 
-        // Create the initial pane
         let shell = ShellDetector.detectShell(config: config)
         let workingDir = ShellDetector.workingDirectory(config: config)
         let initialPane = PaneController(
@@ -50,20 +59,18 @@ final class TabContainerController: NSViewController {
             connectionType: .local(shell: shell, workingDirectory: workingDir)
         )
         ThemeApplier.apply(theme: theme, config: config, to: initialPane.terminalView)
-
         self.splitController = SplitController(initialPaneController: initialPane)
         super.init(nibName: nil, bundle: nil)
 
-        // Configure pane factory for future splits
         splitController.paneFactory = { [weak self] paneID in
-            self?.createPane(id: paneID) ?? PaneController(id: paneID, frame: .zero, connectionType: .local(shell: "/bin/zsh", workingDirectory: NSHomeDirectory()))
+            self?.createPane(id: paneID) ?? PaneController(
+                id: paneID, frame: .zero,
+                connectionType: .local(shell: "/bin/zsh", workingDirectory: NSHomeDirectory())
+            )
         }
 
-        // Observe pane close requests
         closeObserver = NotificationCenter.default.addObserver(
-            forName: .simpletonPaneCloseRequested,
-            object: nil,
-            queue: .main
+            forName: .simpletonPaneCloseRequested, object: nil, queue: .main
         ) { [weak self] notification in
             guard let paneID = notification.object as? PaneID,
                   let self = self,
@@ -71,71 +78,67 @@ final class TabContainerController: NSViewController {
             self.splitController.closePane(paneID)
         }
 
-        // Observe sidebar toggle
-        sidebarToggleObserver = NotificationCenter.default.addObserver(
-            forName: .simpletonToggleSidebar,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.toggleSidebar()
-        }
-
-        // Observe search requests
         searchObserver = NotificationCenter.default.addObserver(
-            forName: .simpletonShowSearch,
-            object: nil,
-            queue: .main
+            forName: .simpletonShowSearch, object: nil, queue: .main
         ) { [weak self] _ in
             guard let self = self,
                   let pane = self.splitController.panes[self.splitController.focusedPaneID] else { return }
             pane.showSearch()
         }
 
-        // Observe AI chat toggle
-        aiChatObserver = NotificationCenter.default.addObserver(
-            forName: .simpletonToggleAIChat,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let aiService = notification.object as? AIService else { return }
-            self?.toggleAIChat(aiService: aiService)
+        // Shim: sidebar toggle → toggle connections panel on left
+        sidebarShimObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonToggleSidebar, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let registry = self?.panelRegistry else { return }
+            var profile = registry.activeProfile
+            profile.leftActivePanelID = (profile.leftActivePanelID == "connections") ? nil : "connections"
+            registry.activeProfile = profile
         }
 
-        // Observe skill picker shortcut — opens AI chat if needed, then activates the picker
-        skillPickerObserver = NotificationCenter.default.addObserver(
-            forName: .simpletonRunSkillPicker,
-            object: nil,
-            queue: .main
+        // Shim: AI chat toggle → toggle ai-chat panel on right
+        aiChatShimObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonToggleAIChat, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let registry = self?.panelRegistry else { return }
+            var profile = registry.activeProfile
+            profile.rightActivePanelID = (profile.rightActivePanelID == "ai-chat") ? nil : "ai-chat"
+            registry.activeProfile = profile
+        }
+
+        // Shim: skill picker → open skills panel on right
+        skillPickerShimObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonRunSkillPicker, object: nil, queue: .main
         ) { [weak self] notification in
             guard let self = self,
-                  let aiService = notification.object as? AIService,
+                  let registry = self.panelRegistry,
                   self.view.window?.isKeyWindow == true else { return }
-            if self.isAIChatVisible {
+            // Update aiService if passed via notification (legacy path)
+            if let svc = notification.object as? AIService { self.aiService = svc }
+            var profile = registry.activeProfile
+            // If skills isn't on the right bar, add it
+            if !profile.rightPanelIDs.contains("skills") {
+                profile.rightPanelIDs.append("skills")
+            }
+            profile.rightActivePanelID = "skills"
+            registry.activeProfile = profile
+            // Notify skills panel to focus the search field
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 NotificationCenter.default.post(name: .simpletonActivateSkillPicker, object: nil)
-            } else {
-                self.toggleAIChat(aiService: aiService)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    NotificationCenter.default.post(name: .simpletonActivateSkillPicker, object: nil)
-                }
             }
         }
 
-        // Track clicks to update focused pane
         initialPane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)
         }
-
-        // Wire title changes to tab title
         initialPane.onTitleChange = { [weak self] title in
             self?.view.window?.tab.title = title
             self?.view.window?.title = title
         }
 
-        // Start the initial shell
         let env = buildEnvironment()
         initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
 
-        // Fire tab open event (defer to avoid firing before window exists)
         DispatchQueue.main.async { [weak self] in
             self?.pluginManager?.fireEvent(.onTabOpen, context: [
                 "tabId": UUID().uuidString,
@@ -147,39 +150,42 @@ final class TabContainerController: NSViewController {
     required init?(coder: NSCoder) { fatalError() }
 
     deinit {
-        if let observer = closeObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = sidebarToggleObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = searchObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = aiChatObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = skillPickerObserver {
-            NotificationCenter.default.removeObserver(observer)
+        [closeObserver, searchObserver, sidebarShimObserver,
+         aiChatShimObserver, skillPickerShimObserver].forEach {
+            if let obs = $0 { NotificationCenter.default.removeObserver(obs) }
         }
     }
 
     override func loadView() {
         let frame = NSRect(x: 0, y: 0, width: 800, height: 600)
+        let container = NSView(frame: frame)
+        container.autoresizingMask = [.width, .height]
 
-        // Outer split view: sidebar | terminal content
-        let outer = NSSplitView(frame: frame)
-        outer.isVertical = true
-        outer.dividerStyle = .thin
-        outer.autoresizingMask = [.width, .height]
-        outerSplitView = outer
+        // Central NSSplitView: [leftPanel?] | terminal | [rightPanel?]
+        let split = NSSplitView(frame: frame)
+        split.isVertical = true
+        split.dividerStyle = .thin
+        split.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(split)
+        contentSplit = split
 
-        // Terminal content (always present)
+        // Terminal is always the first arranged subview in contentSplit
         splitController.rootView.frame = frame
-        splitController.rootView.autoresizingMask = [.width, .height]
-        outer.addSubview(splitController.rootView)
+        split.addArrangedSubview(splitController.rootView)
 
-        self.view = outer
+        if let registry = panelRegistry {
+            mountActivityBars(in: container, registry: registry)
+        } else {
+            // Fallback: no activity bars — terminal fills the full width
+            NSLayoutConstraint.activate([
+                split.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                split.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                split.topAnchor.constraint(equalTo: container.topAnchor),
+                split.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            ])
+        }
+
+        self.view = container
     }
 
     override func viewDidAppear() {
@@ -187,62 +193,132 @@ final class TabContainerController: NSViewController {
         splitController.setFocus(to: splitController.focusedPaneID)
     }
 
-    // MARK: - Sidebar
+    // MARK: - Activity Bars
 
-    private func setupSidebar() {
-        guard let store = bookmarkStore else { return }
+    private func mountActivityBars(in container: NSView, registry: PanelRegistry) {
+        guard let split = contentSplit else { return }
 
-        // Recreate the host controller when dependencies change (e.g. sshConfigWatcher
-        // was nil on the first call but is now available). If the sidebar is currently
-        // visible, swap the view in the outer split view.
-        let wasVisible = isSidebarVisible
-        if let oldHost = sidebarHostController, wasVisible {
-            oldHost.view.removeFromSuperview()
-            oldHost.removeFromParent()
-            isSidebarVisible = false
-        }
+        let leftBar = NSHostingView(rootView: ActivityBarView(
+            side: .left,
+            registry: registry,
+            onOpenSettings: {
+                NotificationCenter.default.post(name: .simpletonShowPreferences, object: nil)
+            }
+        ))
+        leftBar.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(leftBar)
+        leftBarHost = leftBar
 
-        let host = SidebarHostController(
-            bookmarkStore: store,
-            sshConfigWatcher: sshConfigWatcher,
-            config: config
-        )
-        host.onConnect = { [weak self] bookmark in
-            self?.openSSHConnection(bookmark: bookmark)
-        }
-        host.onNewConnection = { [weak self] in
-            guard let window = self?.view.window else { return }
-            NotificationCenter.default.post(name: .simpletonShowNewConnection, object: window)
-        }
-        sidebarHostController = host
+        let rightBar = NSHostingView(rootView: ActivityBarView(
+            side: .right,
+            registry: registry,
+            onOpenSettings: nil
+        ))
+        rightBar.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(rightBar)
+        rightBarHost = rightBar
 
-        // If the sidebar was showing before the rebuild, re-show it.
-        if wasVisible {
-            toggleSidebar()
-        }
+        NSLayoutConstraint.activate([
+            // Left bar
+            leftBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            leftBar.topAnchor.constraint(equalTo: container.topAnchor),
+            leftBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            leftBar.widthAnchor.constraint(equalToConstant: 40),
+            // Right bar
+            rightBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            rightBar.topAnchor.constraint(equalTo: container.topAnchor),
+            rightBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            rightBar.widthAnchor.constraint(equalToConstant: 40),
+            // Content split between bars
+            split.leadingAnchor.constraint(equalTo: leftBar.trailingAnchor),
+            split.trailingAnchor.constraint(equalTo: rightBar.leadingAnchor),
+            split.topAnchor.constraint(equalTo: container.topAnchor),
+            split.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
     }
 
-    func toggleSidebar() {
-        guard let outer = outerSplitView else { return }
+    private func rebuildActivityBars() {
+        guard let registry = panelRegistry else { return }
+        let container = view
+        leftBarHost?.removeFromSuperview()
+        rightBarHost?.removeFromSuperview()
+        leftBarHost = nil
+        rightBarHost = nil
 
-        if isSidebarVisible {
-            // Hide sidebar — remove as child view controller and from split view
-            if let host = sidebarHostController {
-                host.view.removeFromSuperview()
-                host.removeFromParent()
+        // Remove old split-to-container constraints before remounting
+        if let split = contentSplit {
+            let old = container.constraints.filter {
+                ($0.firstItem as? NSView == split || $0.secondItem as? NSView == split) &&
+                ($0.firstItem as? NSView == container || $0.secondItem as? NSView == container)
             }
-            isSidebarVisible = false
-        } else {
-            // Show sidebar
-            setupSidebar()
-            guard let host = sidebarHostController else { return }
-            // Add as child view controller so the NSHostingView participates
-            // in the responder chain and receives mouse events correctly.
-            addChild(host)
-            host.view.frame = NSRect(x: 0, y: 0, width: 240, height: outer.bounds.height)
-            outer.insertArrangedSubview(host.view, at: 0)
-            outer.setPosition(240, ofDividerAt: 0)
-            isSidebarVisible = true
+            NSLayoutConstraint.deactivate(old)
+        }
+        mountActivityBars(in: container, registry: registry)
+    }
+
+    // MARK: - Combine Subscription
+
+    private func subscribeToRegistry() {
+        cancellables.removeAll()
+        guard let registry = panelRegistry else { return }
+        registry.$activeProfile
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] profile in
+                self?.updatePanels(for: profile)
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Panel Show/Hide
+
+    private func updatePanels(for profile: PanelProfile) {
+        guard let split = contentSplit else { return }
+
+        // Left panel
+        let wantedLeft = profile.leftActivePanelID
+        if wantedLeft != leftPanelID {
+            if let vc = leftPanelVC {
+                vc.view.removeFromSuperview()
+                vc.removeFromParent()
+                leftPanelVC = nil
+                leftPanelID = nil
+            }
+            if let id = wantedLeft,
+               let vc = panelRegistry?.makeController(for: id, context: makeContext()) {
+                addChild(vc)
+                vc.view.frame = NSRect(x: 0, y: 0, width: profile.leftWidth, height: split.bounds.height)
+                split.insertArrangedSubview(vc.view, at: 0)
+                let width = profile.leftWidth
+                DispatchQueue.main.async { split.setPosition(width, ofDividerAt: 0) }
+                leftPanelVC = vc
+                leftPanelID = id
+            }
+        }
+
+        // Right panel
+        let wantedRight = profile.rightActivePanelID
+        if wantedRight != rightPanelID {
+            if let vc = rightPanelVC {
+                vc.view.removeFromSuperview()
+                vc.removeFromParent()
+                rightPanelVC = nil
+                rightPanelID = nil
+            }
+            if let id = wantedRight,
+               let vc = panelRegistry?.makeController(for: id, context: makeContext()) {
+                addChild(vc)
+                vc.view.frame = NSRect(x: 0, y: 0, width: profile.rightWidth, height: split.bounds.height)
+                split.addArrangedSubview(vc.view)
+                let rightWidth = profile.rightWidth
+                DispatchQueue.main.async {
+                    let dividerIdx = split.arrangedSubviews.count - 2
+                    if dividerIdx >= 0 {
+                        split.setPosition(split.bounds.width - rightWidth, ofDividerAt: dividerIdx)
+                    }
+                }
+                rightPanelVC = vc
+                rightPanelID = id
+            }
         }
 
         // Refocus terminal
@@ -252,70 +328,28 @@ final class TabContainerController: NSViewController {
         }
     }
 
-    // MARK: - AI Chat Panel
+    // MARK: - Context
 
-    private func toggleAIChat(aiService: AIService) {
-        guard let outer = outerSplitView else { return }
-
-        if isAIChatVisible {
-            // Hide AI chat panel
-            if let chatController = aiChatController {
-                chatController.view.removeFromSuperview()
-                chatController.removeFromParent()
-            }
-            aiChatController = nil
-            isAIChatVisible = false
-        } else {
-            // Show AI chat panel on the right side
-            let chatController = AIChatPanelController(aiService: aiService)
-            chatController.skillStore = skillStore
-            chatController.currentPaneProvider = { [weak self] in
+    private func makeContext() -> PanelContext {
+        PanelContext(
+            tabContainer: { [weak self] in self },
+            skillStore: skillStore,
+            bookmarkStore: bookmarkStore,
+            aiService: aiService,
+            sshConfigWatcher: sshConfigWatcher,
+            appConfig: config,
+            currentPane: { [weak self] in
                 guard let self = self else { return nil }
                 return self.splitController.panes[self.splitController.focusedPaneID]
-            }
-            chatController.contextProvider = { [weak self] in
-                guard let self = self,
-                      let pane = self.splitController.panes[self.splitController.focusedPaneID] else {
-                    return AIContext(os: "macOS", recentCommands: [])
-                }
-                let shell: String?
-                if case .local(let sh, _) = pane.connectionType { shell = sh } else { shell = nil }
-                return AIContextBuilder.build(
-                    terminalView: pane.terminalView,
-                    cwd: pane.currentDirectory,
-                    shell: shell,
-                    includeSelection: true
-                )
-            }
-            chatController.onInsertCommand = { [weak self] cmd in
+            },
+            onInsertCommand: { [weak self] cmd in
                 guard let self = self,
                       let pane = self.splitController.panes[self.splitController.focusedPaneID] else { return }
                 let bytes = Array(cmd.utf8)
                 pane.terminalView.send(data: bytes[...])
-            }
-            chatController.onDismiss = { [weak self] in
-                self?.toggleAIChat(aiService: aiService)
-            }
-
-            addChild(chatController)
-            chatController.view.frame = NSRect(x: 0, y: 0, width: 320, height: outer.bounds.height)
-            outer.addArrangedSubview(chatController.view)
-
-            // Position the divider so the chat panel is 320pt wide on the right
-            let dividerIndex = outer.arrangedSubviews.count - 2
-            if dividerIndex >= 0 {
-                outer.setPosition(outer.bounds.width - 320, ofDividerAt: dividerIndex)
-            }
-
-            self.aiChatController = chatController
-            isAIChatVisible = true
-        }
-
-        // Refocus terminal
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.splitController.setFocus(to: self.splitController.focusedPaneID)
-        }
+            },
+            appSupportDir: appSupportDir
+        )
     }
 
     // MARK: - Pane Factory
@@ -330,19 +364,12 @@ final class TabContainerController: NSViewController {
         )
         pane.pluginManager = pluginManager
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
-
         let env = buildEnvironment()
         pane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
-
-        pane.onTitleChange = { [weak self] title in
-            self?.view.window?.tab.title = title
-        }
-
-        // Track clicks to update focused pane in split controller
+        pane.onTitleChange = { [weak self] title in self?.view.window?.tab.title = title }
         pane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)
         }
-
         return pane
     }
 
@@ -355,10 +382,8 @@ final class TabContainerController: NSViewController {
 
     // MARK: - SSH Connections
 
-    /// Open an SSH connection in a new split pane or the current pane.
     func openSSHConnection(bookmark: Bookmark, inNewSplit direction: SplitDirection? = nil) {
         if let direction = direction {
-            // Temporarily override the pane factory to create an SSH pane
             let previousFactory = splitController.paneFactory
             splitController.paneFactory = { [weak self] paneID in
                 guard let self = self else {
@@ -367,45 +392,31 @@ final class TabContainerController: NSViewController {
                 return self.createSSHPane(id: paneID, bookmark: bookmark)
             }
             splitController.splitFocusedPane(direction: direction)
-            // Restore original factory
             splitController.paneFactory = previousFactory
         } else {
-            // Open in current focused pane — start SSH in existing pane
             if let pane = splitController.panes[splitController.focusedPaneID] {
                 pane.startSSH(bookmark: bookmark, config: config)
             }
         }
-
-        // Refocus the terminal pane so user can type immediately after sidebar click
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.splitController.setFocus(to: self.splitController.focusedPaneID)
         }
-
-        // Record frecency
-        Task {
-            await bookmarkStore?.recordUse(bookmarkId: bookmark.id)
-        }
+        Task { await bookmarkStore?.recordUse(bookmarkId: bookmark.id) }
     }
 
     private func createSSHPane(id: PaneID, bookmark: Bookmark) -> PaneController {
         let pane = PaneController(
-            id: id,
-            frame: NSRect(x: 0, y: 0, width: 400, height: 300),
+            id: id, frame: NSRect(x: 0, y: 0, width: 400, height: 300),
             connectionType: .ssh(bookmarkID: bookmark.id)
         )
         pane.pluginManager = pluginManager
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
         pane.startSSH(bookmark: bookmark, config: config)
-
-        pane.onTitleChange = { [weak self] title in
-            self?.view.window?.tab.title = title
-        }
-
+        pane.onTitleChange = { [weak self] title in self?.view.window?.tab.title = title }
         pane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)
         }
-
         return pane
     }
 }

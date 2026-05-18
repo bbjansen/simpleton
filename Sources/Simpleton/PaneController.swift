@@ -627,4 +627,6 @@ extension Notification.Name {
     static let simpletonRunSkillPicker = Notification.Name("simpletonRunSkillPicker")
     static let simpletonActivateSkillPicker = Notification.Name("simpletonActivateSkillPicker")
     static let simpletonExplainError = Notification.Name("simpletonExplainError")
+    static let simpletonShowPreferences = Notification.Name("simpletonShowPreferences")
+    static let simpletonTerminalOutput = Notification.Name("simpletonTerminalOutput")
 }
