@@ -43,7 +43,80 @@ final class AgentSession: ObservableObject {
         state = .idle
     }
 
-    // MARK: - Multi-Pane Entry Point
+    // MARK: - Chat with Tools (free-text conversation that can execute commands)
+
+    func chat(
+        message: String,
+        history: [ConversationTurn],
+        systemPrompt: String,
+        conversation: TabConversation,
+        focusedPane: PaneController,
+        autopilot: Bool
+    ) async {
+        isCancelled = false
+        var turns = history
+        turns.append(.user(message))
+
+        while !isCancelled {
+            state = .streaming
+            do {
+                let result = try await aiService.agentTurn(system: systemPrompt, turns: turns, options: AIOptions(maxTokens: 4000, temperature: 0.3))
+                switch result {
+                case .text(let text):
+                    onMessage?(ChatMessage(role: "assistant", content: text))
+                    state = .done
+                    onComplete?()
+                    return
+
+                case .toolCall(let id, let cmd, let explanation):
+                    let paneNumber = extractPaneNumber(from: explanation)
+                    let resolved = conversation.resolvePane(number: paneNumber)
+                    let targetPane = resolved?.pane ?? focusedPane
+                    let targetLabel = resolved?.label ?? "focused pane"
+
+                    if autopilot {
+                        await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: targetPane, paneLabel: targetLabel, wasFallback: resolved?.wasFallback ?? false, turns: &turns)
+                    } else {
+                        state = .waitingApproval(cmd: cmd, explanation: explanation, toolCallID: id, paneLabel: targetLabel)
+                        let (action, overridePaneID) = await withCheckedContinuation { (continuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>) in
+                            pendingApprovalContinuation = continuation
+                            onApprovalNeeded?(cmd, explanation, targetLabel) { [weak self] action, overrideID in
+                                self?.pendingApprovalContinuation?.resume(returning: (action, overrideID))
+                                self?.pendingApprovalContinuation = nil
+                            }
+                        }
+                        switch action {
+                        case .allow:
+                            let finalPane: PaneController
+                            let finalLabel: String
+                            if let overrideID = overridePaneID,
+                               let idx = conversation.paneOrder.firstIndex(of: overrideID),
+                               let overrideResolved = conversation.resolvePane(number: idx + 1) {
+                                finalPane = overrideResolved.pane
+                                finalLabel = overrideResolved.label
+                            } else {
+                                finalPane = targetPane
+                                finalLabel = targetLabel
+                            }
+                            await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: finalPane, paneLabel: finalLabel, wasFallback: false, turns: &turns)
+                        case .skip:
+                            turns.append(.toolResult(toolCallID: id, output: "[Command skipped by user]"))
+                        case .stop:
+                            state = .done
+                            onComplete?()
+                            return
+                        }
+                    }
+                }
+            } catch {
+                state = .error(error.localizedDescription)
+                onError?(error.localizedDescription)
+                return
+            }
+        }
+    }
+
+    // MARK: - Skill Execution (Multi-Pane)
 
     func run(skill: Skill, params: [String: String], conversation: TabConversation, focusedPane: PaneController, autopilot: Bool) async {
         isCancelled = false

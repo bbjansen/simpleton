@@ -280,11 +280,10 @@ struct AIChatPanelView: View {
         }
 
         input = ""
-
         messages.append(ChatMessage(role: "user", content: text))
-        messages.append(ChatMessage(role: "assistant", content: ""))
         isStreaming = true
 
+        // Build system prompt with multi-pane context
         let contextStr: String
         if let conv = conversation, let composite = conv.buildCompositeContext() {
             contextStr = AIContextBuilder.formatCompositeForPrompt(composite)
@@ -295,60 +294,118 @@ struct AIChatPanelView: View {
         var skillsSection = ""
         if let store = skillStore, !store.allSkills.isEmpty {
             let list = store.allSkills.map { "  /\($0.slug) — \($0.name)" }.joined(separator: "\n")
-            skillsSection = """
-
-
-        Available skills (invoke with /slug or the bolt button):
-        \(list)
-        """
+            skillsSection = "\n\nAvailable skills (invoke with /slug or the bolt button):\n\(list)"
         }
         let system = """
-        You are a helpful terminal assistant. The user is working in a terminal emulator.
+        You are a powerful terminal assistant with the ability to run commands directly in the user's terminal panes. \
+        You can both answer questions AND execute commands when the user asks you to do something.
+
         \(contextStr)\(skillsSection)
 
-        When suggesting terminal commands, always put them in a fenced code block:
-        ```bash
-        command here
-        ```
-        Use inline backticks only for referencing command names or flags inline with text.
+        When the user asks you to DO something (install, run, fix, create, deploy, etc.), use run_command to execute it directly. \
+        When there are multiple panes, pick the right pane based on context (e.g., run npm commands in the pane with the Node project). \
+        You can chain multiple commands across multiple panes to complete complex tasks.
+
+        When just answering a question or explaining something, respond with plain text. \
+        Put commands you're suggesting (but not executing) in fenced code blocks.
+
         Keep responses concise and practical.
         """
 
-        // Build user prompt with conversation history so the AI has memory
-        let historyMessages = messages.dropLast() // drop the empty assistant placeholder we just appended
-        let userPrompt: String
-        if historyMessages.count > 1 { // more than just the current user message
-            var history: [String] = []
-            for msg in historyMessages.dropLast() { // exclude the current user message (it's at the end before the placeholder)
-                let role = msg.role == "user" ? "User" : "Assistant"
-                let content = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !content.isEmpty {
-                    history.append("\(role): \(content)")
-                }
-            }
-            if history.isEmpty {
-                userPrompt = text
+        // Build conversation history as proper turns
+        var history: [ConversationTurn] = []
+        for msg in messages.dropLast() { // exclude the message we just appended
+            let content = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !content.isEmpty else { continue }
+            if msg.role == "user" {
+                history.append(.user(content))
             } else {
-                userPrompt = "[Previous conversation]\n\(history.joined(separator: "\n\n"))\n\n[Current message]\n\(text)"
+                history.append(.assistant(content))
             }
-        } else {
-            userPrompt = text
         }
 
-        Task {
-            do {
-                let stream = aiService.stream(system: system, user: userPrompt, options: AIOptions(maxTokens: 1000, temperature: 0.3))
-                for try await token in stream {
-                    if let lastIndex = messages.indices.last, messages[lastIndex].role == "assistant" {
-                        messages[lastIndex].content += token
+        // Use agent session so the AI can execute commands across panes
+        if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
+            let session = AgentSession(aiService: aiService)
+            activeAgentSession = session
+            conv.activeSession = session
+
+            session.onMessage = { msg in
+                messages.append(msg)
+                conv.messages.append(msg)
+            }
+            session.onCommandExecuted = { cmd, output, paneLabel in
+                if let idx = agentBubbles.indices.last(where: {
+                    if case .execution(_, _, _, let s, _) = agentBubbles[$0], s == .running { return true }
+                    return false
+                }) {
+                    if case .execution(let id, _, let exp, _, _) = agentBubbles[idx] {
+                        agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: "[\(paneLabel)] \(exp)", status: .done, output: output)
                     }
                 }
-            } catch {
-                if let lastIndex = messages.indices.last, messages[lastIndex].role == "assistant" {
-                    messages[lastIndex].content += "\n\n*Error: \(error.localizedDescription)*"
-                }
             }
-            isStreaming = false
+            session.onComplete = {
+                isStreaming = false
+                activeAgentSession = nil
+                conv.activeSession = nil
+                conv.isRunning = false
+            }
+            session.onError = { err in
+                messages.append(ChatMessage(role: "assistant", content: "Error: \(err)"))
+                isStreaming = false
+                activeAgentSession = nil
+                conv.activeSession = nil
+                conv.isRunning = false
+            }
+            session.onApprovalNeeded = { cmd, explanation, paneLabel, completion in
+                let approvalID = UUID()
+                pendingApprovals[approvalID] = { action in completion(action, nil) }
+                agentBubbles.append(.execution(id: approvalID, cmd: cmd, explanation: "[\(paneLabel)] \(explanation)", status: .waitingApproval, output: ""))
+            }
+
+            conv.isRunning = true
+            Task {
+                await session.chat(
+                    message: text,
+                    history: history,
+                    systemPrompt: system,
+                    conversation: conv,
+                    focusedPane: resolved.pane,
+                    autopilot: autopilotEnabled
+                )
+            }
+        } else {
+            // Fallback: no conversation — use simple streaming (legacy)
+            messages.append(ChatMessage(role: "assistant", content: ""))
+            Task {
+                do {
+                    let userPrompt: String
+                    if !history.isEmpty {
+                        var parts: [String] = []
+                        for turn in history {
+                            switch turn.role {
+                            case .user(let t): parts.append("User: \(t)")
+                            case .assistant(let t): parts.append("Assistant: \(t)")
+                            case .toolResult: break
+                            }
+                        }
+                        userPrompt = "[Previous conversation]\n\(parts.joined(separator: "\n\n"))\n\n[Current message]\n\(text)"
+                    } else {
+                        userPrompt = text
+                    }
+                    let stream = aiService.stream(system: system, user: userPrompt, options: AIOptions(maxTokens: 4000, temperature: 0.3))
+                    for try await token in stream {
+                        if let lastIndex = messages.indices.last, messages[lastIndex].role == "assistant" {
+                            messages[lastIndex].content += token
+                        }
+                    }
+                } catch {
+                    if let lastIndex = messages.indices.last, messages[lastIndex].role == "assistant" {
+                        messages[lastIndex].content += "\n\n*Error: \(error.localizedDescription)*"
+                    }
+                }
+                isStreaming = false
+            }
         }
     }
 
