@@ -3,6 +3,7 @@ import Foundation
 import NaturalLanguage
 import CryptoKit
 
+@MainActor
 final class MemoryStore {
     private let storageDir: URL
     private var entries: [MemoryEntry] = []
@@ -104,23 +105,30 @@ final class MemoryStore {
         }
 
         var scored: [(entry: MemoryEntry, score: Float)] = []
-        for var entry in entries {
+        var updatedIDs: Set<UUID> = []
+        for entry in entries {
             if entry.embedding.isEmpty {
                 let textMatch = entry.content.localizedCaseInsensitiveContains(text) ||
                     entry.tags.contains(where: { $0.localizedCaseInsensitiveContains(text) })
                 if textMatch {
                     scored.append((entry, 0.31))
+                    updatedIDs.insert(entry.id)
                 }
                 continue
             }
             let sim = EmbeddingEngine.cosineSimilarity(queryVector, entry.embedding)
             if sim >= threshold {
-                entry.lastUsed = Date()
-                entry.useCount += 1
-                if let idx = entries.firstIndex(where: { $0.id == entry.id }) {
-                    entries[idx] = entry
-                }
                 scored.append((entry, sim))
+                updatedIDs.insert(entry.id)
+            }
+        }
+
+        // Apply usage updates after iteration completes
+        let now = Date()
+        for id in updatedIDs {
+            if let idx = entries.firstIndex(where: { $0.id == id }) {
+                entries[idx].lastUsed = now
+                entries[idx].useCount += 1
             }
         }
 

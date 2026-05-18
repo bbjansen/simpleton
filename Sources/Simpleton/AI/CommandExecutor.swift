@@ -126,6 +126,11 @@ extension AgentSession {
             try? await Task.sleep(nanoseconds: UInt64(pollMs) * 1_000_000)
             elapsed += pollMs
 
+            // Check if pane is still alive
+            guard pane.state == .running else {
+                return ("[Pane closed or disconnected during command execution]", nil)
+            }
+
             let rows = terminal.rows
             var lines: [String] = []
             for row in 0..<rows {

@@ -26,6 +26,10 @@ final class MCPClient {
         self.config = config
     }
 
+    deinit {
+        disconnect()
+    }
+
     // MARK: - Connect
 
     func connect() async throws {
@@ -187,7 +191,10 @@ final class MCPClient {
             "method": method,
             "params": params
         ]
-        ioQueue.sync { try? writeMessage(message) }
+        ioQueue.sync {
+            do { try writeMessage(message) }
+            catch { print("[MCP] Failed to send notification '\(method)' to \(config.name): \(error)") }
+        }
     }
 
     private func writeMessage(_ message: [String: Any]) throws {

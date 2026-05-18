@@ -29,6 +29,10 @@ final class WatchSession: ObservableObject {
         self.onEvent = onEvent
     }
 
+    deinit {
+        pollTask?.cancel()
+    }
+
     func start() {
         guard !isActive else { return }
         isActive = true
@@ -103,7 +107,9 @@ final class WatchSession: ObservableObject {
                     let matched = (newContent as NSString).substring(with: match.range)
                     return .pattern(regexStr, matched: matched)
                 }
-            } catch {}
+            } catch {
+                print("[Watch] Invalid regex pattern '\(regexStr)': \(error.localizedDescription)")
+            }
             return nil
         }
     }

@@ -1,6 +1,7 @@
 // Sources/Simpleton/AI/Tools/MemoryTools.swift
 import Foundation
 
+@MainActor
 struct MemoryTools: ToolHandler {
     static let handledTools: Set<String> = [
         "save_memory", "recall_memory", "list_memories", "forget_memory",

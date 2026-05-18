@@ -25,6 +25,7 @@ struct ProcessRunner {
                 }
                 return output.trimmingCharacters(in: .whitespacesAndNewlines)
             } catch {
+                try? pipe.fileHandleForReading.close()
                 return "Error: \(error.localizedDescription)"
             }
         }.value
