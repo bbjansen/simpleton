@@ -113,18 +113,53 @@ struct AnthropicProvider: AIProviderProtocol {
             }
         }
 
-        let tools: [[String: Any]] = [[
-            "name": "run_command",
-            "description": "Execute a shell command in the terminal and observe its output",
-            "input_schema": [
-                "type": "object",
-                "properties": [
-                    "cmd": ["type": "string", "description": "Shell command to execute"],
-                    "explanation": ["type": "string", "description": "Why this command is needed"]
-                ] as [String: Any],
-                "required": ["cmd", "explanation"]
-            ] as [String: Any]
-        ]]
+        let tools: [[String: Any]] = [
+            [
+                "name": "run_command",
+                "description": "Execute a shell command in a terminal pane and return its output. Use the 'pane' parameter to target a specific pane by number (1-based). Omit 'pane' to run on the focused pane.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "cmd": ["type": "string", "description": "Shell command to execute"],
+                        "explanation": ["type": "string", "description": "Brief reason this command is needed"],
+                        "pane": ["type": "integer", "description": "Target pane number (1-based). Omit for focused pane."]
+                    ] as [String: Any],
+                    "required": ["cmd", "explanation"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "read_pane_output",
+                "description": "Read the recent terminal output from a pane without running any command. Use this to check what happened, see error messages, or monitor a running process.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "pane": ["type": "integer", "description": "Pane number (1-based). Omit for focused pane."],
+                        "lines": ["type": "integer", "description": "Number of recent lines to read (default 50, max 200)"]
+                    ] as [String: Any],
+                    "required": [] as [String]
+                ] as [String: Any]
+            ],
+            [
+                "name": "list_panes",
+                "description": "List all terminal panes in the current tab with their working directory, shell, and running state. Use this to understand the workspace before acting.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [:] as [String: Any],
+                    "required": [] as [String]
+                ] as [String: Any]
+            ],
+            [
+                "name": "get_pane_state",
+                "description": "Get detailed state of a specific pane: working directory, shell, connection type, and recent output.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "pane": ["type": "integer", "description": "Pane number (1-based)"]
+                    ] as [String: Any],
+                    "required": ["pane"]
+                ] as [String: Any]
+            ]
+        ]
 
         let body: [String: Any] = [
             "model": model, "max_tokens": options.maxTokens,
@@ -145,10 +180,9 @@ struct AnthropicProvider: AIProviderProtocol {
 
         if let block = content.first(where: { $0["type"] as? String == "tool_use" }),
            let toolID = block["id"] as? String,
-           let input = block["input"] as? [String: Any],
-           let cmd = input["cmd"] as? String {
-            let explanation = input["explanation"] as? String ?? ""
-            return .toolCall(id: toolID, cmd: cmd, explanation: explanation)
+           let toolName = block["name"] as? String,
+           let input = block["input"] as? [String: Any] {
+            return .toolCall(id: toolID, name: toolName, arguments: input)
         }
 
         let text = content.compactMap { $0["text"] as? String }.joined()

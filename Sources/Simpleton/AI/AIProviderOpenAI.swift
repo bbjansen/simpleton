@@ -138,21 +138,61 @@ struct OpenAIProvider: AIProviderProtocol {
             }
         }
 
-        let tools: [[String: Any]] = [[
-            "type": "function",
-            "function": [
-                "name": "run_command",
-                "description": "Execute a shell command in the terminal",
-                "parameters": [
-                    "type": "object",
-                    "properties": [
-                        "cmd": ["type": "string"],
-                        "explanation": ["type": "string"]
-                    ] as [String: Any],
-                    "required": ["cmd", "explanation"]
+        let tools: [[String: Any]] = [
+            [
+                "type": "function",
+                "function": [
+                    "name": "run_command",
+                    "description": "Execute a shell command in a terminal pane and return its output. Use 'pane' to target a specific pane by number.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "cmd": ["type": "string", "description": "Shell command to execute"],
+                            "explanation": ["type": "string", "description": "Brief reason this command is needed"],
+                            "pane": ["type": "integer", "description": "Target pane number (1-based). Omit for focused pane."]
+                        ] as [String: Any],
+                        "required": ["cmd", "explanation"]
+                    ] as [String: Any]
                 ] as [String: Any]
-            ] as [String: Any]
-        ]]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "read_pane_output",
+                    "description": "Read recent terminal output from a pane without running a command.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "pane": ["type": "integer", "description": "Pane number (1-based). Omit for focused pane."],
+                            "lines": ["type": "integer", "description": "Number of recent lines (default 50, max 200)"]
+                        ] as [String: Any],
+                        "required": [] as [String]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "list_panes",
+                    "description": "List all terminal panes with their working directory, shell, and state.",
+                    "parameters": ["type": "object", "properties": [:] as [String: Any], "required": [] as [String]] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "get_pane_state",
+                    "description": "Get detailed state of a specific pane.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "pane": ["type": "integer", "description": "Pane number (1-based)"]
+                        ] as [String: Any],
+                        "required": ["pane"]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ]
+        ]
 
         let body: [String: Any] = [
             "model": model, "max_tokens": options.maxTokens,
@@ -177,12 +217,11 @@ struct OpenAIProvider: AIProviderProtocol {
            let call = toolCalls.first,
            let toolID = call["id"] as? String,
            let function = call["function"] as? [String: Any],
+           let toolName = function["name"] as? String,
            let argsStr = function["arguments"] as? String,
            let argsData = argsStr.data(using: .utf8),
-           let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any],
-           let cmd = args["cmd"] as? String {
-            let explanation = args["explanation"] as? String ?? ""
-            return .toolCall(id: toolID, cmd: cmd, explanation: explanation)
+           let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
+            return .toolCall(id: toolID, name: toolName, arguments: args)
         }
 
         let content = message["content"] as? String ?? ""

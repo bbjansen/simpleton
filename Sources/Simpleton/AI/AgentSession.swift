@@ -68,45 +68,13 @@ final class AgentSession: ObservableObject {
                     onComplete?()
                     return
 
-                case .toolCall(let id, let cmd, let explanation):
-                    let paneNumber = extractPaneNumber(from: explanation)
-                    let resolved = conversation.resolvePane(number: paneNumber)
-                    let targetPane = resolved?.pane ?? focusedPane
-                    let targetLabel = resolved?.label ?? "focused pane"
-
-                    if autopilot {
-                        await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: targetPane, paneLabel: targetLabel, wasFallback: resolved?.wasFallback ?? false, turns: &turns)
-                    } else {
-                        state = .waitingApproval(cmd: cmd, explanation: explanation, toolCallID: id, paneLabel: targetLabel)
-                        let (action, overridePaneID) = await withCheckedContinuation { (continuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>) in
-                            pendingApprovalContinuation = continuation
-                            onApprovalNeeded?(cmd, explanation, targetLabel) { [weak self] action, overrideID in
-                                self?.pendingApprovalContinuation?.resume(returning: (action, overrideID))
-                                self?.pendingApprovalContinuation = nil
-                            }
-                        }
-                        switch action {
-                        case .allow:
-                            let finalPane: PaneController
-                            let finalLabel: String
-                            if let overrideID = overridePaneID,
-                               let idx = conversation.paneOrder.firstIndex(of: overrideID),
-                               let overrideResolved = conversation.resolvePane(number: idx + 1) {
-                                finalPane = overrideResolved.pane
-                                finalLabel = overrideResolved.label
-                            } else {
-                                finalPane = targetPane
-                                finalLabel = targetLabel
-                            }
-                            await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: finalPane, paneLabel: finalLabel, wasFallback: false, turns: &turns)
-                        case .skip:
-                            turns.append(.toolResult(toolCallID: id, output: "[Command skipped by user]"))
-                        case .stop:
-                            state = .done
-                            onComplete?()
-                            return
-                        }
-                    }
+                case .toolCall(let id, let name, let args):
+                    let result = await handleToolCall(
+                        id: id, name: name, args: args,
+                        conversation: conversation, focusedPane: focusedPane,
+                        autopilot: autopilot, turns: &turns
+                    )
+                    if result == .stopped { return }
                 }
             } catch {
                 state = .error(error.localizedDescription)
@@ -114,6 +82,175 @@ final class AgentSession: ObservableObject {
                 return
             }
         }
+    }
+
+    private enum ToolHandleResult { case continued, stopped }
+
+    /// Dispatch a tool call to the appropriate handler.
+    private func handleToolCall(
+        id: String, name: String, args: [String: Any],
+        conversation: TabConversation, focusedPane: PaneController,
+        autopilot: Bool, turns: inout [ConversationTurn]
+    ) async -> ToolHandleResult {
+        switch name {
+        case "run_command":
+            return await handleRunCommand(
+                id: id, args: args, conversation: conversation,
+                focusedPane: focusedPane, autopilot: autopilot, turns: &turns
+            )
+        case "read_pane_output":
+            let paneNum = args["pane"] as? Int
+            let lines = min(args["lines"] as? Int ?? 50, 200)
+            let resolved = conversation.resolvePane(number: paneNum)
+            let pane = resolved?.pane ?? focusedPane
+            let label = resolved?.label ?? "focused pane"
+
+            let output = readTerminalOutput(pane: pane, lines: lines)
+            turns.append(.toolResult(toolCallID: id, output: "[\(label)] Recent output (\(lines) lines):\n\(output)"))
+            return .continued
+
+        case "list_panes":
+            let output = listPanesOutput(conversation: conversation, focusedPane: focusedPane)
+            turns.append(.toolResult(toolCallID: id, output: output))
+            return .continued
+
+        case "get_pane_state":
+            let paneNum = args["pane"] as? Int ?? 1
+            let resolved = conversation.resolvePane(number: paneNum)
+            if let pane = resolved?.pane {
+                let output = paneStateOutput(pane: pane, label: resolved?.label ?? "Pane \(paneNum)")
+                turns.append(.toolResult(toolCallID: id, output: output))
+            } else {
+                turns.append(.toolResult(toolCallID: id, output: "Pane \(paneNum) not found."))
+            }
+            return .continued
+
+        default:
+            turns.append(.toolResult(toolCallID: id, output: "Unknown tool: \(name)"))
+            return .continued
+        }
+    }
+
+    /// Handle run_command tool call with approval flow.
+    private func handleRunCommand(
+        id: String, args: [String: Any],
+        conversation: TabConversation, focusedPane: PaneController,
+        autopilot: Bool, turns: inout [ConversationTurn]
+    ) async -> ToolHandleResult {
+        guard let cmd = args["cmd"] as? String else {
+            turns.append(.toolResult(toolCallID: id, output: "Missing 'cmd' parameter"))
+            return .continued
+        }
+        let explanation = args["explanation"] as? String ?? ""
+        let paneNumber = args["pane"] as? Int
+        let resolved = conversation.resolvePane(number: paneNumber)
+        let targetPane = resolved?.pane ?? focusedPane
+        let targetLabel = resolved?.label ?? "focused pane"
+
+        if autopilot {
+            await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: targetPane, paneLabel: targetLabel, wasFallback: resolved?.wasFallback ?? false, turns: &turns)
+            return .continued
+        }
+
+        state = .waitingApproval(cmd: cmd, explanation: explanation, toolCallID: id, paneLabel: targetLabel)
+        let (action, overridePaneID) = await withCheckedContinuation { (continuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>) in
+            pendingApprovalContinuation = continuation
+            onApprovalNeeded?(cmd, explanation, targetLabel) { [weak self] action, overrideID in
+                self?.pendingApprovalContinuation?.resume(returning: (action, overrideID))
+                self?.pendingApprovalContinuation = nil
+            }
+        }
+        switch action {
+        case .allow:
+            let finalPane: PaneController
+            let finalLabel: String
+            if let overrideID = overridePaneID,
+               let idx = conversation.paneOrder.firstIndex(of: overrideID),
+               let overrideResolved = conversation.resolvePane(number: idx + 1) {
+                finalPane = overrideResolved.pane
+                finalLabel = overrideResolved.label
+            } else {
+                finalPane = targetPane
+                finalLabel = targetLabel
+            }
+            await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: finalPane, paneLabel: finalLabel, wasFallback: false, turns: &turns)
+            return .continued
+        case .skip:
+            turns.append(.toolResult(toolCallID: id, output: "[Command skipped by user]"))
+            return .continued
+        case .stop:
+            state = .done
+            onComplete?()
+            return .stopped
+        }
+    }
+
+    // MARK: - Read-Only Tool Implementations
+
+    private func readTerminalOutput(pane: PaneController, lines: Int) -> String {
+        let terminal = pane.terminalView.getTerminal()
+        let totalRows = terminal.rows
+        let startRow = max(0, totalRows - lines)
+        var outputLines: [String] = []
+        for row in startRow..<totalRows {
+            if let line = terminal.getLine(row: row) {
+                let text = line.translateToString(trimRight: true)
+                if !text.isEmpty { outputLines.append(text) }
+            }
+        }
+        let output = outputLines.joined(separator: "\n")
+        return output.isEmpty ? "[No output]" : output
+    }
+
+    private func listPanesOutput(conversation: TabConversation, focusedPane: PaneController) -> String {
+        guard let context = conversation.buildCompositeContext() else {
+            return "Panes: 1 (focused)\nCWD: \(focusedPane.currentDirectory ?? "unknown")"
+        }
+        var lines: [String] = ["Panes in this tab:\n"]
+        for pane in context.panes {
+            let focus = pane.isFocused ? " (focused)" : ""
+            let cwdStr = pane.cwd ?? "unknown"
+            let shellStr = pane.shell ?? "shell"
+            let connStr: String
+            switch pane.connectionType {
+            case .local: connStr = "local"
+            case .ssh: connStr = "SSH"
+            }
+            lines.append("  \(pane.label)\(focus) — \(cwdStr) [\(shellStr), \(connStr)]")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func paneStateOutput(pane: PaneController, label: String) -> String {
+        let cwd = pane.currentDirectory ?? "unknown"
+        let connStr: String
+        let shellStr: String
+        switch pane.connectionType {
+        case .local(let shell, _):
+            connStr = "local"
+            shellStr = URL(fileURLWithPath: shell).lastPathComponent
+        case .ssh:
+            connStr = "SSH (\(pane.sshHost ?? "unknown"))"
+            shellStr = "remote"
+        }
+        let stateStr: String
+        switch pane.state {
+        case .running: stateStr = "running"
+        case .exited(let code): stateStr = "exited (code \(code))"
+        case .disconnected: stateStr = "disconnected"
+        case .connecting: stateStr = "connecting"
+        case .authRequired: stateStr = "auth required"
+        }
+        let output = readTerminalOutput(pane: pane, lines: 30)
+        return """
+        \(label)
+        CWD: \(cwd)
+        Shell: \(shellStr)
+        Connection: \(connStr)
+        State: \(stateStr)
+        Recent output:
+        \(output)
+        """
     }
 
     // MARK: - Skill Execution (Multi-Pane)
@@ -135,45 +272,13 @@ final class AgentSession: ObservableObject {
                     onComplete?()
                     return
 
-                case .toolCall(let id, let cmd, let explanation):
-                    let paneNumber = extractPaneNumber(from: explanation)
-                    let resolved = conversation.resolvePane(number: paneNumber)
-                    let targetPane = resolved?.pane ?? focusedPane
-                    let targetLabel = resolved?.label ?? "focused pane"
-
-                    if autopilot {
-                        await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: targetPane, paneLabel: targetLabel, wasFallback: resolved?.wasFallback ?? false, turns: &turns)
-                    } else {
-                        state = .waitingApproval(cmd: cmd, explanation: explanation, toolCallID: id, paneLabel: targetLabel)
-                        let (action, overridePaneID) = await withCheckedContinuation { (continuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>) in
-                            pendingApprovalContinuation = continuation
-                            onApprovalNeeded?(cmd, explanation, targetLabel) { [weak self] action, overrideID in
-                                self?.pendingApprovalContinuation?.resume(returning: (action, overrideID))
-                                self?.pendingApprovalContinuation = nil
-                            }
-                        }
-                        switch action {
-                        case .allow:
-                            let finalPane: PaneController
-                            let finalLabel: String
-                            if let overrideID = overridePaneID,
-                               let idx = conversation.paneOrder.firstIndex(of: overrideID),
-                               let overrideResolved = conversation.resolvePane(number: idx + 1) {
-                                finalPane = overrideResolved.pane
-                                finalLabel = overrideResolved.label
-                            } else {
-                                finalPane = targetPane
-                                finalLabel = targetLabel
-                            }
-                            await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: finalPane, paneLabel: finalLabel, wasFallback: false, turns: &turns)
-                        case .skip:
-                            turns.append(.toolResult(toolCallID: id, output: "[Command skipped by user]"))
-                        case .stop:
-                            state = .done
-                            onComplete?()
-                            return
-                        }
-                    }
+                case .toolCall(let id, let name, let args):
+                    let result = await handleToolCall(
+                        id: id, name: name, args: args,
+                        conversation: conversation, focusedPane: focusedPane,
+                        autopilot: autopilot, turns: &turns
+                    )
+                    if result == .stopped { return }
                 }
             } catch {
                 state = .error(error.localizedDescription)
@@ -201,7 +306,13 @@ final class AgentSession: ObservableObject {
                     state = .done
                     onComplete?()
                     return
-                case .toolCall(let id, let cmd, let explanation):
+                case .toolCall(let id, let name, let args):
+                    // Legacy path: only handle run_command, ignore other tools
+                    guard name == "run_command", let cmd = args["cmd"] as? String else {
+                        turns.append(.toolResult(toolCallID: id, output: "Tool \(name) not available in legacy mode"))
+                        continue
+                    }
+                    let explanation = args["explanation"] as? String ?? ""
                     if autopilot {
                         await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: pane, paneLabel: "focused pane", wasFallback: false, turns: &turns)
                     } else {

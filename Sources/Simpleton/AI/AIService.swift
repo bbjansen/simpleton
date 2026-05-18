@@ -25,7 +25,16 @@ struct ConversationTurn {
 
 enum AgentTurnResult {
     case text(String)
-    case toolCall(id: String, cmd: String, explanation: String)
+    case toolCall(id: String, name: String, arguments: [String: Any])
+}
+
+extension AgentTurnResult {
+    /// Convenience for the common run_command case
+    var asRunCommand: (id: String, cmd: String, explanation: String)? {
+        guard case .toolCall(let id, let name, let args) = self, name == "run_command",
+              let cmd = args["cmd"] as? String else { return nil }
+        return (id, cmd, args["explanation"] as? String ?? "")
+    }
 }
 
 /// Centralized AI service. All AI calls go through this.
@@ -92,7 +101,7 @@ final class AIService {
             let combined = messages.joined(separator: "\n\n")
             let text = try await provider.complete(system: system, user: combined, model: config.model, options: options)
             if let cmd = parseFencedRunBlock(from: text) {
-                return .toolCall(id: UUID().uuidString, cmd: cmd, explanation: "")
+                return .toolCall(id: UUID().uuidString, name: "run_command", arguments: ["cmd": cmd, "explanation": ""])
             }
             return .text(text)
         }
