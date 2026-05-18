@@ -97,13 +97,7 @@ final class NotesPanelDefinition: PanelDefinition {
     let isBuiltIn = true
 
     func makeViewController(context: PanelContext) -> NSViewController {
-        let vc = NSViewController()
-        vc.view = NSHostingView(rootView:
-            Text("Notes panel — coming soon")
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        )
-        return vc
+        NotesPanelController(context: context)
     }
 }
 
