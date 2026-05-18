@@ -57,8 +57,8 @@ final class SkillsPanelVM: ObservableObject {
         session.onComplete = { [weak self] in
             self?.isRunning = false
         }
-        session.onApprovalNeeded = { _, _, handler in
-            handler(.allow)
+        session.onApprovalNeeded = { _, _, _, handler in
+            handler(.allow, nil)
         }
 
         await session.run(skill: skill, params: paramValues, pane: pane, autopilot: true)
