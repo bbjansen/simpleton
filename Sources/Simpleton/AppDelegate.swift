@@ -92,6 +92,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panelRegistry.register(.environment)
         panelRegistry.register(.fileBrowser)
         panelRegistry.register(.processes)
+        panelRegistry.register(.sshTunnels)
         // Register JS panels from script plugins
         for plugin in pluginManager?.scriptPlugins ?? [] {
             for panelManifest in plugin.manifest.panels ?? [] {

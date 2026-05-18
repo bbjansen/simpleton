@@ -152,4 +152,18 @@ extension PanelDefinition {
     ) { _ in
         NSHostingController(rootView: ProcessesPanelView())
     }
+
+    static let sshTunnels = PanelDefinition(
+        id: PanelProfile.PanelID.sshTunnels,
+        name: "SSH Tunnels",
+        icon: "network",
+        description: "Active SSH port forwards",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: SSHTunnelsPanelView(
+            tabContainerProvider: context.tabContainer,
+            bookmarkStore: context.bookmarkStore
+        ))
+    }
 }
