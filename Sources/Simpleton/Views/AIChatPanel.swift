@@ -1,12 +1,27 @@
 // Sources/Simpleton/Views/AIChatPanel.swift
 import AppKit
 import SwiftUI
+import SimpletonCore
 
 struct ChatMessage: Identifiable {
     let id = UUID()
     let role: String // "user" or "assistant"
     var content: String
     let timestamp = Date()
+}
+
+enum AgentUIMessage: Identifiable {
+    case chat(ChatMessage)
+    case skillForm(Skill)
+    case execution(id: UUID, cmd: String, explanation: String, status: AgentExecutionBubble.BubbleStatus, output: String)
+
+    var id: UUID {
+        switch self {
+        case .chat(let m): return m.id
+        case .skillForm(let s): return s.id
+        case .execution(let id, _, _, _, _): return id
+        }
+    }
 }
 
 /// SwiftUI view for the AI Chat Panel.
@@ -16,9 +31,22 @@ struct AIChatPanelView: View {
     let onInsertCommand: (String) -> Void
     let onDismiss: () -> Void
 
+    var skillStore: SkillStore?
+    var currentPane: PaneController?
+
     @State private var messages: [ChatMessage] = []
     @State private var input = ""
     @State private var isStreaming = false
+
+    @State private var autopilotEnabled = false
+    @State private var showSkillPicker = false
+    @State private var activeSkill: Skill? = nil
+    @State private var skillValues: [String: String] = [:]
+    @State private var aiSuggestedKeys: Set<String> = []
+    @State private var agentBubbles: [AgentUIMessage] = []
+    @State private var activeAgentSession: AgentSession? = nil
+    @State private var pendingApprovals: [UUID: (AgentSession.ApprovalAction) -> Void] = [:]
+    @State private var selectedPaneID: PaneID? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +57,14 @@ struct AIChatPanelView: View {
                 Text("AI Assistant")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
+                Toggle(isOn: $autopilotEnabled) {
+                    Text("Autopilot")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(autopilotEnabled ? .white : .secondary)
+                }
+                .toggleStyle(.button)
+                .controlSize(.mini)
+                .tint(.purple)
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
@@ -40,13 +76,81 @@ struct AIChatPanelView: View {
 
             Divider()
 
-            // Messages
+            // Skill parameter form overlay (shown when a skill is selected)
+            if let skill = activeSkill {
+                let paneList: [(id: PaneID, label: String)] = {
+                    if let pane = currentPane { return [(id: pane.id, label: "Current pane")] }
+                    return []
+                }()
+                SkillParameterForm(
+                    skill: skill,
+                    values: $skillValues,
+                    aiSuggestedKeys: aiSuggestedKeys,
+                    panes: paneList,
+                    selectedPaneID: $selectedPaneID,
+                    onRun: { runSkill() },
+                    onCancel: {
+                        activeSkill = nil
+                        skillValues = [:]
+                        aiSuggestedKeys = []
+                    },
+                    onFilePickerRequested: { paramName in
+                        let panel = NSOpenPanel()
+                        panel.canChooseFiles = true
+                        panel.canChooseDirectories = true
+                        panel.allowsMultipleSelection = false
+                        if panel.runModal() == .OK, let url = panel.url {
+                            skillValues[paramName] = url.path
+                        }
+                    }
+                )
+                .padding(12)
+
+                Divider()
+            }
+
+            // Messages + agent bubbles
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(messages) { message in
                             ChatBubble(message: message, onInsertCommand: onInsertCommand)
                                 .id(message.id)
+                        }
+                        ForEach(agentBubbles) { item in
+                            switch item {
+                            case .execution(let id, let cmd, let explanation, let status, let output):
+                                AgentExecutionBubble(
+                                    cmd: cmd,
+                                    explanation: explanation,
+                                    status: status,
+                                    output: output,
+                                    onAllow: {
+                                        pendingApprovals[id]?(.allow)
+                                        pendingApprovals.removeValue(forKey: id)
+                                        if let idx = agentBubbles.firstIndex(where: { $0.id == id }) {
+                                            agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: explanation, status: .running, output: "")
+                                        }
+                                    },
+                                    onSkip: {
+                                        pendingApprovals[id]?(.skip)
+                                        pendingApprovals.removeValue(forKey: id)
+                                        if let idx = agentBubbles.firstIndex(where: { $0.id == id }) {
+                                            agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: explanation, status: .skipped, output: "")
+                                        }
+                                    },
+                                    onStop: {
+                                        pendingApprovals[id]?(.stop)
+                                        pendingApprovals.removeValue(forKey: id)
+                                        if let idx = agentBubbles.firstIndex(where: { $0.id == id }) {
+                                            agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: explanation, status: .skipped, output: "")
+                                        }
+                                    }
+                                )
+                                .id(id)
+                            default:
+                                EmptyView()
+                            }
                         }
                     }
                     .padding(12)
@@ -56,12 +160,34 @@ struct AIChatPanelView: View {
                         proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
+                .onChange(of: agentBubbles.count) {
+                    if let last = agentBubbles.last {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
             }
 
             Divider()
 
             // Input
             HStack(spacing: 8) {
+                // Bolt button for skill picker
+                Button(action: { showSkillPicker.toggle() }) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.yellow)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showSkillPicker, arrowEdge: .top) {
+                    if let store = skillStore {
+                        SkillPickerSheet(skillStore: store, onSelect: { skill in
+                            activeSkill = skill
+                            selectedPaneID = currentPane?.id
+                            loadAutoFill(skill: skill)
+                        }, onDismiss: { showSkillPicker = false })
+                    }
+                }
+
                 TextField("Ask about your terminal session...", text: $input)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
@@ -69,7 +195,11 @@ struct AIChatPanelView: View {
                     .disabled(isStreaming)
 
                 if isStreaming {
-                    Button(action: { aiService.cancelAll(); isStreaming = false }) {
+                    Button(action: {
+                        aiService.cancelAll()
+                        activeAgentSession?.cancel()
+                        isStreaming = false
+                    }) {
                         Image(systemName: "stop.circle.fill")
                             .foregroundColor(.red)
                     }
@@ -93,6 +223,19 @@ struct AIChatPanelView: View {
     private func sendMessage() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+
+        // Slash-command detection
+        if text.hasPrefix("/") {
+            let slug = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+            if let skill = skillStore?.skill(forSlug: slug) {
+                input = ""
+                activeSkill = skill
+                selectedPaneID = currentPane?.id
+                loadAutoFill(skill: skill)
+                return
+            }
+        }
+
         input = ""
 
         messages.append(ChatMessage(role: "user", content: text))
@@ -122,6 +265,70 @@ struct AIChatPanelView: View {
                 }
             }
             isStreaming = false
+        }
+    }
+
+    private func loadAutoFill(skill: Skill) {
+        guard let pane = currentPane else { return }
+        skillValues = SkillAutoFill.phase1(skill: skill, pane: pane)
+        aiSuggestedKeys = []
+        Task {
+            let suggested = try? await SkillAutoFill.phase2(
+                skill: skill, currentValues: skillValues, pane: pane, aiService: aiService
+            )
+            if let suggested = suggested {
+                for (k, v) in suggested where (skillValues[k] ?? "").isEmpty {
+                    skillValues[k] = v
+                    aiSuggestedKeys.insert(k)
+                }
+            }
+        }
+    }
+
+    private func runSkill() {
+        guard let skill = activeSkill, let pane = currentPane else { return }
+        activeSkill = nil
+        let params = skillValues
+        skillValues = [:]
+        aiSuggestedKeys = []
+
+        let session = AgentSession(aiService: aiService)
+        activeAgentSession = session
+
+        let runningID = UUID()
+        agentBubbles.append(.execution(id: runningID, cmd: "Starting \(skill.name)…", explanation: "", status: .running, output: ""))
+
+        session.onMessage = { msg in
+            messages.append(msg)
+        }
+        session.onCommandExecuted = { cmd, output in
+            if let idx = agentBubbles.indices.last(where: {
+                if case .execution(_, _, _, let s, _) = agentBubbles[$0], s == .running { return true }
+                return false
+            }) {
+                if case .execution(let id, let c, let exp, _, _) = agentBubbles[idx] {
+                    agentBubbles[idx] = .execution(id: id, cmd: c, explanation: exp, status: .done, output: output)
+                }
+            }
+        }
+        session.onComplete = {
+            isStreaming = false
+            activeAgentSession = nil
+        }
+        session.onError = { err in
+            messages.append(ChatMessage(role: "assistant", content: "Error: \(err)"))
+            isStreaming = false
+            activeAgentSession = nil
+        }
+        session.onApprovalNeeded = { cmd, explanation, completion in
+            let approvalID = UUID()
+            pendingApprovals[approvalID] = completion
+            agentBubbles.append(.execution(id: approvalID, cmd: cmd, explanation: explanation, status: .waitingApproval, output: ""))
+        }
+
+        isStreaming = true
+        Task {
+            await session.run(skill: skill, params: params, pane: pane, autopilot: autopilotEnabled)
         }
     }
 }
@@ -199,6 +406,8 @@ final class AIChatPanelController: NSViewController {
     var contextProvider: (() -> AIContext)?
     var onInsertCommand: ((String) -> Void)?
     var onDismiss: (() -> Void)?
+    var skillStore: SkillStore?
+    var currentPane: PaneController?
 
     init(aiService: AIService) {
         self.aiService = aiService
@@ -208,12 +417,14 @@ final class AIChatPanelController: NSViewController {
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
-        let chatView = AIChatPanelView(
+        var chatView = AIChatPanelView(
             aiService: aiService,
             contextProvider: { [weak self] in self?.contextProvider?() ?? AIContext(os: "macOS", recentCommands: []) },
             onInsertCommand: { [weak self] cmd in self?.onInsertCommand?(cmd) },
             onDismiss: { [weak self] in self?.onDismiss?() }
         )
+        chatView.skillStore = skillStore
+        chatView.currentPane = currentPane
         self.view = NSHostingView(rootView: chatView)
         self.view.frame = NSRect(x: 0, y: 0, width: 320, height: 600)
     }
