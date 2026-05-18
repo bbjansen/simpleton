@@ -10,6 +10,9 @@ final class MCPClient {
     private(set) var tools: [MCPTool] = []
     private(set) var isConnected = false
 
+    /// Serial queue protecting requestID, readBuffer, and pipe I/O.
+    private let ioQueue = DispatchQueue(label: "simpleton.mcp.io")
+
     /// Buffer for partial lines read from stdout.
     private var readBuffer = Data()
 
@@ -140,15 +143,17 @@ final class MCPClient {
             proc.terminate()
         }
         process = nil
-        readBuffer = Data()
+        ioQueue.sync { readBuffer = Data() }
         print("[MCP] Disconnected from \(config.name)")
     }
 
     // MARK: - JSON-RPC Transport
 
     private func sendRequest(method: String, params: [String: Any], timeout: TimeInterval = 10.0) async throws -> [String: Any] {
-        requestID += 1
-        let id = requestID
+        let id: Int = ioQueue.sync {
+            requestID += 1
+            return requestID
+        }
 
         let message: [String: Any] = [
             "jsonrpc": "2.0",
@@ -157,7 +162,7 @@ final class MCPClient {
             "params": params
         ]
 
-        try writeMessage(message)
+        try ioQueue.sync { try writeMessage(message) }
 
         // Read responses until we get one matching our request ID
         return try await withThrowingTaskGroup(of: [String: Any].self) { group in
@@ -182,7 +187,7 @@ final class MCPClient {
             "method": method,
             "params": params
         ]
-        try? writeMessage(message)
+        ioQueue.sync { try? writeMessage(message) }
     }
 
     private func writeMessage(_ message: [String: Any]) throws {
@@ -199,7 +204,7 @@ final class MCPClient {
         while true {
             try Task.checkCancellation()
 
-            if let line = readLine() {
+            if let line = ioQueue.sync(execute: { readLine() }) {
                 guard let data = line.data(using: .utf8),
                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                     continue // skip malformed lines
