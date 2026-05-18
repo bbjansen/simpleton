@@ -141,4 +141,15 @@ extension PanelDefinition {
             currentPaneProvider: context.currentPane
         ))
     }
+
+    static let processes = PanelDefinition(
+        id: PanelProfile.PanelID.processes,
+        name: "Processes",
+        icon: "cpu",
+        description: "Running processes sorted by CPU",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { _ in
+        NSHostingController(rootView: ProcessesPanelView())
+    }
 }
