@@ -52,8 +52,10 @@ struct ProcessesPanelView: View {
                         Spacer()
                         Button {
                             kill(proc.pid, SIGTERM)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                kill(proc.pid, SIGKILL)
+                            let pid = proc.pid
+                            Task {
+                                try? await Task.sleep(for: .seconds(2))
+                                kill(pid, SIGKILL)
                             }
                             Task { await load() }
                         } label: {

@@ -304,7 +304,8 @@ struct AutoFocusTextField: NSViewRepresentable {
         field.textColor = .white
         field.delegate = context.coordinator
         // Auto-focus after a brief delay to ensure the panel is key
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(50))
             field.window?.makeFirstResponder(field)
         }
         return field

@@ -35,7 +35,8 @@ final class OnboardingCoordinator {
 
         let entries = sshConfigWatcher()?.concreteEntries ?? []
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
             guard let self else { return }
             guard let window = NSApp.keyWindow else { return }
 
@@ -86,7 +87,7 @@ final class OnboardingCoordinator {
                 defer: false
             )
             sheetWindow.contentView = NSHostingView(rootView: wizardView)
-            window.beginSheet(sheetWindow)
+            window.beginSheet(sheetWindow, completionHandler: nil)
         }
     }
 }

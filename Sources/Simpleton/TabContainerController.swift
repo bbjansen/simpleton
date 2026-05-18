@@ -133,7 +133,8 @@ final class TabContainerController: NSViewController {
             profile.activatePanel(id: PanelProfile.PanelID.skills, on: .right)
             registry.activeProfile = profile
             // Notify skills panel to focus the search field
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
                 NotificationCenter.default.post(name: .simpletonActivateSkillPicker, object: nil)
             }
         }

@@ -63,7 +63,8 @@ final class PreferencesWindowController {
             // Delay releasing the window reference so AppKit animation blocks that were
             // captured during the close sequence finish before the window is deallocated,
             // preventing EXC_BAD_ACCESS in _NSWindowTransformAnimation / _Block_release.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
                 self?.window = nil
             }
         }

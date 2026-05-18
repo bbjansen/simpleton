@@ -17,7 +17,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var sessionManager: SessionManager?
     private var workspaceManager: WorkspaceManager?
     private var workspacesMenu: NSMenu?
-    private var isFirstLaunch = false
     private var pluginManager: PluginManager?
     private var aiService: AIService?
     private var aiExplainPanel: AIExplainPanel?
