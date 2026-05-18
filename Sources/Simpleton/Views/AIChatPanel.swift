@@ -56,44 +56,11 @@ struct AIChatPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                Image(systemName: "sparkles")
-                    .foregroundColor(.purple)
-                Text("AI Assistant")
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer()
-                Button(action: {
-                    if autopilotEnabled {
-                        autopilotEnabled = false
-                    } else {
-                        showAutopilotConfirm = true
-                    }
-                }) {
-                    Text(autopilotEnabled ? "Autopilot ON" : "Autopilot")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(autopilotEnabled ? .white : .secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(autopilotEnabled ? Color.orange : Color.clear)
-                        .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
-                .alert("Enable Autopilot?", isPresented: $showAutopilotConfirm) {
-                    Button("Enable", role: .destructive) { autopilotEnabled = true }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("The AI will execute commands in your terminal without asking for approval. It can run any shell command, modify files, and control processes.")
-                }
-                if let dismiss = onDismiss {
-                    Button(action: dismiss) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(12)
-            .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
+            ChatHeaderView(
+                autopilotEnabled: $autopilotEnabled,
+                showAutopilotConfirm: $showAutopilotConfirm,
+                onDismiss: onDismiss
+            )
 
             Divider()
 
@@ -115,32 +82,7 @@ struct AIChatPanelView: View {
 
             // Pane indicator bar (multi-pane only)
             if let conv = conversation, conv.paneOrder.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(conv.paneOrder, id: \.self) { paneID in
-                            let label = conv.paneLabels[paneID] ?? "Pane"
-                            let isFocused = conv.buildCompositeContext()?.focusedPaneID == paneID
-                            Button(action: { conversation?.targetPaneID = paneID }) {
-                                HStack(spacing: 3) {
-                                    Circle()
-                                        .fill(isFocused ? Color.green : Color.secondary.opacity(0.4))
-                                        .frame(width: 6, height: 6)
-                                    Text(label)
-                                        .font(.system(size: 9))
-                                        .lineLimit(1)
-                                }
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(conv.targetPaneID == paneID ? Color.accentColor.opacity(0.2) : Color(nsColor: NSColor(white: 0.12, alpha: 1)))
-                                .cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                }
-                .padding(.vertical, 4)
-                .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+                PaneIndicatorBar(conversation: conv)
             }
 
             // Skill parameter form overlay (shown when a skill is selected)
@@ -242,75 +184,29 @@ struct AIChatPanelView: View {
             Divider()
 
             // Input
-            HStack(spacing: 8) {
-                // Bolt button for skill picker
-                Button(action: { showSkillPicker.toggle() }) {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.yellow)
+            ChatInputView(
+                input: $input,
+                showSkillPicker: $showSkillPicker,
+                isStreaming: isStreaming,
+                skillStore: skillStore,
+                onSend: sendMessage,
+                onCancel: {
+                    aiService.cancelAll()
+                    activeAgentSession?.cancel()
+                    isStreaming = false
+                },
+                onSkillSelected: { skill in
+                    activeSkill = skill
+                    selectedPaneID = currentPane?.id
+                    loadAutoFill(skill: skill)
                 }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showSkillPicker, arrowEdge: .top) {
-                    if let store = skillStore {
-                        SkillPickerSheet(skillStore: store, onSelect: { skill in
-                            activeSkill = skill
-                            selectedPaneID = currentPane?.id
-                            loadAutoFill(skill: skill)
-                        }, onDismiss: { showSkillPicker = false })
-                    }
-                }
-
-                TextField("Ask about your terminal session...", text: $input)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .onSubmit { sendMessage() }
-                    .disabled(isStreaming)
-
-                if isStreaming {
-                    Button(action: {
-                        aiService.cancelAll()
-                        activeAgentSession?.cancel()
-                        isStreaming = false
-                    }) {
-                        Image(systemName: "stop.circle.fill")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .foregroundColor(input.isEmpty ? .secondary : .purple)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(input.isEmpty)
-                }
-            }
-            .padding(12)
-            .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
+            )
 
             // Bottom status bar: step counter + turn cap toggle
-            HStack(spacing: 6) {
-                if let session = activeAgentSession, session.stepNumber > 0 {
-                    Text("Step \(session.stepNumber)")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Button(action: { unlimitedTurns.toggle() }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: unlimitedTurns ? "infinity" : "gauge.with.dots.needle.33percent")
-                            .font(.system(size: 9))
-                        Text(unlimitedTurns ? "Unlimited" : "25 turns")
-                            .font(.system(size: 9))
-                    }
-                    .foregroundColor(unlimitedTurns ? .orange : .secondary)
-                }
-                .buttonStyle(.plain)
-                .help(unlimitedTurns ? "Turn limit disabled — agent can run indefinitely" : "Agent limited to 25 tool calls per message")
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            .background(Color(nsColor: NSColor(white: 0.05, alpha: 1)))
+            ChatStatusBar(
+                stepNumber: activeAgentSession?.stepNumber ?? 0,
+                unlimitedTurns: $unlimitedTurns
+            )
         }
         .frame(width: 320)
         .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
