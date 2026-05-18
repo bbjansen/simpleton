@@ -21,7 +21,7 @@ struct CommandClassifier {
         "find", "grep", "rg", "fd", "ag",
     ]
 
-    static let unsafeOperators: [String] = ["|", ">", ">>", "<"]
+    static let unsafeOperators: [String] = ["|", ">", ">>", "<", "&&", "||", ";"]
 
     static func isSafe(_ command: String) -> Bool {
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)

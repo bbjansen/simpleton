@@ -293,6 +293,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        NotificationCenter.default.removeObserver(self)
+
         // Disconnect all MCP server processes
         for client in mcpClients {
             client.disconnect()

@@ -15,6 +15,12 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
         self.context = context
     }
 
+    deinit {
+        if let observer = outputObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
     func install(into controller: WKUserContentController) {
         guard let shimURL = Bundle.main.url(forResource: "panel-bridge", withExtension: "js"),
               let shim = try? String(contentsOf: shimURL, encoding: .utf8) else {
