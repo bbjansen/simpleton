@@ -1,0 +1,1520 @@
+[
+  {
+    "builtIn": true,
+    "description": "Transfer a local file or directory to a remote server using SCP.",
+    "icon": "arrow.up.circle",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5001",
+    "name": "SCP File Transfer",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-010000000000",
+        "label": "Local Path",
+        "name": "localPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": "sshHost",
+        "id": "F2000000-D5E6-4F78-9A0B-010000000001",
+        "label": "Remote Host",
+        "name": "remoteHost",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-010000000002",
+        "label": "Remote Path",
+        "name": "remotePath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "scp-transfer",
+    "systemPrompt": "Transfer {localPath} to {remoteHost}:{remotePath}. Verify SSH connectivity first, then run: scp '{localPath}' {remoteHost}:'{remotePath}'. Report transfer speed and confirm success.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Sync a local directory to a remote server using rsync.",
+    "icon": "arrow.triangle.2.circlepath",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5002",
+    "name": "Rsync Sync",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-020000000000",
+        "label": "Local Path",
+        "name": "localPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": "sshHost",
+        "id": "F2000000-D5E6-4F78-9A0B-020000000001",
+        "label": "Remote Host",
+        "name": "remoteHost",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-020000000002",
+        "label": "Remote Path",
+        "name": "remotePath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-020000000003",
+        "label": "Delete Orphans",
+        "name": "deleteOrphans",
+        "pickerOptions": ["yes", "no"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "rsync-sync",
+    "systemPrompt": "Sync {localPath} to {remoteHost}:{remotePath}. Run: rsync -avz{delete} '{localPath}/' {remoteHost}:'{remotePath}/' where {delete} is ' --delete' when deleteOrphans=yes. Show transfer summary.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Compress a directory into a .tar.gz archive.",
+    "icon": "archivebox",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5003",
+    "name": "Compress Directory",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-030000000000",
+        "label": "Source Path",
+        "name": "sourcePath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-030000000001",
+        "label": "Output Name",
+        "name": "outputName",
+        "pickerOptions": null,
+        "placeholder": "archive",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "compress",
+    "systemPrompt": "Compress {sourcePath} into {outputName}.tar.gz. Run: tar -czf '{outputName}.tar.gz' -C \"$(dirname '{sourcePath}')\" \"$(basename '{sourcePath}')\". Show resulting file size.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Encrypt or decrypt a file using GPG AES256 symmetric encryption.",
+    "icon": "lock.fill",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5004",
+    "name": "Encrypt / Decrypt File",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-040000000000",
+        "label": "File Path",
+        "name": "filePath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-040000000001",
+        "label": "Action",
+        "name": "action",
+        "pickerOptions": ["encrypt", "decrypt"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "encrypt-file",
+    "systemPrompt": "Perform {action} on {filePath} using gpg. For encrypt: gpg --symmetric --cipher-algo AES256 '{filePath}'. For decrypt: gpg --output '{filePath%.gpg*}' --decrypt '{filePath}'. Confirm the operation completed.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Stage all changes, commit with a message, and push to the specified branch.",
+    "icon": "arrow.up.circle",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5005",
+    "name": "Git Commit + Push",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-050000000000",
+        "label": "Commit Message",
+        "name": "commitMessage",
+        "pickerOptions": null,
+        "placeholder": "chore: update",
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-050000000001",
+        "label": "Branch",
+        "name": "branch",
+        "pickerOptions": null,
+        "placeholder": "main",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "git-push",
+    "systemPrompt": "In the current git repository, stage all changes, create a commit with message \"{commitMessage}\" on branch {branch}, and push. Run: git add -A && git commit -m \"{commitMessage}\" && git push origin {branch}. Show the push output.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Install npm dependencies and run the build script in a project directory.",
+    "icon": "hammer",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5006",
+    "name": "npm Install + Build",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-060000000000",
+        "label": "Project Path",
+        "name": "projectPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      }
+    ],
+    "slug": "npm-build",
+    "systemPrompt": "In {projectPath}, install dependencies and build. Run: cd '{projectPath}' && npm install && npm run build. Show errors or warnings.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Create a Python virtual environment and install requirements.",
+    "icon": "terminal",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5007",
+    "name": "Python venv Setup",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-070000000000",
+        "label": "Project Path",
+        "name": "projectPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      }
+    ],
+    "slug": "python-setup",
+    "systemPrompt": "Set up Python venv in {projectPath}. Run: cd '{projectPath}' && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt. Confirm success.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Switch the active runtime version using nvm, pyenv, or rbenv.",
+    "icon": "arrow.2.squarepath",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5008",
+    "name": "Switch Runtime Version",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-080000000000",
+        "label": "Runtime",
+        "name": "runtime",
+        "pickerOptions": ["node", "python", "ruby"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-080000000001",
+        "label": "Version",
+        "name": "version",
+        "pickerOptions": null,
+        "placeholder": "18.0.0",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "switch-runtime",
+    "systemPrompt": "Switch {runtime} version to {version}. Use nvm for node, pyenv for python, rbenv for ruby. Run the appropriate 'use' command then verify with {runtime} --version.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Run database migrations up, down, or check status using the detected framework.",
+    "icon": "cylinder.split.1x2",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5009",
+    "name": "Run DB Migrations",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-090000000000",
+        "label": "Project Path",
+        "name": "projectPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-090000000001",
+        "label": "Direction",
+        "name": "direction",
+        "pickerOptions": ["up", "down", "status"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "db-migrate",
+    "systemPrompt": "In {projectPath}, run DB migrations direction={direction}. Detect the framework (Rails, Alembic, TypeORM, Flyway) and run the appropriate command. Show migration output.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Report disk usage, memory, CPU load, and top processes.",
+    "icon": "heart",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5010",
+    "name": "System Health Check",
+    "parameters": [],
+    "slug": "system-health",
+    "systemPrompt": "Run a system health check. Report: disk usage (df -h), memory (free -h or vm_stat on macOS), CPU load (uptime), top 5 processes by CPU (ps aux --sort=-%cpu | head -6). Format results clearly.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Start, stop, restart, or check the status of a system service.",
+    "icon": "gearshape",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5011",
+    "name": "Manage Service",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-110000000000",
+        "label": "Service Name",
+        "name": "serviceName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-110000000001",
+        "label": "Action",
+        "name": "action",
+        "pickerOptions": ["start", "stop", "restart", "status"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "service-manage",
+    "systemPrompt": "Run: systemctl {action} {serviceName} (or launchctl on macOS). Show status after: systemctl status {serviceName}.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Find and terminate a process by name, using SIGTERM then SIGKILL if needed.",
+    "icon": "xmark.circle",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5012",
+    "name": "Kill Process",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-120000000000",
+        "label": "Process Name",
+        "name": "processName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "kill-process",
+    "systemPrompt": "Find and kill process '{processName}'. Run: pgrep -f '{processName}' to get PIDs, then kill -15 <pid>. If still running after 3s, use kill -9. Confirm termination.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Check which process is using a port, or kill it.",
+    "icon": "network",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5013",
+    "name": "Check / Kill Port",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-130000000000",
+        "label": "Port",
+        "name": "port",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-130000000001",
+        "label": "Action",
+        "name": "action",
+        "pickerOptions": ["check", "kill"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "port-check",
+    "systemPrompt": "For check: show what is using port {port} with lsof -ti tcp:{port}. For kill: run kill $(lsof -ti tcp:{port}). Confirm result.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "List, add, or remove crontab entries.",
+    "icon": "clock",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5014",
+    "name": "Cron Job Manager",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-140000000000",
+        "label": "Action",
+        "name": "action",
+        "pickerOptions": ["list", "add", "remove"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-140000000001",
+        "label": "Schedule",
+        "name": "schedule",
+        "pickerOptions": null,
+        "placeholder": "0 * * * *",
+        "required": false,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-140000000002",
+        "label": "Command",
+        "name": "command",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": false,
+        "type": "text"
+      }
+    ],
+    "slug": "cron",
+    "systemPrompt": "Manage crontab: action={action}. For list: crontab -l. For add: append '{schedule} {command}' to crontab. For remove: remove line matching '{command}' from crontab. Show final crontab.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Allow, deny, or delete a firewall rule for a port and protocol.",
+    "icon": "shield",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5015",
+    "name": "Firewall Rule",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-150000000000",
+        "label": "Action",
+        "name": "action",
+        "pickerOptions": ["allow", "deny", "delete"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-150000000001",
+        "label": "Port",
+        "name": "port",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-150000000002",
+        "label": "Protocol",
+        "name": "protocol",
+        "pickerOptions": ["tcp", "udp", "any"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "firewall",
+    "systemPrompt": "Apply firewall rule: ufw {action} {port}/{protocol} on Linux, or describe pfctl equivalent on macOS. Show rules after: ufw status numbered.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Check for available system updates without installing them.",
+    "icon": "arrow.down.circle",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5016",
+    "name": "Check System Updates",
+    "parameters": [],
+    "slug": "check-updates",
+    "systemPrompt": "Check for system updates. Detect package manager (apt, dnf/yum, brew, pacman) and run the update check command. List available updates without installing.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Bootstrap a new server with essential packages, a deploy user, and firewall.",
+    "icon": "server.rack",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5017",
+    "name": "Bootstrap New Server",
+    "parameters": [
+      {
+        "autoFillHint": "sshHost",
+        "id": "F2000000-D5E6-4F78-9A0B-170000000000",
+        "label": "Remote Host",
+        "name": "remoteHost",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-170000000001",
+        "label": "Username",
+        "name": "username",
+        "pickerOptions": null,
+        "placeholder": "deploy",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "bootstrap",
+    "systemPrompt": "Bootstrap {remoteHost} as user {username}. Connect via SSH and: update packages, install curl/git/vim/htop/ufw, create user {username} with sudo, set up SSH key auth, enable firewall. Show each step.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Find files larger than a specified size in a directory.",
+    "icon": "magnifyingglass",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5018",
+    "name": "Find Large Files",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-180000000000",
+        "label": "Directory",
+        "name": "directory",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-180000000001",
+        "label": "Minimum Size (MB)",
+        "name": "minSizeMB",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      }
+    ],
+    "slug": "find-large-files",
+    "systemPrompt": "Find files larger than {minSizeMB}MB in {directory}. Run: find '{directory}' -type f -size +{minSizeMB}M | xargs ls -lh 2>/dev/null | sort -k5 -rh | head -20. Show results.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Batch rename files in a directory by replacing a pattern with a replacement string.",
+    "icon": "pencil",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5019",
+    "name": "Batch Rename Files",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-190000000000",
+        "label": "Directory",
+        "name": "directory",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-190000000001",
+        "label": "Pattern",
+        "name": "pattern",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-190000000002",
+        "label": "Replacement",
+        "name": "replacement",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "batch-rename",
+    "systemPrompt": "Rename files in {directory} matching '{pattern}' by replacing with '{replacement}'. Show preview first, then perform rename. Confirm changes made.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Find and replace text across files matching a glob pattern.",
+    "icon": "text.magnifyingglass",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5020",
+    "name": "Find & Replace in Files",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-200000000000",
+        "label": "Pattern",
+        "name": "pattern",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-200000000001",
+        "label": "Replacement",
+        "name": "replacement",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-200000000002",
+        "label": "Directory",
+        "name": "directory",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-200000000003",
+        "label": "File Glob",
+        "name": "fileGlob",
+        "pickerOptions": null,
+        "placeholder": "*.txt",
+        "required": false,
+        "type": "text"
+      }
+    ],
+    "slug": "find-replace",
+    "systemPrompt": "Find '{pattern}' and replace with '{replacement}' in files matching '{fileGlob}' under {directory}. Show matching files first, then replace using sed. Report count of changes.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Tail the last N lines of a service's log, adapting to journalctl or file-based logs.",
+    "icon": "doc.text",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5021",
+    "name": "Tail Logs",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-210000000000",
+        "label": "Service Name",
+        "name": "serviceName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-210000000001",
+        "label": "Lines",
+        "name": "lines",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      }
+    ],
+    "slug": "tail-logs",
+    "systemPrompt": "Show last {lines} lines of logs for {serviceName}. Use journalctl -u {serviceName} -n {lines} -f on Linux, or tail /var/log/{serviceName}.log. Adapt to available logging system.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Search a log file for a pattern and show matching lines with line numbers.",
+    "icon": "doc.text.magnifyingglass",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5022",
+    "name": "Search Logs",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-220000000000",
+        "label": "Pattern",
+        "name": "pattern",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-220000000001",
+        "label": "Log File",
+        "name": "logFile",
+        "pickerOptions": null,
+        "placeholder": "/var/log/syslog",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "log-search",
+    "systemPrompt": "Search '{pattern}' in {logFile}. Run: grep -n '{pattern}' '{logFile}' | tail -50. Show line numbers and match count.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Check SSL certificate expiry, subject, and issuer for a domain.",
+    "icon": "lock.shield",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5023",
+    "name": "SSL Certificate Check",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-230000000000",
+        "label": "Domain",
+        "name": "domain",
+        "pickerOptions": null,
+        "placeholder": "example.com",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "cert-check",
+    "systemPrompt": "Check SSL certificate for {domain}. Run: echo | openssl s_client -connect {domain}:443 -servername {domain} 2>/dev/null | openssl x509 -noout -dates -subject -issuer. Show expiry and validity.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Scan a host for open ports in a specified range using nmap.",
+    "icon": "radar",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5024",
+    "name": "Port Scan",
+    "parameters": [
+      {
+        "autoFillHint": "sshHost",
+        "id": "F2000000-D5E6-4F78-9A0B-240000000000",
+        "label": "Host",
+        "name": "host",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-240000000001",
+        "label": "Port Range",
+        "name": "portRange",
+        "pickerOptions": null,
+        "placeholder": "1-1024",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "nmap-scan",
+    "systemPrompt": "Scan {host} for open ports in range {portRange}. Run: nmap -p {portRange} --open {host}. Show open ports and services.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Check an HTTP endpoint for status code, response time, and headers.",
+    "icon": "globe",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5025",
+    "name": "HTTP Health Check",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-250000000000",
+        "label": "URL",
+        "name": "url",
+        "pickerOptions": null,
+        "placeholder": "https://example.com",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "http-check",
+    "systemPrompt": "Check HTTP endpoint {url}. Run: curl -s -o /dev/null -w 'HTTP %{http_code} | %{time_total}s | %{size_download}B\\n' '{url}' and curl -sI '{url}' | head -20. Show status and headers.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Run ping, traceroute, and dig against a target for full network diagnostics.",
+    "icon": "wifi",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5026",
+    "name": "Network Diagnose",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-260000000000",
+        "label": "Target",
+        "name": "target",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "network-diagnose",
+    "systemPrompt": "Full network diagnostic for {target}. Run: ping -c 4 {target}, traceroute {target}, and dig {target}. Show results of each step.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Set up a local SSH port-forward tunnel to a remote host and port.",
+    "icon": "arrow.forward.square",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5027",
+    "name": "SSH Tunnel",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-270000000000",
+        "label": "Local Port",
+        "name": "localPort",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "autoFillHint": "sshHost",
+        "id": "F2000000-D5E6-4F78-9A0B-270000000001",
+        "label": "Remote Host",
+        "name": "remoteHost",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-270000000002",
+        "label": "Remote Port",
+        "name": "remotePort",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      }
+    ],
+    "slug": "ssh-tunnel",
+    "systemPrompt": "Set up SSH tunnel: ssh -N -L {localPort}:localhost:{remotePort} {remoteHost}. Confirm tunnel and show how to use it.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Copy a local SSH public key to a remote host using ssh-copy-id.",
+    "icon": "key",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5028",
+    "name": "Copy SSH Key",
+    "parameters": [
+      {
+        "autoFillHint": "sshHost",
+        "id": "F2000000-D5E6-4F78-9A0B-280000000000",
+        "label": "Remote Host",
+        "name": "remoteHost",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-280000000001",
+        "label": "Key File",
+        "name": "keyFile",
+        "pickerOptions": null,
+        "placeholder": "~/.ssh/id_rsa.pub",
+        "required": true,
+        "type": "filePath"
+      }
+    ],
+    "slug": "ssh-copy-id",
+    "systemPrompt": "Copy public key to remote: ssh-copy-id -i '{keyFile}' {remoteHost}. Verify with: ssh -o BatchMode=yes {remoteHost} echo ok.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Generate a cryptographically random password of the specified length.",
+    "icon": "key.horizontal",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5029",
+    "name": "Generate Password",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-290000000000",
+        "label": "Length",
+        "name": "length",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-290000000001",
+        "label": "Include Symbols",
+        "name": "symbols",
+        "pickerOptions": ["yes", "no"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "gen-password",
+    "systemPrompt": "Generate a {length}-char random password with symbols={symbols}. Use: openssl rand -base64 64 | tr -d '\\n' | head -c {length}. For symbols=yes include special chars. Print the password.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Dump a MySQL, PostgreSQL, or SQLite database to a timestamped backup file.",
+    "icon": "cylinder.split.1x2.fill",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5030",
+    "name": "Backup Database",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-300000000000",
+        "label": "Database Type",
+        "name": "dbType",
+        "pickerOptions": ["mysql", "postgres", "sqlite"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-300000000001",
+        "label": "Database Name",
+        "name": "dbName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-300000000002",
+        "label": "Output Path",
+        "name": "outputPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      }
+    ],
+    "slug": "db-backup",
+    "systemPrompt": "Backup {dbType} database '{dbName}' to {outputPath}/{dbName}_$(date +%Y%m%d_%H%M%S).{ext}. Use mysqldump/pg_dump/cp as appropriate. Confirm backup size.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Restore a MySQL or PostgreSQL database from a backup file.",
+    "icon": "arrow.counterclockwise",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5031",
+    "name": "Restore Database",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-310000000000",
+        "label": "Database Type",
+        "name": "dbType",
+        "pickerOptions": ["mysql", "postgres"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-310000000001",
+        "label": "Database Name",
+        "name": "dbName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-310000000002",
+        "label": "Backup File",
+        "name": "backupFile",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      }
+    ],
+    "slug": "db-restore",
+    "systemPrompt": "Restore {dbType} database '{dbName}' from '{backupFile}'. Use mysql/psql as appropriate. Confirm restore completed.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Build a Docker image and push it to a registry.",
+    "icon": "shippingbox",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5032",
+    "name": "Build + Push Image",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-320000000000",
+        "label": "Image Name",
+        "name": "imageName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-320000000001",
+        "label": "Tag",
+        "name": "tag",
+        "pickerOptions": null,
+        "placeholder": "latest",
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-320000000002",
+        "label": "Registry",
+        "name": "registry",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-320000000003",
+        "label": "Build Context",
+        "name": "context",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      }
+    ],
+    "slug": "docker-build",
+    "systemPrompt": "Build and push: docker build -t {registry}/{imageName}:{tag} '{context}' && docker push {registry}/{imageName}:{tag}. Show build output and confirm push.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Run docker-compose up, down, restart, or pull in a project directory.",
+    "icon": "square.stack.3d.up",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5033",
+    "name": "Docker Compose",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-330000000000",
+        "label": "Project Path",
+        "name": "projectPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-330000000001",
+        "label": "Action",
+        "name": "action",
+        "pickerOptions": ["up", "down", "restart", "pull"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "compose",
+    "systemPrompt": "Run: cd '{projectPath}' && docker-compose {action}. Show service status after: docker-compose ps.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Open an interactive shell session inside a running Docker container.",
+    "icon": "terminal.fill",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5034",
+    "name": "Shell into Container",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-340000000000",
+        "label": "Container Name",
+        "name": "containerName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-340000000001",
+        "label": "Shell",
+        "name": "shell",
+        "pickerOptions": ["bash", "sh", "zsh"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "docker-exec",
+    "systemPrompt": "Open shell in container: docker exec -it {containerName} {shell}. If not running, start it first with docker start {containerName}.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Remove stopped containers, unused images, volumes, or everything at once.",
+    "icon": "trash",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5035",
+    "name": "Docker Cleanup",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-350000000000",
+        "label": "Action",
+        "name": "action",
+        "pickerOptions": ["containers", "images", "volumes", "all"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "docker-cleanup",
+    "systemPrompt": "Docker cleanup action={action}. For containers: docker rm $(docker ps -aq). For images: docker rmi $(docker images -q). For volumes: docker volume prune -f. For all: docker system prune -af --volumes. Show freed space.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Show the last N log lines from a Docker container.",
+    "icon": "list.bullet",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5036",
+    "name": "Docker Container Logs",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-360000000000",
+        "label": "Container Name",
+        "name": "containerName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-360000000001",
+        "label": "Lines",
+        "name": "lines",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      }
+    ],
+    "slug": "docker-logs",
+    "systemPrompt": "Show docker logs: docker logs --tail {lines} {containerName}. Show container status: docker inspect --format '{{.State.Status}}' {containerName}.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Rsync a local path to a remote server and restart a systemd service.",
+    "icon": "arrow.up.right.circle",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5037",
+    "name": "Deploy to Server",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-370000000000",
+        "label": "Local Path",
+        "name": "localPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": "sshHost",
+        "id": "F2000000-D5E6-4F78-9A0B-370000000001",
+        "label": "Remote Host",
+        "name": "remoteHost",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-370000000002",
+        "label": "Remote Path",
+        "name": "remotePath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-370000000003",
+        "label": "Service Name",
+        "name": "serviceName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "deploy",
+    "systemPrompt": "Deploy {localPath} to {remoteHost}:{remotePath} and restart {serviceName}. Run: rsync -avz '{localPath}/' {remoteHost}:'{remotePath}/' && ssh {remoteHost} 'sudo systemctl restart {serviceName} && systemctl status {serviceName}'. Confirm deployment.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Fetch log output from a Kubernetes pod, optionally targeting a specific container.",
+    "icon": "square.stack.3d.down.right",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5038",
+    "name": "Kubernetes Pod Logs",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-380000000000",
+        "label": "Namespace",
+        "name": "namespace",
+        "pickerOptions": null,
+        "placeholder": "default",
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-380000000001",
+        "label": "Pod",
+        "name": "pod",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-380000000002",
+        "label": "Container",
+        "name": "container",
+        "pickerOptions": null,
+        "placeholder": "",
+        "required": false,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-380000000003",
+        "label": "Lines",
+        "name": "lines",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "number"
+      }
+    ],
+    "slug": "k8s-logs",
+    "systemPrompt": "Get pod logs: kubectl logs -n {namespace} {pod} --tail={lines}{containerFlag} where containerFlag is ' -c {container}' when container is non-empty.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Analyze an error message and provide root cause, fix steps, and prevention tips.",
+    "icon": "exclamationmark.bubble",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5039",
+    "name": "Explain Error",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-390000000000",
+        "label": "Error",
+        "name": "error",
+        "pickerOptions": null,
+        "placeholder": "Paste error here",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "explain-error",
+    "systemPrompt": "Analyze this error and explain cause and fix:\n\n{error}\n\nProvide: 1) Root cause, 2) Step-by-step fix, 3) Prevention. Be concise.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Write a bash script from a description, save it, and execute it.",
+    "icon": "scroll",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5040",
+    "name": "Write & Run Script",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-400000000000",
+        "label": "Description",
+        "name": "description",
+        "pickerOptions": null,
+        "placeholder": "Describe what the script should do",
+        "required": true,
+        "type": "text"
+      }
+    ],
+    "slug": "write-script",
+    "systemPrompt": "Write a bash script that: {description}. Show the full script with explanation. Then save to /tmp/simpleton_script_$(date +%s).sh, make executable, and run it. Show output.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Make an HTTP API request with curl and pretty-print the JSON response.",
+    "icon": "arrow.up.and.down.circle",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5041",
+    "name": "API Request",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-410000000000",
+        "label": "Method",
+        "name": "method",
+        "pickerOptions": ["GET", "POST", "PUT", "DELETE"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      },
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-410000000001",
+        "label": "URL",
+        "name": "url",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-410000000002",
+        "label": "Headers",
+        "name": "headers",
+        "pickerOptions": null,
+        "placeholder": "Authorization: Bearer token",
+        "required": false,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-410000000003",
+        "label": "Body",
+        "name": "body",
+        "pickerOptions": null,
+        "placeholder": "{\"key\":\"value\"}",
+        "required": false,
+        "type": "text"
+      }
+    ],
+    "slug": "api-test",
+    "systemPrompt": "Make {method} request to {url}. Use: curl -s -X {method} '{url}' {headerArgs} {bodyArgs} | python3 -m json.tool 2>/dev/null || cat. Show status code and response.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Inspect a project directory and generate an optimised multi-stage Dockerfile.",
+    "icon": "doc.badge.plus",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5042",
+    "name": "Generate Dockerfile",
+    "parameters": [
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-420000000000",
+        "label": "Project Path",
+        "name": "projectPath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-420000000001",
+        "label": "Base Image",
+        "name": "baseImage",
+        "pickerOptions": null,
+        "placeholder": "ubuntu:22.04",
+        "required": false,
+        "type": "text"
+      }
+    ],
+    "slug": "gen-dockerfile",
+    "systemPrompt": "Inspect {projectPath} and write a Dockerfile with base {baseImage}. Detect project type, analyze deps, write multi-stage Dockerfile to {projectPath}/Dockerfile. Show file and explain each instruction.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Generate a systemd service unit file, reload the daemon, and enable the service.",
+    "icon": "gearshape.2",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5043",
+    "name": "Generate systemd Service",
+    "parameters": [
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-430000000000",
+        "label": "Service Name",
+        "name": "serviceName",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-430000000001",
+        "label": "Command",
+        "name": "command",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-430000000002",
+        "label": "User",
+        "name": "user",
+        "pickerOptions": null,
+        "placeholder": "www-data",
+        "required": true,
+        "type": "text"
+      },
+      {
+        "autoFillHint": "cwd",
+        "id": "F2000000-D5E6-4F78-9A0B-430000000003",
+        "label": "Working Directory",
+        "name": "workingDir",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      }
+    ],
+    "slug": "gen-service",
+    "systemPrompt": "Generate systemd service for {serviceName}. Write unit file to /etc/systemd/system/{serviceName}.service with: ExecStart={command}, User={user}, WorkingDirectory={workingDir}. Reload daemon, enable and start.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Read a config file and report security risks, misconfigurations, and improvements.",
+    "icon": "checkmark.shield",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5044",
+    "name": "Review Config for Issues",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-440000000000",
+        "label": "File Path",
+        "name": "filePath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      }
+    ],
+    "slug": "review-config",
+    "systemPrompt": "Read {filePath} and review for: security risks, misconfigurations, deprecated settings, improvements. Organize findings by severity: critical / warning / info.",
+    "version": 1
+  },
+  {
+    "builtIn": true,
+    "description": "Convert a file between JSON, YAML, TOML, and CSV formats.",
+    "icon": "arrow.triangle.2.circlepath.doc",
+    "id": "F1A2B3C4-D5E6-4F78-9A0B-1C2D3E4F5045",
+    "name": "Convert File Format",
+    "parameters": [
+      {
+        "autoFillHint": "selection",
+        "id": "F2000000-D5E6-4F78-9A0B-450000000000",
+        "label": "File Path",
+        "name": "filePath",
+        "pickerOptions": null,
+        "placeholder": null,
+        "required": true,
+        "type": "filePath"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-450000000001",
+        "label": "From Format",
+        "name": "from",
+        "pickerOptions": ["json", "yaml", "toml", "csv"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      },
+      {
+        "autoFillHint": null,
+        "id": "F2000000-D5E6-4F78-9A0B-450000000002",
+        "label": "To Format",
+        "name": "to",
+        "pickerOptions": ["json", "yaml", "toml", "csv"],
+        "placeholder": null,
+        "required": true,
+        "type": "picker"
+      }
+    ],
+    "slug": "convert",
+    "systemPrompt": "Convert {filePath} from {from} to {to} format. Use python3/yq/jq. Write output to a new file with appropriate extension. Show preview of first 20 lines. Confirm output path.",
+    "version": 1
+  }
+]
