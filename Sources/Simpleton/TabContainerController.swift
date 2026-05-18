@@ -246,7 +246,10 @@ final class TabContainerController: NSViewController {
             // Show AI chat panel on the right side
             let chatController = AIChatPanelController(aiService: aiService)
             chatController.skillStore = skillStore
-            chatController.currentPane = splitController.panes[splitController.focusedPaneID]
+            chatController.currentPaneProvider = { [weak self] in
+                guard let self = self else { return nil }
+                return self.splitController.panes[self.splitController.focusedPaneID]
+            }
             chatController.contextProvider = { [weak self] in
                 guard let self = self,
                       let pane = self.splitController.panes[self.splitController.focusedPaneID] else {

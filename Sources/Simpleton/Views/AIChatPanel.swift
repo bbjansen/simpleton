@@ -30,7 +30,9 @@ struct AIChatPanelView: View {
     let onDismiss: () -> Void
 
     var skillStore: SkillStore?
-    var currentPane: PaneController?
+    var currentPaneProvider: (() -> PaneController?)?
+
+    private var currentPane: PaneController? { currentPaneProvider?() }
 
     @State private var messages: [ChatMessage] = []
     @State private var input = ""
@@ -405,7 +407,7 @@ final class AIChatPanelController: NSViewController {
     var onInsertCommand: ((String) -> Void)?
     var onDismiss: (() -> Void)?
     var skillStore: SkillStore?
-    var currentPane: PaneController?
+    var currentPaneProvider: (() -> PaneController?)?
 
     init(aiService: AIService) {
         self.aiService = aiService
@@ -422,7 +424,7 @@ final class AIChatPanelController: NSViewController {
             onDismiss: { [weak self] in self?.onDismiss?() }
         )
         chatView.skillStore = skillStore
-        chatView.currentPane = currentPane
+        chatView.currentPaneProvider = currentPaneProvider
         self.view = NSHostingView(rootView: chatView)
         self.view.frame = NSRect(x: 0, y: 0, width: 320, height: 600)
     }
