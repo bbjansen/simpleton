@@ -12,13 +12,11 @@ struct ChatMessage: Identifiable {
 
 enum AgentUIMessage: Identifiable {
     case chat(ChatMessage)
-    case skillForm(Skill)
     case execution(id: UUID, cmd: String, explanation: String, status: AgentExecutionBubble.BubbleStatus, output: String)
 
     var id: UUID {
         switch self {
         case .chat(let m): return m.id
-        case .skillForm(let s): return s.id
         case .execution(let id, _, _, _, _): return id
         }
     }

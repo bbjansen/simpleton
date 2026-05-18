@@ -27,6 +27,7 @@ final class AgentSession: ObservableObject {
 
     private let aiService: AIService
     private var isCancelled = false
+    private var pendingApprovalContinuation: CheckedContinuation<ApprovalAction, Never>?
 
     init(aiService: AIService) {
         self.aiService = aiService
@@ -34,6 +35,8 @@ final class AgentSession: ObservableObject {
 
     func cancel() {
         isCancelled = true
+        pendingApprovalContinuation?.resume(returning: .stop)
+        pendingApprovalContinuation = nil
         aiService.cancelAll()
         state = .idle
     }
@@ -61,7 +64,11 @@ final class AgentSession: ObservableObject {
                     } else {
                         state = .waitingApproval(cmd: cmd, explanation: explanation, toolCallID: id)
                         let action = await withCheckedContinuation { (continuation: CheckedContinuation<ApprovalAction, Never>) in
-                            onApprovalNeeded?(cmd, explanation) { action in continuation.resume(returning: action) }
+                            pendingApprovalContinuation = continuation
+                            onApprovalNeeded?(cmd, explanation) { [weak self] action in
+                                self?.pendingApprovalContinuation?.resume(returning: action)
+                                self?.pendingApprovalContinuation = nil
+                            }
                         }
                         switch action {
                         case .allow:
