@@ -339,6 +339,69 @@ struct OpenAIProvider: AIProviderProtocol {
                         "required": ["keys"]
                     ] as [String: Any]
                 ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "get_env",
+                    "description": "Get environment variable(s). Omit name for all.",
+                    "parameters": ["type": "object", "properties": ["name": ["type": "string"]] as [String: Any], "required": [] as [String]] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "http_request",
+                    "description": "Make an HTTP request. Test APIs, check endpoints.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "url": ["type": "string"],
+                            "method": ["type": "string", "description": "GET, POST, PUT, DELETE, etc."],
+                            "headers": ["type": "object"],
+                            "body": ["type": "string"]
+                        ] as [String: Any],
+                        "required": ["url"]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "check_port",
+                    "description": "Check if a port is in use and what's using it.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "port": ["type": "integer"],
+                            "host": ["type": "string"]
+                        ] as [String: Any],
+                        "required": ["port"]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "find_process",
+                    "description": "Find processes by name.",
+                    "parameters": ["type": "object", "properties": ["name": ["type": "string"]] as [String: Any], "required": ["name"]] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "kill_process",
+                    "description": "Send signal to a process. Signals: TERM, KILL, INT, HUP.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "pid": ["type": "integer"],
+                            "signal": ["type": "string"]
+                        ] as [String: Any],
+                        "required": ["pid"]
+                    ] as [String: Any]
+                ] as [String: Any]
             ]
         ]
 

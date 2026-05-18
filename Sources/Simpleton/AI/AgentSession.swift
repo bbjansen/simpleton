@@ -343,6 +343,93 @@ final class AgentSession: ObservableObject {
             turns.append(.toolResult(toolCallID: id, output: "Sent '\(keys)' to \(label)"))
             return .continued
 
+        case "get_env":
+            let varName = args["name"] as? String
+            if let name = varName {
+                let value = ProcessInfo.processInfo.environment[name]
+                turns.append(.toolResult(toolCallID: id, output: value ?? "[Not set]"))
+            } else {
+                // Return all env vars
+                let env = ProcessInfo.processInfo.environment
+                    .sorted(by: { $0.key < $1.key })
+                    .map { "\($0.key)=\($0.value)" }
+                    .joined(separator: "\n")
+                turns.append(.toolResult(toolCallID: id, output: env))
+            }
+            return .continued
+
+        case "http_request":
+            guard let urlStr = args["url"] as? String,
+                  let url = URL(string: urlStr) else {
+                turns.append(.toolResult(toolCallID: id, output: "Missing or invalid 'url' parameter"))
+                return .continued
+            }
+            let method = (args["method"] as? String ?? "GET").uppercased()
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            request.timeoutInterval = 15
+            if let headers = args["headers"] as? [String: String] {
+                for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+            }
+            if let body = args["body"] as? String {
+                request.httpBody = body.data(using: .utf8)
+                if request.value(forHTTPHeaderField: "Content-Type") == nil {
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                }
+            }
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let httpResponse = response as? HTTPURLResponse
+                let status = httpResponse?.statusCode ?? 0
+                let bodyStr = String(data: data, encoding: .utf8) ?? "[Binary data, \(data.count) bytes]"
+                let maxChars = 5000
+                let truncated = bodyStr.count > maxChars ? String(bodyStr.prefix(maxChars)) + "\n[... truncated]" : bodyStr
+                turns.append(.toolResult(toolCallID: id, output: "HTTP \(status)\n\(truncated)"))
+            } catch {
+                turns.append(.toolResult(toolCallID: id, output: "HTTP error: \(error.localizedDescription)"))
+            }
+            return .continued
+
+        case "check_port":
+            guard let port = args["port"] as? Int else {
+                turns.append(.toolResult(toolCallID: id, output: "Missing 'port' parameter"))
+                return .continued
+            }
+            let host = args["host"] as? String ?? "localhost"
+            let result = runSubprocess("/usr/sbin/lsof", args: ["-i", ":\(port)", "-P", "-n"])
+            if result.isEmpty {
+                turns.append(.toolResult(toolCallID: id, output: "Port \(port) on \(host): not in use"))
+            } else {
+                turns.append(.toolResult(toolCallID: id, output: "Port \(port) on \(host):\n\(result)"))
+            }
+            return .continued
+
+        case "find_process":
+            guard let name = args["name"] as? String else {
+                turns.append(.toolResult(toolCallID: id, output: "Missing 'name' parameter"))
+                return .continued
+            }
+            let result = runSubprocess("/usr/bin/pgrep", args: ["-fl", name])
+            turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "No processes matching '\(name)'" : result))
+            return .continued
+
+        case "kill_process":
+            guard let pid = args["pid"] as? Int else {
+                turns.append(.toolResult(toolCallID: id, output: "Missing 'pid' parameter"))
+                return .continued
+            }
+            let signal = args["signal"] as? String ?? "TERM"
+            let sigNum: Int32
+            switch signal.uppercased() {
+            case "KILL", "9": sigNum = SIGKILL
+            case "INT", "2": sigNum = SIGINT
+            case "HUP", "1": sigNum = SIGHUP
+            default: sigNum = SIGTERM
+            }
+            let rc = kill(Int32(pid), sigNum)
+            turns.append(.toolResult(toolCallID: id, output: rc == 0 ? "Sent SIG\(signal.uppercased()) to PID \(pid)" : "Failed to signal PID \(pid): errno \(errno)"))
+            return .continued
+
         default:
             turns.append(.toolResult(toolCallID: id, output: "Unknown tool: \(name)"))
             return .continued

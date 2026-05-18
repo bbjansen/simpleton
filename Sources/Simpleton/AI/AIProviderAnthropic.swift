@@ -285,6 +285,66 @@ struct AnthropicProvider: AIProviderProtocol {
                     ] as [String: Any],
                     "required": ["keys"]
                 ] as [String: Any]
+            ],
+            [
+                "name": "get_env",
+                "description": "Get environment variable(s). Pass a name for one variable, or omit for all.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "name": ["type": "string", "description": "Variable name (e.g. PATH). Omit for all variables."]
+                    ] as [String: Any],
+                    "required": [] as [String]
+                ] as [String: Any]
+            ],
+            [
+                "name": "http_request",
+                "description": "Make an HTTP request. Useful for testing APIs, checking endpoints, downloading data.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "url": ["type": "string", "description": "Full URL"],
+                        "method": ["type": "string", "description": "HTTP method (default GET)"],
+                        "headers": ["type": "object", "description": "Request headers as key-value pairs"],
+                        "body": ["type": "string", "description": "Request body (for POST/PUT)"]
+                    ] as [String: Any],
+                    "required": ["url"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "check_port",
+                "description": "Check if a port is in use and what process is using it.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "port": ["type": "integer", "description": "Port number to check"],
+                        "host": ["type": "string", "description": "Host (default: localhost)"]
+                    ] as [String: Any],
+                    "required": ["port"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "find_process",
+                "description": "Find running processes by name.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "name": ["type": "string", "description": "Process name or pattern to search for"]
+                    ] as [String: Any],
+                    "required": ["name"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "kill_process",
+                "description": "Send a signal to a process. Use to stop stuck processes.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "pid": ["type": "integer", "description": "Process ID"],
+                        "signal": ["type": "string", "description": "Signal name: TERM (default), KILL, INT, HUP"]
+                    ] as [String: Any],
+                    "required": ["pid"]
+                ] as [String: Any]
             ]
         ]
 

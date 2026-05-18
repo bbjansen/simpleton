@@ -316,6 +316,11 @@ struct AIChatPanelView: View {
         - **get_git_log(directory?, count?)**: Recent commit history.
         - **clipboard_copy(text)**: Copy text to the system clipboard.
         - **send_keys(keys, pane?)**: Send keystrokes to a pane — ctrl+c, ctrl+d, enter, arrow keys, etc. Use to stop processes, navigate menus, or provide interactive input.
+        - **get_env(name?)**: Get one or all environment variables.
+        - **http_request(url, method?, headers?, body?)**: Make HTTP requests — test APIs, check endpoints.
+        - **check_port(port, host?)**: Check if a port is in use and what process holds it.
+        - **find_process(name)**: Find running processes by name.
+        - **kill_process(pid, signal?)**: Send signals (TERM, KILL, INT) to processes.
         - **get_system_info()**: OS, hostname, CPU, memory, uptime, user, shell.
 
         ## How to act
