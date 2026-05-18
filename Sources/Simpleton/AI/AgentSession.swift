@@ -33,8 +33,8 @@ final class AgentSession: ObservableObject {
     private var isCancelled = false
     private var pendingApprovalContinuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>?
     private var turnCount = 0
-    private let maxTurns = 25
-    private let warningTurn = 15
+    var maxTurns = 25
+    private var warningTurn: Int { max(maxTurns - 10, 10) }
 
     init(aiService: AIService) {
         self.aiService = aiService

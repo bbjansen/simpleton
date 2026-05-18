@@ -336,6 +336,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Clear Terminal", action: #selector(clearTerminal), keyEquivalent: "k")
+        editMenu.addItem(.separator())
         editMenu.addItem(withTitle: "Find...", action: #selector(showScrollbackSearch), keyEquivalent: "f")
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
@@ -806,6 +808,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showScrollbackSearch() {
         NotificationCenter.default.post(name: .simpletonShowSearch, object: nil)
+    }
+
+    @objc private func clearTerminal() {
+        guard let pane = activeSplitController?.panes[activeSplitController?.focusedPaneID ?? UUID()] else { return }
+        // Send Ctrl+L (form feed) to clear the terminal, then "clear" command for a full reset
+        pane.terminalView.send(data: Array("\u{0C}".utf8)[...])
     }
 
     // MARK: - Connect to Bookmark

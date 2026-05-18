@@ -50,6 +50,7 @@ struct AIChatPanelView: View {
     @State private var activeAgentSession: AgentSession? = nil
     @State private var pendingApprovals: [UUID: (AgentSession.ApprovalAction) -> Void] = [:]
     @State private var selectedPaneID: PaneID? = nil
+    @State private var unlimitedTurns = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -255,6 +256,30 @@ struct AIChatPanelView: View {
             }
             .padding(12)
             .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
+
+            // Bottom status bar: step counter + turn cap toggle
+            HStack(spacing: 6) {
+                if let session = activeAgentSession, session.stepNumber > 0 {
+                    Text("Step \(session.stepNumber)")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button(action: { unlimitedTurns.toggle() }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: unlimitedTurns ? "infinity" : "gauge.with.dots.needle.33percent")
+                            .font(.system(size: 9))
+                        Text(unlimitedTurns ? "Unlimited" : "25 turns")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(unlimitedTurns ? .orange : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(unlimitedTurns ? "Turn limit disabled — agent can run indefinitely" : "Agent limited to 25 tool calls per message")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(Color(nsColor: NSColor(white: 0.05, alpha: 1)))
         }
         .frame(width: 320)
         .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
@@ -348,6 +373,7 @@ struct AIChatPanelView: View {
         // Use agent session so the AI can execute commands across panes
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
             let session = AgentSession(aiService: aiService)
+            if unlimitedTurns { session.maxTurns = Int.max }
             activeAgentSession = session
             conv.activeSession = session
 
@@ -459,6 +485,7 @@ struct AIChatPanelView: View {
             aiSuggestedKeys = []
 
             let session = AgentSession(aiService: aiService)
+            if unlimitedTurns { session.maxTurns = Int.max }
             activeAgentSession = session
             conv.activeSession = session
 
@@ -514,6 +541,7 @@ struct AIChatPanelView: View {
             aiSuggestedKeys = []
 
             let session = AgentSession(aiService: aiService)
+            if unlimitedTurns { session.maxTurns = Int.max }
             activeAgentSession = session
 
             let runningID = UUID()
@@ -673,6 +701,21 @@ struct ChatBubble: View {
     }
 }
 
+/// NSHostingView subclass that lets Cmd+key shortcuts pass through to the menu bar
+/// instead of being eaten by SwiftUI TextFields.
+final class MenuPassthroughHostingView<Content: View>: NSHostingView<Content> {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // If Cmd is held (without Ctrl — Ctrl+Cmd combos may be used by terminal),
+        // let the menu bar handle it first.
+        if event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) {
+            if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+                return true
+            }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 /// NSViewController host for the AI Chat Panel.
 final class AIChatPanelController: NSViewController {
 
@@ -697,15 +740,14 @@ final class AIChatPanelController: NSViewController {
 
     override func loadView() {
         let chatView = buildChatView()
-        self.view = NSHostingView(rootView: chatView)
+        self.view = MenuPassthroughHostingView(rootView: chatView)
         self.view.frame = NSRect(x: 0, y: 0, width: 320, height: 600)
     }
 
     private func rebuildHostingView() {
         guard isViewLoaded else { return }
         let chatView = buildChatView()
-        // Update rootView in place — replacing self.view would orphan it from the parent NSSplitView
-        if let hostingView = self.view as? NSHostingView<AIChatPanelView> {
+        if let hostingView = self.view as? MenuPassthroughHostingView<AIChatPanelView> {
             hostingView.rootView = chatView
         }
     }
