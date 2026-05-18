@@ -71,9 +71,8 @@ final class PanelRegistry: ObservableObject {
         try persistUserProfiles()
     }
 
-    /// Activate a profile, evicting all cached controllers so panels rebuild with a fresh context.
+    /// Activate a profile. Controllers are retained so panels preserve their state across switches.
     func activateProfile(_ profile: PanelProfile) {
-        controllers.removeAll()
         activeProfile = profile
     }
 

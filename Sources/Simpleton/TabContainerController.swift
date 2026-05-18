@@ -92,7 +92,7 @@ final class TabContainerController: NSViewController {
         ) { [weak self] _ in
             guard let registry = self?.panelRegistry else { return }
             var profile = registry.activeProfile
-            profile.leftActivePanelID = (profile.leftActivePanelID == "connections") ? nil : "connections"
+            profile.togglePanel(id: PanelProfile.PanelID.connections, on: .left)
             registry.activeProfile = profile
         }
 
@@ -102,7 +102,7 @@ final class TabContainerController: NSViewController {
         ) { [weak self] _ in
             guard let registry = self?.panelRegistry else { return }
             var profile = registry.activeProfile
-            profile.rightActivePanelID = (profile.rightActivePanelID == "ai-chat") ? nil : "ai-chat"
+            profile.togglePanel(id: PanelProfile.PanelID.aiChat, on: .right)
             registry.activeProfile = profile
         }
 
@@ -116,11 +116,7 @@ final class TabContainerController: NSViewController {
             // Update aiService if passed via notification (legacy path)
             if let svc = notification.object as? AIService { self.aiService = svc }
             var profile = registry.activeProfile
-            // If skills isn't on the right bar, add it
-            if !profile.rightPanelIDs.contains("skills") {
-                profile.rightPanelIDs.append("skills")
-            }
-            profile.rightActivePanelID = "skills"
+            profile.activatePanel(id: PanelProfile.PanelID.skills, on: .right)
             registry.activeProfile = profile
             // Notify skills panel to focus the search field
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

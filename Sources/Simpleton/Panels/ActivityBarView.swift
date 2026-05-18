@@ -54,33 +54,13 @@ struct ActivityBarView: View {
 
     private func togglePanel(id: String) {
         var profile = registry.activeProfile
-        if side == .left {
-            profile.leftActivePanelID = (profile.leftActivePanelID == id) ? nil : id
-        } else {
-            profile.rightActivePanelID = (profile.rightActivePanelID == id) ? nil : id
-        }
+        profile.togglePanel(id: id, on: side)
         registry.activeProfile = profile
     }
 
     private func movePanelToSide(panelID: String) {
         var profile = registry.activeProfile
-        let wasActiveOnLeft = profile.leftActivePanelID == panelID
-        let wasActiveOnRight = profile.rightActivePanelID == panelID
-
-        // Remove from both sides
-        profile.leftPanelIDs.removeAll { $0 == panelID }
-        profile.rightPanelIDs.removeAll { $0 == panelID }
-        if wasActiveOnLeft { profile.leftActivePanelID = nil }
-        if wasActiveOnRight { profile.rightActivePanelID = nil }
-
-        // Add to target side; if it was active on the source side, activate on destination
-        if side == .left {
-            profile.leftPanelIDs.append(panelID)
-            if wasActiveOnRight { profile.leftActivePanelID = panelID }
-        } else {
-            profile.rightPanelIDs.append(panelID)
-            if wasActiveOnLeft { profile.rightActivePanelID = panelID }
-        }
+        profile.movePanel(id: panelID, to: side)
         registry.activeProfile = profile
     }
 }
