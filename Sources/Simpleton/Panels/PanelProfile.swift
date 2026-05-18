@@ -21,7 +21,19 @@ extension PanelProfile {
         static let skills      = "skills"
         static let notes       = "notes"
         static let snippets    = "snippets"
+        static let history     = "history"
+        static let environment = "environment"
+        static let fileBrowser = "file-browser"
+        static let processes   = "processes"
+        static let sshTunnels  = "ssh-tunnels"
+        static let git         = "git"
+        static let docker      = "docker"
     }
+}
+
+extension PanelProfile {
+    /// Reserved UUID for the wizard-created Default profile.
+    static let defaultProfileID = UUID(uuidString: "00000000-0000-0000-0001-000000000001")!
 }
 
 // MARK: - Mutation Helpers
@@ -80,7 +92,7 @@ extension PanelProfile {
         PanelProfile(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
             name: "Developer",
-            leftPanelIDs: ["connections", "snippets"],
+            leftPanelIDs: ["connections", "snippets", "notes"],
             rightPanelIDs: ["ai-chat", "skills"],
             leftActivePanelID: nil,
             rightActivePanelID: "ai-chat"
