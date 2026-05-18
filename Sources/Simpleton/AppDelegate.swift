@@ -374,6 +374,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let chatItem = NSMenuItem(title: "AI Chat", action: #selector(toggleAIChat), keyEquivalent: "A")
         chatItem.keyEquivalentModifierMask = [.command, .shift]
         aiMenu.addItem(chatItem)
+        let skillItem = NSMenuItem(title: "Run Skill…", action: #selector(showSkillPicker), keyEquivalent: "K")
+        skillItem.keyEquivalentModifierMask = [.command, .shift]
+        aiMenu.addItem(skillItem)
         aiMenu.addItem(withTitle: "AI: Explain Selection", action: #selector(explainSelection), keyEquivalent: "")
         aiMenu.addItem(withTitle: "AI: Explain Error", action: #selector(explainLastError), keyEquivalent: "")
         aiMenuItem.submenu = aiMenu
@@ -586,6 +589,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PaletteAction(title: "Reset Font Size", shortcut: "⌘0", category: "View") { [weak self] in self?.resetFontSize() },
             PaletteAction(title: "Change Theme", shortcut: nil, category: "App") { [weak self] in self?.showThemePicker() },
             PaletteAction(title: "AI: Chat", shortcut: "\u{2318}\u{21e7}A", category: "AI") { [weak self] in self?.toggleAIChat() },
+            PaletteAction(title: "AI: Run Skill", shortcut: "\u{2318}\u{21e7}K", category: "AI") { [weak self] in self?.showSkillPicker() },
             PaletteAction(title: "AI: Explain Selection", shortcut: nil, category: "AI") { [weak self] in self?.explainSelection() },
             PaletteAction(title: "AI: Explain Error", shortcut: nil, category: "AI") { [weak self] in self?.explainLastError() },
         ]
@@ -685,6 +689,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleAIChat() {
         NotificationCenter.default.post(name: .simpletonToggleAIChat, object: aiService)
+    }
+
+    @objc private func showSkillPicker() {
+        guard let ai = aiService, ai.isEnabled else { return }
+        NotificationCenter.default.post(name: .simpletonRunSkillPicker, object: ai)
     }
 
     @objc private func explainSelection() {

@@ -53,7 +53,16 @@ enum AIKeychain {
         SecItemDelete(query as CFDictionary)
     }
 
+    /// Checks whether a key is stored without retrieving its data (avoids Keychain auth prompt).
     static func hasAPIKey(for provider: AIProvider) -> Bool {
-        retrieveAPIKey(for: provider) != nil
+        let account = "apiKey.\(provider.rawValue)"
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnAttributes as String: false,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 }

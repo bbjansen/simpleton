@@ -23,7 +23,6 @@ final class SkillStore: ObservableObject {
 
     private func loadBuiltIns() {
         guard let url = Bundle.module.url(forResource: "builtin-skills", withExtension: "json") else {
-            print("[SkillStore] builtin-skills.json not found in bundle")
             return
         }
         builtInSkills = (try? AtomicFileWriter.readJSON([Skill].self, from: url)) ?? []

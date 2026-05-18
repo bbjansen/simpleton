@@ -125,34 +125,36 @@ struct PreferencesView: View {
             .frame(width: 180)
             .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
 
-            // Content
-            ScrollView {
-                Group {
-                    switch selectedTab {
-                    case 0: GeneralTab(config: $config, onChanged: onChanged)
-                    case 1: AppearanceTab(config: $config, onChanged: onChanged)
-                    case 2: TerminalTab(config: $config, onChanged: onChanged)
-                    case 3: SSHPrefsTab(config: $config, onChanged: onChanged)
-                    case 4: KeysTab()
-                    case 5:
-                        if let pm = pluginManager {
-                            PluginsPreferencesTab(pluginManager: pm)
+            // Content — Skills tab manages its own scroll/split layout so it
+            // must live outside the outer ScrollView.
+            if selectedTab == 7, let store = skillStore {
+                SkillsPreferencesTab(skillStore: store)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    Group {
+                        switch selectedTab {
+                        case 0: GeneralTab(config: $config, onChanged: onChanged)
+                        case 1: AppearanceTab(config: $config, onChanged: onChanged)
+                        case 2: TerminalTab(config: $config, onChanged: onChanged)
+                        case 3: SSHPrefsTab(config: $config, onChanged: onChanged)
+                        case 4: KeysTab()
+                        case 5:
+                            if let pm = pluginManager {
+                                PluginsPreferencesTab(pluginManager: pm)
+                            }
+                        case 6:
+                            AIPreferencesTab(config: aiConfig, onChanged: { newAIConfig in
+                                aiConfig = newAIConfig
+                                onAIConfigChanged(newAIConfig)
+                            })
+                        default: EmptyView()
                         }
-                    case 6:
-                        AIPreferencesTab(config: aiConfig, onChanged: { newAIConfig in
-                            aiConfig = newAIConfig
-                            onAIConfigChanged(newAIConfig)
-                        })
-                    case 7:
-                        if let store = skillStore {
-                            SkillsPreferencesTab(skillStore: store)
-                        }
-                    default: EmptyView()
                     }
+                    .padding(24)
                 }
-                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 700, height: 500)
     }

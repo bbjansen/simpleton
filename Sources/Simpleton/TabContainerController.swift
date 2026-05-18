@@ -13,6 +13,7 @@ final class TabContainerController: NSViewController {
     private var sidebarToggleObserver: NSObjectProtocol?
     private var searchObserver: NSObjectProtocol?
     private var aiChatObserver: NSObjectProtocol?
+    private var skillPickerObserver: NSObjectProtocol?
     private var aiChatController: AIChatPanelController?
     private var isAIChatVisible = false
 
@@ -100,6 +101,25 @@ final class TabContainerController: NSViewController {
             self?.toggleAIChat(aiService: aiService)
         }
 
+        // Observe skill picker shortcut — opens AI chat if needed, then activates the picker
+        skillPickerObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonRunSkillPicker,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let aiService = notification.object as? AIService,
+                  self.view.window?.isKeyWindow == true else { return }
+            if self.isAIChatVisible {
+                NotificationCenter.default.post(name: .simpletonActivateSkillPicker, object: nil)
+            } else {
+                self.toggleAIChat(aiService: aiService)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    NotificationCenter.default.post(name: .simpletonActivateSkillPicker, object: nil)
+                }
+            }
+        }
+
         // Track clicks to update focused pane
         initialPane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)
@@ -137,6 +157,9 @@ final class TabContainerController: NSViewController {
             NotificationCenter.default.removeObserver(observer)
         }
         if let observer = aiChatObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = skillPickerObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }

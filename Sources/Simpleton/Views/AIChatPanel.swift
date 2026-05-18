@@ -218,6 +218,9 @@ struct AIChatPanelView: View {
         }
         .frame(width: 320)
         .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+        .onReceive(NotificationCenter.default.publisher(for: .simpletonActivateSkillPicker)) { _ in
+            showSkillPicker = true
+        }
     }
 
     private func sendMessage() {

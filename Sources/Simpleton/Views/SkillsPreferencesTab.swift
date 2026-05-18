@@ -74,7 +74,7 @@ struct SkillsPreferencesTab: View {
 
     private var skillList: some View {
         ScrollView {
-            LazyVStack(spacing: 2) {
+            VStack(spacing: 2) {
                 if !skillStore.builtInSkills.isEmpty {
                     sectionHeader("Built-in")
                     ForEach(skillStore.builtInSkills) { skill in skillRow(skill) }

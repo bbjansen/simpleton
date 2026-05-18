@@ -624,5 +624,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 extension Notification.Name {
     static let simpletonPaneCloseRequested = Notification.Name("simpletonPaneCloseRequested")
     static let simpletonToggleAIChat = Notification.Name("simpletonToggleAIChat")
+    static let simpletonRunSkillPicker = Notification.Name("simpletonRunSkillPicker")
+    static let simpletonActivateSkillPicker = Notification.Name("simpletonActivateSkillPicker")
     static let simpletonExplainError = Notification.Name("simpletonExplainError")
 }
