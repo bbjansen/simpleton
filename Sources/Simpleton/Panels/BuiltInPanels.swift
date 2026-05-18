@@ -179,4 +179,15 @@ extension PanelDefinition {
             currentPaneProvider: context.currentPane
         ))
     }
+
+    static let docker = PanelDefinition(
+        id: PanelProfile.PanelID.docker,
+        name: "Docker",
+        icon: "shippingbox",
+        description: "Running and stopped containers",
+        defaultSide: .right,
+        isBuiltIn: true
+    ) { _ in
+        NSHostingController(rootView: DockerPanelView())
+    }
 }
