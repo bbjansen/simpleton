@@ -11,7 +11,7 @@ struct NetworkTools: ToolHandler {
         case "http_request":
             return await handleHttpRequest(args)
         case "check_port":
-            return handleCheckPort(args, processRunner: context.processRunner)
+            return await handleCheckPort(args, processRunner: context.processRunner)
         default:
             return "Unknown network tool: \(name)"
         }
@@ -48,12 +48,12 @@ struct NetworkTools: ToolHandler {
         }
     }
 
-    private func handleCheckPort(_ args: [String: Any], processRunner: ProcessRunner) -> String {
+    private func handleCheckPort(_ args: [String: Any], processRunner: ProcessRunner) async -> String {
         guard let port = args["port"] as? Int else {
             return "Missing 'port' parameter"
         }
         let host = args["host"] as? String ?? "localhost"
-        let result = processRunner.run("/usr/sbin/lsof", args: ["-i", ":\(port)", "-P", "-n"])
+        let result = await processRunner.run("/usr/sbin/lsof", args: ["-i", ":\(port)", "-P", "-n"])
         if result.isEmpty {
             return "Port \(port) on \(host): not in use"
         } else {

@@ -12,7 +12,7 @@ struct GitTools: ToolHandler {
         switch name {
         case "get_git_status":
             let dir = args["directory"] as? String
-            let result = processRunner.run("/usr/bin/git", args: ["status", "--short"], cwd: dir)
+            let result = await processRunner.run("/usr/bin/git", args: ["status", "--short"], cwd: dir)
             return result.isEmpty ? "[Clean working tree]" : result
 
         case "get_git_diff":
@@ -21,13 +21,13 @@ struct GitTools: ToolHandler {
             var gitArgs = ["diff"]
             if staged { gitArgs.append("--cached") }
             gitArgs.append("--stat")
-            let result = processRunner.run("/usr/bin/git", args: gitArgs, cwd: dir)
+            let result = await processRunner.run("/usr/bin/git", args: gitArgs, cwd: dir)
             return result.isEmpty ? "[No changes]" : result
 
         case "get_git_log":
             let dir = args["directory"] as? String
             let count = args["count"] as? Int ?? 10
-            let result = processRunner.run("/usr/bin/git", args: ["log", "--oneline", "-\(min(count, 50))"], cwd: dir)
+            let result = await processRunner.run("/usr/bin/git", args: ["log", "--oneline", "-\(min(count, 50))"], cwd: dir)
             return result.isEmpty ? "[No commits]" : result
 
         default:

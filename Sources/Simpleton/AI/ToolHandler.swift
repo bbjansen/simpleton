@@ -3,7 +3,7 @@ import Foundation
 import SimpletonCore
 
 struct ToolContext {
-    let conversation: TabConversation
+    let conversation: TabConversation?
     let focusedPane: PaneController
     let processRunner: ProcessRunner
 }

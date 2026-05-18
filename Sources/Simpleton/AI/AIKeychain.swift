@@ -53,6 +53,14 @@ enum AIKeychain {
         SecItemDelete(query as CFDictionary)
     }
 
+    /// Migrate an existing key from a restrictive accessibility level to AfterFirstUnlock.
+    /// Call once at app launch so users who stored keys under the old setting stop getting
+    /// repeated password prompts.
+    static func migrateAccessibility(for provider: AIProvider) {
+        guard let existing = retrieveAPIKey(for: provider) else { return }
+        _ = storeAPIKey(existing, for: provider)
+    }
+
     /// Checks whether a key is stored without retrieving its data (avoids Keychain auth prompt).
     static func hasAPIKey(for provider: AIProvider) -> Bool {
         let account = "apiKey.\(provider.rawValue)"

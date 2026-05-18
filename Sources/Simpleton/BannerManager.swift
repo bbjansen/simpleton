@@ -35,13 +35,12 @@ final class BannerManager {
         let iconName = isCleanExit ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
         let text = isCleanExit ? "Shell exited" : "Shell exited (code \(exitCode))"
 
-        var buttons: [(String, () -> Void)] = [
-            ("Reopen Shell", { [weak self] in self?.onReopenShell?() }),
-            ("Close Pane", { [weak self] in self?.onClosePane?() }),
-        ]
+        var buttons: [(String, () -> Void)] = []
         if !isCleanExit {
             buttons.append(("Explain", { [weak self] in self?.onExplainError?() }))
         }
+        buttons.append(("Reopen Shell", { [weak self] in self?.onReopenShell?() }))
+        buttons.append(("Close Pane", { [weak self] in self?.onClosePane?() }))
 
         layoutBanner(
             iconName: iconName,

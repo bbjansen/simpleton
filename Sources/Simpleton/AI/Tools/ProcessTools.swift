@@ -9,7 +9,7 @@ struct ProcessTools: ToolHandler {
     func handle(name: String, args: [String: Any], context: ToolContext) async -> String {
         switch name {
         case "find_process":
-            return handleFindProcess(args, processRunner: context.processRunner)
+            return await handleFindProcess(args, processRunner: context.processRunner)
         case "kill_process":
             return handleKillProcess(args)
         default:
@@ -17,11 +17,11 @@ struct ProcessTools: ToolHandler {
         }
     }
 
-    private func handleFindProcess(_ args: [String: Any], processRunner: ProcessRunner) -> String {
+    private func handleFindProcess(_ args: [String: Any], processRunner: ProcessRunner) async -> String {
         guard let name = args["name"] as? String else {
             return "Missing 'name' parameter"
         }
-        let result = processRunner.run("/usr/bin/pgrep", args: ["-fl", name])
+        let result = await processRunner.run("/usr/bin/pgrep", args: ["-fl", name])
         return result.isEmpty ? "No processes matching '\(name)'" : result
     }
 

@@ -29,7 +29,7 @@ struct TerminalTools: ToolHandler {
     private func handleReadPaneOutput(_ args: [String: Any], context: ToolContext) -> String {
         let paneNum = args["pane"] as? Int
         let lines = min(args["lines"] as? Int ?? 50, 200)
-        let resolved = context.conversation.resolvePane(number: paneNum)
+        let resolved = context.conversation?.resolvePane(number: paneNum)
         let pane = resolved?.pane ?? context.focusedPane
         let label = resolved?.label ?? "focused pane"
 
@@ -38,7 +38,7 @@ struct TerminalTools: ToolHandler {
     }
 
     private func handleListPanes(context: ToolContext) -> String {
-        guard let compositeContext = context.conversation.buildCompositeContext() else {
+        guard let compositeContext = context.conversation?.buildCompositeContext() else {
             return "Panes: 1 (focused)\nCWD: \(context.focusedPane.currentDirectory ?? "unknown")"
         }
         var lines: [String] = ["Panes in this tab:\n"]
@@ -58,7 +58,7 @@ struct TerminalTools: ToolHandler {
 
     private func handleGetPaneState(_ args: [String: Any], context: ToolContext) -> String {
         let paneNum = args["pane"] as? Int ?? 1
-        let resolved = context.conversation.resolvePane(number: paneNum)
+        let resolved = context.conversation?.resolvePane(number: paneNum)
         if let pane = resolved?.pane {
             return paneStateOutput(pane: pane, label: resolved?.label ?? "Pane \(paneNum)")
         } else {
@@ -71,7 +71,7 @@ struct TerminalTools: ToolHandler {
             return "Missing 'keys' parameter"
         }
         let paneNum = args["pane"] as? Int
-        let resolved = context.conversation.resolvePane(number: paneNum)
+        let resolved = context.conversation?.resolvePane(number: paneNum)
         let pane = resolved?.pane ?? context.focusedPane
         let label = resolved?.label ?? "focused pane"
 
@@ -96,7 +96,7 @@ struct TerminalTools: ToolHandler {
 
     // MARK: - Helpers
 
-    func readTerminalOutput(pane: PaneController, lines: Int) -> String {
+    private func readTerminalOutput(pane: PaneController, lines: Int) -> String {
         let terminal = pane.terminalView.getTerminal()
         let totalRows = terminal.rows
         let startRow = max(0, totalRows - lines)
@@ -111,7 +111,7 @@ struct TerminalTools: ToolHandler {
         return output.isEmpty ? "[No output]" : output
     }
 
-    func paneStateOutput(pane: PaneController, label: String) -> String {
+    private func paneStateOutput(pane: PaneController, label: String) -> String {
         let cwd = pane.currentDirectory ?? "unknown"
         let connStr: String
         let shellStr: String

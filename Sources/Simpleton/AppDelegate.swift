@@ -74,6 +74,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             aiConfig = file.config
         }
         aiService = AIService(config: aiConfig)
+        // Migrate keychain items from old accessibility level to stop repeated password prompts
+        for provider in AIProvider.allCases {
+            AIKeychain.migrateAccessibility(for: provider)
+        }
         aiExplainPanel = AIExplainPanel()
         let skillStore = SkillStore(appSupportDir: simpletonDir)
         skillStore.load()

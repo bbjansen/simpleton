@@ -2,29 +2,32 @@
 import Foundation
 
 struct ProcessRunner {
-    func run(_ executable: String, args: [String], cwd: String? = nil) -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = args
-        if let cwd = cwd {
-            process.currentDirectoryURL = URL(fileURLWithPath: NSString(string: cwd).expandingTildeInPath)
-        }
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            let maxChars = 8000
-            if output.count > maxChars {
-                return String(output.prefix(maxChars)) + "\n[... truncated]"
+    /// Run a subprocess off the main actor to avoid UI blocking.
+    func run(_ executable: String, args: [String], cwd: String? = nil) async -> String {
+        await Task.detached {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = args
+            if let cwd = cwd {
+                process.currentDirectoryURL = URL(fileURLWithPath: NSString(string: cwd).expandingTildeInPath)
             }
-            return output.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            return "Error: \(error.localizedDescription)"
-        }
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            do {
+                try process.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                let maxChars = 8000
+                if output.count > maxChars {
+                    return String(output.prefix(maxChars)) + "\n[... truncated, total \(output.count) chars]"
+                }
+                return output.trimmingCharacters(in: .whitespacesAndNewlines)
+            } catch {
+                return "Error: \(error.localizedDescription)"
+            }
+        }.value
     }
 
     func formatFileSize(_ bytes: UInt64) -> String {

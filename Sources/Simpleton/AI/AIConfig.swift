@@ -1,7 +1,7 @@
 // Sources/Simpleton/AI/AIConfig.swift
 import Foundation
 
-enum AIProvider: String, Codable {
+enum AIProvider: String, Codable, CaseIterable {
     case anthropic
     case openai
     case ollama
