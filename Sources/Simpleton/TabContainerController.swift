@@ -52,6 +52,7 @@ final class TabContainerController: NSViewController {
                     splitController: splitController,
                     aiService: aiService
                 )
+                panelRegistry?.rebindAIChat(to: tabConversation)
             }
         }
     }

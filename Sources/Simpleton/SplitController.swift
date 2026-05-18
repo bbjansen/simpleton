@@ -203,6 +203,14 @@ final class SplitController: NSObject, NSSplitViewDelegate {
     private func reconcile() {
         let parentView = rootView.superview
         let frame = rootView.frame
+
+        // Track position in parent's arranged subviews before removal
+        // so the terminal stays between left and right panels in contentSplit.
+        var insertionIndex: Int?
+        if let splitParent = parentView as? NSSplitView {
+            insertionIndex = splitParent.arrangedSubviews.firstIndex(of: rootView)
+        }
+
         rootView.removeFromSuperview()
 
         let newRoot = buildView(from: tree, frame: frame)
@@ -211,7 +219,11 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         if let parent = parentView {
             newRoot.frame = frame
             newRoot.autoresizingMask = [.width, .height]
-            parent.addSubview(newRoot)
+            if let splitParent = parent as? NSSplitView, let idx = insertionIndex {
+                splitParent.insertArrangedSubview(newRoot, at: min(idx, splitParent.arrangedSubviews.count))
+            } else {
+                parent.addSubview(newRoot)
+            }
         }
     }
 
