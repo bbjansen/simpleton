@@ -91,6 +91,28 @@ struct SkillsPanelView: View {
     }
 
     var body: some View {
+        contentView
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if vm.aiService == nil {
+            PanelEmptyStateView(
+                icon: "sparkles",
+                title: "AI not configured",
+                message: "Set up an AI provider to use Skills.",
+                actionLabel: "Open AI Settings",
+                action: {
+                    NotificationCenter.default.post(name: .openAIPreferences, object: nil)
+                }
+            )
+        } else {
+            mainContent
+        }
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
         VStack(spacing: 0) {
             // Search
             HStack(spacing: 6) {

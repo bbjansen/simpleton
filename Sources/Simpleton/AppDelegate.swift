@@ -174,6 +174,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .simpletonShowPreferences,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(showPreferences),
+            name: .openAIPreferences,
+            object: nil
+        )
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -1079,4 +1085,5 @@ extension Notification.Name {
     static let simpletonShowSearch = Notification.Name("simpletonShowSearch")
     static let simpletonSplitChanged = Notification.Name("simpletonSplitChanged")
     static let simpletonShowNewConnection = Notification.Name("simpletonShowNewConnection")
+    static let openAIPreferences = Notification.Name("simpletonOpenAIPreferences")
 }
