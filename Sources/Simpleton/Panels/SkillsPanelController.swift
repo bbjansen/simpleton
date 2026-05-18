@@ -36,6 +36,28 @@ final class SkillsPanelVM: ObservableObject {
         paramValues = [:]
         outputLines = []
         errorMessage = nil
+
+        // Phase 1: instant auto-fill from terminal context
+        if let pane = currentPaneProvider() {
+            let filled = SkillAutoFill.phase1(skill: skill, pane: pane)
+            for (key, value) in filled {
+                paramValues[key] = value
+            }
+
+            // Phase 2: AI-suggested values for remaining empty params
+            if let ai = aiService {
+                Task {
+                    if let suggested = try? await SkillAutoFill.phase2(
+                        skill: skill, currentValues: paramValues,
+                        pane: pane, aiService: ai
+                    ) {
+                        for (key, value) in suggested where paramValues[key]?.isEmpty ?? true {
+                            paramValues[key] = value
+                        }
+                    }
+                }
+            }
+        }
     }
 
     func run(pane: PaneController) async {
