@@ -127,4 +127,18 @@ extension PanelDefinition {
             currentPaneProvider: context.currentPane
         ))
     }
+
+    static let fileBrowser = PanelDefinition(
+        id: PanelProfile.PanelID.fileBrowser,
+        name: "File Browser",
+        icon: "folder",
+        description: "Browse the local filesystem",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: FileBrowserPanelView(
+            onInsert: context.onInsertCommand,
+            currentPaneProvider: context.currentPane
+        ))
+    }
 }
