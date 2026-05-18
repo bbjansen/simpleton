@@ -46,7 +46,11 @@ final class SessionManager {
         state.cleanShutdown = false
         state.savedAt = Date()
         let file = SessionStateFile(state: state)
-        try? AtomicFileWriter.writeJSON(file, to: stateFileURL)
+        do {
+            try AtomicFileWriter.writeJSON(file, to: stateFileURL)
+        } catch {
+            print("[Simpleton] Failed to save session state: \(error)")
+        }
     }
 
     /// Check if the last session crashed (cleanShutdown == false).

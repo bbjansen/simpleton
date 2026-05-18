@@ -43,7 +43,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 2. Load bookmarks
         let store = BookmarkStore(directory: simpletonDir)
-        Task { try? await store.load() }
+        Task {
+            do { try await store.load() }
+            catch { print("[Simpleton] Failed to load bookmarks: \(error)") }
+        }
         bookmarkStore = store
 
         // 3. Start SSH config watcher
@@ -71,10 +74,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Load AI config
         let aiConfigFile = simpletonDir.appendingPathComponent("ai-config.json")
-        if FileManager.default.fileExists(atPath: aiConfigFile.path),
-           let data = try? Data(contentsOf: aiConfigFile),
-           let file = try? JSONDecoder().decode(AIConfigFile.self, from: data) {
-            aiConfig = file.config
+        if FileManager.default.fileExists(atPath: aiConfigFile.path) {
+            do {
+                let data = try Data(contentsOf: aiConfigFile)
+                let file = try JSONDecoder().decode(AIConfigFile.self, from: data)
+                aiConfig = file.config
+            } catch {
+                print("[Simpleton] Failed to load AI config: \(error)")
+            }
         }
         aiService = AIService(config: aiConfig)
         // Migrate keychain items from old accessibility level to stop repeated password prompts
@@ -343,7 +350,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func saveConfig(_ config: AppConfig) {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let simpletonDir = appSupport.appendingPathComponent("Simpleton")
-        try? AtomicFileWriter.writeJSON(ConfigFile(config: config), to: simpletonDir.appendingPathComponent("config.json"))
+        do {
+            try AtomicFileWriter.writeJSON(ConfigFile(config: config), to: simpletonDir.appendingPathComponent("config.json"))
+        } catch {
+            print("[Simpleton] Failed to save config: \(error)")
+        }
     }
 
     // MARK: - Split Actions

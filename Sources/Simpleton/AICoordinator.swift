@@ -90,8 +90,11 @@ final class AICoordinator {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let simpletonDir = appSupport.appendingPathComponent("Simpleton")
         let aiConfigFile = simpletonDir.appendingPathComponent("ai-config.json")
-        if let data = try? JSONEncoder().encode(AIConfigFile(config: config)) {
-            try? data.write(to: aiConfigFile)
+        do {
+            let data = try JSONEncoder().encode(AIConfigFile(config: config))
+            try data.write(to: aiConfigFile)
+        } catch {
+            print("[Simpleton] Failed to save AI config: \(error)")
         }
     }
 }
