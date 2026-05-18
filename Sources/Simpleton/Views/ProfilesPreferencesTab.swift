@@ -6,6 +6,7 @@ struct ProfilesPreferencesTab: View {
     @ObservedObject var registry: PanelRegistry
     @State private var selectedProfileID: UUID?
     @State private var editingProfile: PanelProfile?
+    @State private var showingTemplatePicker = false
 
     var body: some View {
         HSplitView {
@@ -63,6 +64,9 @@ struct ProfilesPreferencesTab: View {
             }
             .frame(maxWidth: .infinity)
         }
+        .sheet(isPresented: $showingTemplatePicker) {
+            templatePickerSheet
+        }
     }
 
     private func profileRow(_ profile: PanelProfile) -> some View {
@@ -87,11 +91,27 @@ struct ProfilesPreferencesTab: View {
     }
 
     private func addProfile() {
-        var p = PanelProfile(name: "New Profile", leftPanelIDs: ["connections"], rightPanelIDs: ["ai-chat"])
-        p.id = UUID()
-        try? registry.saveProfile(p)
-        selectedProfileID = p.id
-        editingProfile = p
+        showingTemplatePicker = true
+    }
+
+    @ViewBuilder
+    private var templatePickerSheet: some View {
+        ProfileTemplatePickerView(allPanels: registry.definitions) { panelIDs, name in
+            let left = panelIDs.filter { id in
+                registry.definitions.first(where: { $0.id == id })?.defaultSide == .left
+            }
+            let right = panelIDs.filter { id in
+                registry.definitions.first(where: { $0.id == id })?.defaultSide == .right
+            }
+            var p = PanelProfile(name: name, leftPanelIDs: left, rightPanelIDs: right)
+            p.id = UUID()
+            try? registry.saveProfile(p)
+            selectedProfileID = p.id
+            editingProfile = p
+            showingTemplatePicker = false
+        } onCancel: {
+            showingTemplatePicker = false
+        }
     }
 }
 
@@ -225,5 +245,82 @@ struct ProfileEditor: View {
 
     private func panelIcon(_ id: String) -> String {
         allPanels.first(where: { $0.id == id })?.icon ?? "square"
+    }
+}
+
+struct ProfileTemplatePickerView: View {
+    let allPanels: [PanelDefinition]
+    let onCreate: ([String], String) -> Void
+    let onCancel: () -> Void
+
+    @State private var selectedTemplate: TemplateOption = .blank
+    @State private var profileName = "New Profile"
+
+    enum TemplateOption: String, CaseIterable, Identifiable {
+        case blank      = "Blank"
+        case general    = "General"
+        case developer  = "Developer"
+        case devops     = "DevOps"
+        var id: String { rawValue }
+    }
+
+    private var templatePanelIDs: [String] {
+        switch selectedTemplate {
+        case .blank:
+            return []
+        case .general:
+            return (PanelProfile.defaultProfiles.first(where: { $0.name == "General" })).map {
+                $0.leftPanelIDs + $0.rightPanelIDs
+            } ?? []
+        case .developer:
+            return (PanelProfile.defaultProfiles.first(where: { $0.name == "Developer" })).map {
+                $0.leftPanelIDs + $0.rightPanelIDs
+            } ?? []
+        case .devops:
+            return (PanelProfile.defaultProfiles.first(where: { $0.name == "DevOps" })).map {
+                $0.leftPanelIDs + $0.rightPanelIDs
+            } ?? []
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("New Profile")
+                .font(.headline)
+                .padding()
+            Divider()
+            Form {
+                TextField("Name", text: $profileName)
+                Picker("Start from", selection: $selectedTemplate) {
+                    ForEach(TemplateOption.allCases) { option in
+                        Text(option.rawValue).tag(option)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                if selectedTemplate != .blank {
+                    Section("Included panels") {
+                        ForEach(templatePanelIDs, id: \.self) { id in
+                            if let panel = allPanels.first(where: { $0.id == id }) {
+                                Label(panel.name, systemImage: panel.icon)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding()
+            Divider()
+            HStack {
+                Button("Cancel") { onCancel() }
+                Spacer()
+                Button("Create") {
+                    onCreate(templatePanelIDs, profileName)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(profileName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 360, height: 400)
     }
 }
