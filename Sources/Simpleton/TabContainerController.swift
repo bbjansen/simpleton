@@ -34,6 +34,9 @@ final class TabContainerController: NSViewController {
     /// Plugin manager reference — propagated to panes.
     var pluginManager: PluginManager?
 
+    /// Skill store reference — passed to the AI chat panel.
+    var skillStore: SkillStore?
+
     init(config: AppConfig, theme: Theme) {
         self.config = config
         self.theme = theme
@@ -242,12 +245,21 @@ final class TabContainerController: NSViewController {
         } else {
             // Show AI chat panel on the right side
             let chatController = AIChatPanelController(aiService: aiService)
+            chatController.skillStore = skillStore
+            chatController.currentPane = splitController.panes[splitController.focusedPaneID]
             chatController.contextProvider = { [weak self] in
                 guard let self = self,
                       let pane = self.splitController.panes[self.splitController.focusedPaneID] else {
                     return AIContext(os: "macOS", recentCommands: [])
                 }
-                return AIContextBuilder.build(terminalView: pane.terminalView, includeSelection: true)
+                let shell: String?
+                if case .local(let sh, _) = pane.connectionType { shell = sh } else { shell = nil }
+                return AIContextBuilder.build(
+                    terminalView: pane.terminalView,
+                    cwd: pane.currentDirectory,
+                    shell: shell,
+                    includeSelection: true
+                )
             }
             chatController.onInsertCommand = { [weak self] cmd in
                 guard let self = self,

@@ -22,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var aiService: AIService?
     private var aiExplainPanel: AIExplainPanel?
     private var aiConfig: AIConfig = AIConfig()
+    private var skillStore: SkillStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -73,6 +74,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         aiService = AIService(config: aiConfig)
         aiExplainPanel = AIExplainPanel()
+        let skillStore = SkillStore(appSupportDir: simpletonDir)
+        skillStore.load()
+        self.skillStore = skillStore
 
         // Fire startup event
         pluginManager?.fireEvent(.onStartup, context: [
@@ -83,7 +87,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 4. Initialize panels
         quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
         commandPalettePanel = CommandPalettePanel()
-        preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager, aiConfig: aiConfig, onConfigChanged: { [weak self] newConfig in
+        preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, onConfigChanged: { [weak self] newConfig in
             self?.config = newConfig
             self?.saveConfig(newConfig)
         }, onAIConfigChanged: { [weak self] newAIConfig in
@@ -200,6 +204,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Focus the terminal in the new window
         if let tabContainer = wc.window?.contentViewController as? TabContainerController {
+            tabContainer.skillStore = skillStore
             wc.window?.makeFirstResponder(
                 tabContainer.splitController.panes[tabContainer.splitController.focusedPaneID]?.terminalView
             )
