@@ -112,12 +112,6 @@ final class SnippetsPanelDefinition: PanelDefinition {
     let isBuiltIn = true
 
     func makeViewController(context: PanelContext) -> NSViewController {
-        let vc = NSViewController()
-        vc.view = NSHostingView(rootView:
-            Text("Snippets panel — coming soon")
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        )
-        return vc
+        SnippetsPanelController(context: context)
     }
 }
