@@ -44,6 +44,14 @@ struct MenuBarBuilder {
         editMenu.addItem(withTitle: "Clear Terminal", action: #selector(AppDelegate.clearTerminal), keyEquivalent: "k")
         editMenu.addItem(.separator())
         editMenu.addItem(withTitle: "Find...", action: #selector(AppDelegate.showScrollbackSearch), keyEquivalent: "f")
+        editMenu.addItem(.separator())
+        let prevPromptItem = NSMenuItem(title: "Previous Prompt", action: #selector(AppDelegate.previousPrompt), keyEquivalent: "\u{F700}")
+        prevPromptItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(prevPromptItem)
+        let nextPromptItem = NSMenuItem(title: "Next Prompt", action: #selector(AppDelegate.nextPrompt), keyEquivalent: "\u{F701}")
+        nextPromptItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(nextPromptItem)
+        editMenu.addItem(withTitle: "Copy Command Output", action: #selector(AppDelegate.selectCommandOutput), keyEquivalent: "")
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 

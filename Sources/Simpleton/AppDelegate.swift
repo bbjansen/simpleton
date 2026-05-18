@@ -559,6 +559,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pane.terminalView.send(data: Array("\u{0C}".utf8)[...])
     }
 
+    // MARK: - Prompt Navigation
+
+    @objc func previousPrompt() {
+        guard let sc = activeSplitController,
+              let pane = sc.panes[sc.focusedPaneID] else { return }
+        pane.navigateToPreviousPrompt()
+    }
+
+    @objc func nextPrompt() {
+        guard let sc = activeSplitController,
+              let pane = sc.panes[sc.focusedPaneID] else { return }
+        pane.navigateToNextPrompt()
+    }
+
+    @objc func selectCommandOutput() {
+        guard let sc = activeSplitController,
+              let pane = sc.panes[sc.focusedPaneID] else { return }
+        pane.selectCommandOutput()
+    }
+
     // MARK: - Connect to Bookmark
 
     private func connectToBookmark(_ bookmark: Bookmark, in targetWindow: NSWindow? = nil) {
