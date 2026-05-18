@@ -7,6 +7,14 @@ struct ScriptPluginCommand: Codable {
     let shortcut: String?
 }
 
+struct ScriptPluginPanelManifest: Codable {
+    let id: String
+    let name: String
+    let icon: String
+    let defaultSide: PanelSide
+    let entrypoint: String   // relative path to the HTML file within the plugin directory
+}
+
 struct ScriptPluginManifest: Codable {
     let name: String
     let version: String
@@ -16,6 +24,7 @@ struct ScriptPluginManifest: Codable {
     let events: [String]?
     let commands: [ScriptPluginCommand]?
     let permissions: [String]?
+    let panels: [ScriptPluginPanelManifest]?
 }
 
 /// A loaded script plugin — manifest + directory path.
