@@ -27,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var aiCoordinator: AICoordinator!
     private var onboardingCoordinator: OnboardingCoordinator!
     private var sessionCoordinator: SessionCoordinator!
+    private var updateManager: UpdateManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -129,6 +130,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, panelRegistry: panelRegistry, onConfigChanged: { [weak self] newConfig in
             self?.config = newConfig
             self?.saveConfig(newConfig)
+            self?.updateManager?.setCheckMode(newConfig.general.checkForUpdates)
         }, onAIConfigChanged: { [weak self] newAIConfig in
             self?.aiConfig = newAIConfig
             self?.aiService?.updateConfig(newAIConfig)
@@ -199,6 +201,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             createNewWindow: { [weak self] in self?.createNewWindow() },
             addWindowController: { [weak self] wc in self?.windowControllers.append(wc) }
         )
+
+        updateManager = UpdateManager(checkMode: config.general.checkForUpdates)
 
         NotificationCenter.default.addObserver(
             self,
@@ -570,6 +574,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showOnboardingIfNeeded() {
         onboardingCoordinator.showOnboardingIfNeeded()
+    }
+
+    // MARK: - Updates
+
+    @objc func checkForUpdates() {
+        updateManager?.checkForUpdates()
     }
 
     // MARK: - Workspaces
