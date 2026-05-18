@@ -28,6 +28,9 @@ final class SplitController: NSObject, NSSplitViewDelegate {
     /// Called when focused pane changes.
     var onFocusChange: ((PaneID) -> Void)?
 
+    /// Called when the split tree changes (pane added, removed, layout changed).
+    var onTreeChange: (() -> Void)?
+
     /// Saved tree for pane zoom (Cmd+Shift+Enter).
     private var savedTree: SplitNode?
     private(set) var zoomedPaneID: PaneID?
@@ -65,6 +68,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         // Focus the new pane
         setFocus(to: newPaneID)
         NotificationCenter.default.post(name: .simpletonSplitChanged, object: nil)
+        onTreeChange?()
     }
 
     /// Close a specific pane. If it's the last pane, calls onPaneClose.
@@ -112,6 +116,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         reconcile()
         setFocus(to: focusedPaneID)
         NotificationCenter.default.post(name: .simpletonSplitChanged, object: nil)
+        onTreeChange?()
     }
 
     /// Navigate focus in a direction.
@@ -143,6 +148,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         reconcile()
         setFocus(to: focusedPaneID)
         NotificationCenter.default.post(name: .simpletonSplitChanged, object: nil)
+        onTreeChange?()
     }
 
     // MARK: - Zoom
@@ -156,6 +162,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
             zoomedPaneID = nil
             reconcile()
             setFocus(to: focusedPaneID)
+            onTreeChange?()
         } else {
             // Zoom: save tree, show only focused pane
             guard tree.paneCount > 1 else { return }
@@ -163,6 +170,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
             zoomedPaneID = focusedPaneID
             tree = .pane(focusedPaneID)
             reconcile()
+            onTreeChange?()
         }
     }
 
