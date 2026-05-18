@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelRegistry: PanelRegistry?
     private var terminalActions: TerminalActions!
     private var aiCoordinator: AICoordinator!
+    private var onboardingCoordinator: OnboardingCoordinator!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -163,6 +164,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             aiExplainPanel: { [weak self] in self?.aiExplainPanel },
             activeSplitController: { [weak self] in self?.activeSplitController },
             windowControllers: { [weak self] in self?.windowControllers ?? [] }
+        )
+
+        onboardingCoordinator = OnboardingCoordinator(
+            sshConfigWatcher: { [weak self] in self?.sshConfigWatcher },
+            panelRegistry: { [weak self] in self?.panelRegistry },
+            aiConfig: { [weak self] in self?.aiConfig ?? AIConfig() },
+            bookmarkStore: { [weak self] in self?.bookmarkStore },
+            onAIConfigChanged: { [weak self] newAIConfig in
+                self?.aiConfig = newAIConfig
+                self?.aiService = AIService(config: newAIConfig)
+                self?.aiCoordinator.saveAIConfig(newAIConfig)
+            }
         )
 
         NotificationCenter.default.addObserver(
@@ -674,75 +687,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Import Wizard
+    // MARK: - Onboarding
 
     private func showOnboardingIfNeeded() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
-        let legacy  = simpletonDir.appendingPathComponent(".wizard-done")
-        let current = simpletonDir.appendingPathComponent(".onboarding-done")
-        guard !FileManager.default.fileExists(atPath: current.path),
-              !FileManager.default.fileExists(atPath: legacy.path) else { return }
-
-        let entries = sshConfigWatcher?.concreteEntries ?? []
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self else { return }
-            guard let window = NSApp.keyWindow else { return }
-
-            let panels = self.panelRegistry?.definitions ?? []
-            let wizardView = OnboardingWizardView(
-                allPanels: panels,
-                sshEntries: entries,
-                initialAIConfig: self.aiConfig,
-                onComplete: { [weak self] profile, newAIConfig, bookmarks, groups in
-                    guard let self else { return }
-                    window.endSheet(window.sheets.last ?? window)
-                    // Save Default profile and activate
-                    try? self.panelRegistry?.saveProfile(profile)
-                    self.panelRegistry?.activateProfile(profile)
-                    // Save AI config if configured
-                    if let newAIConfig {
-                        self.aiConfig = newAIConfig
-                        self.aiService = AIService(config: newAIConfig)
-                        self.saveAIConfig(newAIConfig)
-                    }
-                    // Import bookmarks
-                    Task {
-                        for bookmark in bookmarks {
-                            try? await self.bookmarkStore?.add(bookmark)
-                        }
-                    }
-                    FileManager.default.createFile(atPath: simpletonDir.appendingPathComponent(".onboarding-done").path, contents: nil)
-                },
-                onSkip: { [weak self] in
-                    guard let self else { return }
-                    window.endSheet(window.sheets.last ?? window)
-                    // Create default profile silently
-                    let defaultPanel: [String] = ["connections", "history", "file-browser", "environment", "processes", "ssh-tunnels"]
-                    let silentProfile = PanelProfile(
-                        id: PanelProfile.defaultProfileID,
-                        name: "Default",
-                        leftPanelIDs: defaultPanel,
-                        rightPanelIDs: ["ai-chat"],
-                        leftActivePanelID: "connections",
-                        rightActivePanelID: "ai-chat"
-                    )
-                    try? self.panelRegistry?.saveProfile(silentProfile)
-                    self.panelRegistry?.activateProfile(silentProfile)
-                    FileManager.default.createFile(atPath: simpletonDir.appendingPathComponent(".onboarding-done").path, contents: nil)
-                }
-            )
-
-            let sheetWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 550, height: 500),
-                styleMask: [.titled],
-                backing: .buffered,
-                defer: false
-            )
-            sheetWindow.contentView = NSHostingView(rootView: wizardView)
-            window.beginSheet(sheetWindow)
-        }
+        onboardingCoordinator.showOnboardingIfNeeded()
     }
 
     // MARK: - Workspaces
