@@ -18,7 +18,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "Simpleton",
-            dependencies: ["SimpletonCore", "SwiftTerm"]
+            dependencies: ["SimpletonCore", "SwiftTerm"],
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "SimpletonCoreTests",
