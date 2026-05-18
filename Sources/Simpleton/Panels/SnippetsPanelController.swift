@@ -173,7 +173,7 @@ struct SnippetsPanelView: View {
     }
 
     private func extractPlaceholders(_ command: String) -> [String] {
-        let pattern = try! NSRegularExpression(pattern: #"\{(\w+)\}"#)
+        guard let pattern = try? NSRegularExpression(pattern: #"\{(\w+)\}"#) else { return [] }
         let matches = pattern.matches(in: command, range: NSRange(command.startIndex..., in: command))
         var seen = Set<String>()
         return matches.compactMap { match -> String? in

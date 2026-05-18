@@ -36,7 +36,7 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ controller: WKUserContentController,
                                didReceive message: WKScriptMessage) {
-        DispatchQueue.main.async { self.handle(message: message) }
+        DispatchQueue.main.async { [weak self] in self?.handle(message: message) }
     }
 
     private func handle(message: WKScriptMessage) {

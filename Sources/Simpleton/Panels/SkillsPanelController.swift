@@ -85,6 +85,7 @@ final class SkillsPanelVM: ObservableObject {
 
         await session.run(skill: skill, params: paramValues, pane: pane, autopilot: true)
         isRunning = false
+        activeSession = nil
     }
 
     func cancel() {
