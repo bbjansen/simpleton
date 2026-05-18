@@ -96,6 +96,9 @@ struct PreferencesView: View {
         }
         t.append((6, "AI", "sparkles"))
         t.append((7, "Skills", "bolt"))
+        if panelRegistry != nil {
+            t.append((8, "Profiles", "person.crop.rectangle.stack"))
+        }
         return t
     }
 
@@ -128,10 +131,13 @@ struct PreferencesView: View {
             .frame(width: 180)
             .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
 
-            // Content — Skills tab manages its own scroll/split layout so it
-            // must live outside the outer ScrollView.
+            // Content — Skills and Profiles tabs manage their own scroll/split layout so
+            // they must live outside the outer ScrollView.
             if selectedTab == 7, let store = skillStore {
                 SkillsPreferencesTab(skillStore: store)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if selectedTab == 8, let registry = panelRegistry {
+                ProfilesPreferencesTab(registry: registry)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
