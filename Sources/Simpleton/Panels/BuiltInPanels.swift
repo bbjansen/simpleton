@@ -99,4 +99,18 @@ extension PanelDefinition {
             onInsert: context.onInsertCommand
         ))
     }
+
+    static let history = PanelDefinition(
+        id: PanelProfile.PanelID.history,
+        name: "History",
+        icon: "clock",
+        description: "Searchable shell command history",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: HistoryPanelView(
+            shell: context.appConfig.general.shell,
+            onInsert: context.onInsertCommand
+        ))
+    }
 }
