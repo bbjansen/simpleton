@@ -30,7 +30,10 @@ struct MemoryTools: ToolHandler {
             return "Missing 'content' parameter"
         }
         let typeStr = args["type"] as? String ?? "convention"
-        let type = MemoryEntry.MemoryType(rawValue: typeStr) ?? .convention
+        guard let type = MemoryEntry.MemoryType(rawValue: typeStr) else {
+            let valid = MemoryEntry.MemoryType.allCases.map(\.rawValue).joined(separator: ", ")
+            return "Invalid memory type '\(typeStr)'. Valid types: \(valid)"
+        }
         let tags: [String]
         if let tagsArray = args["tags"] as? [String] {
             tags = tagsArray

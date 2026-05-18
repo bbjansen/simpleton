@@ -338,12 +338,12 @@ struct AIChatPanelView: View {
 
         ## Your tools
         - **run_command(cmd, pane?)**: Execute shell commands. Target a specific pane by number. Output + exit code are captured automatically.
-        - **read_pane_output(pane?, lines?)**: Read recent terminal output without running anything. Check status, errors, or long-running processes.
+        - **read_pane_output(pane?, lines?)**: Read recent terminal output without running anything. Default 50 lines, max 200. Check status, errors, or long-running processes.
         - **list_panes()**: See all panes with their CWD, shell, and state.
         - **get_pane_state(pane)**: Detailed pane info including CWD, shell, connection type, recent output.
         - **read_file(path)**: Read a file directly (up to 10k chars). Avoids shell quoting issues.
         - **write_file(path, content)**: Write a file directly. Creates parent directories. Avoids heredoc escaping.
-        - **edit_file(path, old_text, new_text)**: Search-and-replace in a file. Safer than write_file for targeted edits.
+        - **edit_file(path, old_text, new_text, replace_all?, trim_whitespace?)**: Search-and-replace in a file. Safer than write_file for targeted edits. Set trim_whitespace=true to match ignoring whitespace differences.
         - **list_directory(path?)**: List files/dirs with types and sizes. Faster than ls.
         - **search_files(pattern, directory?)**: Recursive grep across files. Find code, config values, etc.
         - **get_git_status(directory?)**: Git status (short format).
@@ -352,10 +352,10 @@ struct AIChatPanelView: View {
         - **clipboard_copy(text)**: Copy text to the system clipboard.
         - **send_keys(keys, pane?)**: Send keystrokes to a pane — ctrl+c, ctrl+d, enter, arrow keys, etc. Use to stop processes, navigate menus, or provide interactive input.
         - **get_env(name?)**: Get one or all environment variables.
-        - **http_request(url, method?, headers?, body?)**: Make HTTP requests — test APIs, check endpoints.
+        - **http_request(url, method?, headers?, body?)**: Make HTTP requests — test APIs, check endpoints. Headers is a dictionary, body is a string.
         - **check_port(port, host?)**: Check if a port is in use and what process holds it.
         - **find_process(name)**: Find running processes by name.
-        - **kill_process(pid, signal?)**: Send signals (TERM, KILL, INT) to processes.
+        - **kill_process(pid, signal?)**: Send signals to processes. Supports: TERM, KILL, INT, HUP, STOP, CONT, USR1, USR2, QUIT.
         - **get_system_info()**: OS, hostname, CPU, memory, uptime, user, shell.
         - **web_search(query, count?)**: Search the web via DuckDuckGo. Returns titles, snippets, and URLs. Default 5 results, max 10.
         - **fetch_url(url)**: Fetch a web page and return text content (HTML stripped, max 5000 chars). Use to read documentation, API responses, etc.

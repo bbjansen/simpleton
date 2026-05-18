@@ -62,16 +62,40 @@ struct FileTools: ToolHandler {
               let newText = args["new_text"] as? String else {
             return "Missing 'path', 'old_text', or 'new_text' parameter"
         }
+        let trimWhitespace = args["trim_whitespace"] as? Bool ?? false
         let expandedPath = NSString(string: path).expandingTildeInPath
         do {
             var content = try String(contentsOfFile: expandedPath, encoding: .utf8)
-            let occurrences = content.components(separatedBy: oldText).count - 1
+            let searchText: String
+            var searchContent: String = content
+            if trimWhitespace {
+                // Normalize both content and search text by collapsing runs of whitespace
+                let normalize = { (s: String) -> String in
+                    s.components(separatedBy: .whitespacesAndNewlines)
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " ")
+                }
+                searchText = normalize(oldText)
+                searchContent = normalize(content)
+            } else {
+                searchText = oldText
+            }
+            let occurrences = searchContent.components(separatedBy: searchText).count - 1
             if occurrences == 0 {
-                return "Error: old_text not found in \(path). Make sure it matches exactly (including whitespace)."
+                return "Error: old_text not found in \(path). Make sure it matches exactly (including whitespace). Tip: set trim_whitespace=true to ignore whitespace differences."
             } else if occurrences > 1 && !(args["replace_all"] as? Bool ?? false) {
                 return "Error: old_text found \(occurrences) times in \(path). Set replace_all=true or provide more context to make the match unique."
             } else {
-                if args["replace_all"] as? Bool ?? false {
+                if trimWhitespace {
+                    // Split old_text on whitespace, rejoin with \s+ pattern for flexible matching
+                    let words = oldText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+                    let pattern = words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "\\s+")
+                    if let regex = try? NSRegularExpression(pattern: pattern),
+                       let match = regex.firstMatch(in: content, range: NSRange(content.startIndex..., in: content)),
+                       let range = Range(match.range, in: content) {
+                        content.replaceSubrange(range, with: newText)
+                    }
+                } else if args["replace_all"] as? Bool ?? false {
                     content = content.replacingOccurrences(of: oldText, with: newText)
                 } else {
                     if let range = content.range(of: oldText) {

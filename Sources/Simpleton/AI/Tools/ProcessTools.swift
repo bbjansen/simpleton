@@ -35,6 +35,12 @@ struct ProcessTools: ToolHandler {
         case "KILL", "9": sigNum = SIGKILL
         case "INT", "2": sigNum = SIGINT
         case "HUP", "1": sigNum = SIGHUP
+        case "STOP", "19": sigNum = SIGSTOP
+        case "CONT", "18": sigNum = SIGCONT
+        case "USR1", "10": sigNum = SIGUSR1
+        case "USR2", "12": sigNum = SIGUSR2
+        case "QUIT", "3": sigNum = SIGQUIT
+        case "TERM", "15": sigNum = SIGTERM
         default: sigNum = SIGTERM
         }
         let rc = kill(Int32(pid), sigNum)
