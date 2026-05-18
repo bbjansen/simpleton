@@ -14,6 +14,7 @@ final class SessionCoordinator {
     private let panelRegistry: () -> PanelRegistry?
     private let aiService: () -> AIService?
     private let skillStore: () -> SkillStore?
+    private let memoryStore: () -> MemoryStore?
     private let workspaceManager: () -> WorkspaceManager?
     private let clearSavedState: () -> Void
     private let createNewWindow: () -> Void
@@ -29,6 +30,7 @@ final class SessionCoordinator {
         panelRegistry: @escaping () -> PanelRegistry?,
         aiService: @escaping () -> AIService?,
         skillStore: @escaping () -> SkillStore?,
+        memoryStore: @escaping () -> MemoryStore?,
         workspaceManager: @escaping () -> WorkspaceManager?,
         clearSavedState: @escaping () -> Void,
         createNewWindow: @escaping () -> Void,
@@ -43,6 +45,7 @@ final class SessionCoordinator {
         self.panelRegistry = panelRegistry
         self.aiService = aiService
         self.skillStore = skillStore
+        self.memoryStore = memoryStore
         self.workspaceManager = workspaceManager
         self.clearSavedState = clearSavedState
         self.createNewWindow = createNewWindow
@@ -120,6 +123,7 @@ final class SessionCoordinator {
             wc.panelRegistry = panelRegistry()
             wc.aiService = aiService()
             wc.skillStore = skillStore()
+            wc.memoryStore = memoryStore()
             addWindowController(wc)
 
             if let window = wc.window {

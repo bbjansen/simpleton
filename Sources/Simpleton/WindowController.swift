@@ -29,6 +29,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     var skillStore: SkillStore? {
         didSet { tabContainer.skillStore = skillStore }
     }
+    var memoryStore: MemoryStore? {
+        didSet { tabContainer.memoryStore = memoryStore }
+    }
 
     init(config: AppConfig, theme: Theme) {
         self.config = config

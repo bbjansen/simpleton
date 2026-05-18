@@ -44,6 +44,7 @@ final class TabContainerController: NSViewController {
     var sshConfigWatcher: SSHConfigWatcher?
     var pluginManager: PluginManager?
     var skillStore: SkillStore?
+    var memoryStore: MemoryStore?
     var aiService: AIService? {
         didSet {
             if tabConversation == nil, let aiService = aiService {
@@ -351,6 +352,7 @@ final class TabContainerController: NSViewController {
         PanelContext(
             tabContainer: { [weak self] in self },
             skillStore: skillStore,
+            memoryStore: memoryStore,
             bookmarkStore: bookmarkStore,
             aiService: aiService,
             sshConfigWatcher: sshConfigWatcher,

@@ -26,6 +26,7 @@ final class AIChatPanelController: NSViewController {
     var onInsertCommand: ((String) -> Void)?
     var onDismiss: (() -> Void)?
     var skillStore: SkillStore?
+    var memoryStore: MemoryStore?
     var currentPaneProvider: (() -> PaneController?)?
 
     /// Per-tab conversation. Set by PanelRegistry.rebindAIChat(to:) when the active tab changes.
@@ -62,6 +63,7 @@ final class AIChatPanelController: NSViewController {
             onDismiss: onDismiss.map { _ in { [weak self] in self?.onDismiss?() } }
         )
         chatView.skillStore = skillStore
+        chatView.memoryStore = memoryStore
         chatView.currentPaneProvider = currentPaneProvider
         chatView.conversation = conversation
         return chatView

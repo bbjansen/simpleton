@@ -35,6 +35,8 @@ struct AIChatPanelView: View {
     /// Per-tab conversation. When set, multi-pane context is used.
     var conversation: TabConversation?
 
+    var memoryStore: MemoryStore?
+
     private var currentPane: PaneController? { currentPaneProvider?() }
 
     @State private var messages: [ChatMessage] = []
@@ -290,10 +292,21 @@ struct AIChatPanelView: View {
             let list = store.allSkills.map { "  /\($0.slug) — \($0.name)" }.joined(separator: "\n")
             skillsSection = "\n\nAvailable skills (invoke with /slug or the bolt button):\n\(list)"
         }
+        // Load project memories for context injection
+        var memorySection = ""
+        if let store = memoryStore, let pane = currentPane {
+            let projectPath = pane.currentDirectory ?? FileManager.default.currentDirectoryPath
+            store.loadForProject(path: projectPath)
+            let relevant = store.relevantMemories(forContext: "\(contextStr) \(text)")
+            if !relevant.isEmpty {
+                let memList = relevant.map { "  - \($0.promptSummary)" }.joined(separator: "\n")
+                memorySection = "\n\n## Known context (from memory)\n\(memList)"
+            }
+        }
         let system = """
         You are a powerful terminal agent embedded in a native macOS terminal emulator. You have full access to the user's terminal panes and can execute commands, read output, and orchestrate multi-step workflows.
 
-        \(contextStr)\(skillsSection)
+        \(contextStr)\(skillsSection)\(memorySection)
 
         ## Your tools
         - **run_command(cmd, pane?)**: Execute shell commands. Target a specific pane by number. Output + exit code are captured automatically.
@@ -318,6 +331,10 @@ struct AIChatPanelView: View {
         - **get_system_info()**: OS, hostname, CPU, memory, uptime, user, shell.
         - **web_search(query, count?)**: Search the web via DuckDuckGo. Returns titles, snippets, and URLs. Default 5 results, max 10.
         - **fetch_url(url)**: Fetch a web page and return text content (HTML stripped, max 5000 chars). Use to read documentation, API responses, etc.
+        - **save_memory(content, type, tags)**: Save information to persistent project memory. Types: errorFix, convention, decision, environment, preference. Tags help retrieval.
+        - **recall_memory(query, count?)**: Search project memory semantically. Returns the most relevant saved memories. Use when you need to recall past decisions, fixes, or conventions.
+        - **list_memories(type?)**: List all saved memories, optionally filtered by type.
+        - **forget_memory(id)**: Delete a memory entry by ID (full UUID or first 8 chars).
 
         ## Interactive commands
         Some commands require interactive input (y/n prompts, selection menus, passwords).
@@ -366,7 +383,7 @@ struct AIChatPanelView: View {
 
         // Use agent session so the AI can execute commands across panes
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
-            let session = AgentSession(aiService: aiService)
+            let session = AgentSession(aiService: aiService, memoryStore: memoryStore)
             configureSession(session, conversation: conv)
             conv.activeSession = session
             conv.isRunning = true
@@ -439,7 +456,7 @@ struct AIChatPanelView: View {
         skillValues = [:]
         aiSuggestedKeys = []
 
-        let session = AgentSession(aiService: aiService)
+        let session = AgentSession(aiService: aiService, memoryStore: memoryStore)
 
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
             configureSession(session, conversation: conv)

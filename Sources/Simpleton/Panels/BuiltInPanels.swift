@@ -38,6 +38,7 @@ extension PanelDefinition {
         guard let aiService = context.aiService else { return NSViewController() }
         let vc = AIChatPanelController(aiService: aiService)
         vc.skillStore = context.skillStore
+        vc.memoryStore = context.memoryStore
         vc.currentPaneProvider = context.currentPane
         vc.contextProvider = {
             guard let pane = context.currentPane() else {

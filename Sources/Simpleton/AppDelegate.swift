@@ -23,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var aiConfig: AIConfig = AIConfig()
     private var skillStore: SkillStore?
     private var panelRegistry: PanelRegistry?
+    private var memoryStore: MemoryStore?
     private var terminalActions: TerminalActions!
     private var aiCoordinator: AICoordinator!
     private var onboardingCoordinator: OnboardingCoordinator!
@@ -92,6 +93,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let skillStore = SkillStore(appSupportDir: simpletonDir)
         skillStore.load()
         self.skillStore = skillStore
+
+        // Create memory store
+        let memoryDir = simpletonDir.appendingPathComponent("memory")
+        self.memoryStore = MemoryStore(storageDir: memoryDir)
 
         // Create panel registry and register built-in panels
         let profilesDir = simpletonDir.appendingPathComponent("profiles")
@@ -196,6 +201,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panelRegistry: { [weak self] in self?.panelRegistry },
             aiService: { [weak self] in self?.aiService },
             skillStore: { [weak self] in self?.skillStore },
+            memoryStore: { [weak self] in self?.memoryStore },
             workspaceManager: { [weak self] in self?.workspaceManager },
             clearSavedState: { [weak self] in self?.sessionManager?.clearSavedState() },
             createNewWindow: { [weak self] in self?.createNewWindow() },
@@ -297,6 +303,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         wc.panelRegistry = panelRegistry
         wc.aiService = aiService
         wc.skillStore = skillStore
+        wc.memoryStore = memoryStore
         windowControllers.append(wc)
         wc.window?.center()
         wc.window?.makeKeyAndOrderFront(nil)

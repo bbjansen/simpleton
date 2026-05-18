@@ -20,7 +20,8 @@ let package = Package(
         .executableTarget(
             name: "Simpleton",
             dependencies: ["SimpletonCore", "SwiftTerm", .product(name: "Sparkle", package: "Sparkle")],
-            resources: [.process("Resources")]
+            resources: [.process("Resources")],
+            linkerSettings: [.linkedFramework("NaturalLanguage")]
         ),
         .testTarget(
             name: "SimpletonCoreTests",

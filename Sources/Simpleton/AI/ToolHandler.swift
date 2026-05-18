@@ -6,6 +6,7 @@ struct ToolContext {
     let conversation: TabConversation?
     let focusedPane: PaneController
     let processRunner: ProcessRunner
+    var memoryStore: MemoryStore?
 }
 
 protocol ToolHandler {

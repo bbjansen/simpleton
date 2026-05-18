@@ -64,19 +64,25 @@ final class AgentSession: ObservableObject {
     private let processRunner = ProcessRunner()
     private let promptBuilder = PromptBuilder()
     private let toolRegistry: ToolHandlerRegistry
+    private let memoryStore: MemoryStore?
     var isCancelled = false
     var pendingApprovalContinuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>?
     private var turnCount = 0
     var maxTurns = 25
     private var warningTurn: Int { max(maxTurns - 10, 10) }
 
-    init(aiService: AIService) {
+    init(aiService: AIService, memoryStore: MemoryStore? = nil) {
         self.aiService = aiService
-        self.toolRegistry = ToolHandlerRegistry([
+        self.memoryStore = memoryStore
+        var handlers: [ToolHandler] = [
             FileTools(), TerminalTools(), GitTools(),
             SystemTools(), NetworkTools(), ProcessTools(),
             WebTools(),
-        ])
+        ]
+        if memoryStore != nil {
+            handlers.append(MemoryTools())
+        }
+        self.toolRegistry = ToolHandlerRegistry(handlers)
     }
 
     func cancel() {
@@ -159,7 +165,7 @@ final class AgentSession: ObservableObject {
             )
         }
 
-        let context = ToolContext(conversation: conversation, focusedPane: focusedPane, processRunner: processRunner)
+        let context = ToolContext(conversation: conversation, focusedPane: focusedPane, processRunner: processRunner, memoryStore: memoryStore)
         if let handler = toolRegistry.handler(for: name) {
             let output = await handler.handle(name: name, args: args, context: context)
             turns.append(.toolResult(toolCallID: id, output: output))
