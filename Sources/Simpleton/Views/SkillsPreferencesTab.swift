@@ -40,7 +40,7 @@ struct SkillsPreferencesTab: View {
             }
             .frame(width: 200)
 
-            // Right: editor
+            // Right: editor — .id forces re-creation when selected skill changes
             Group {
                 if let skill = editingSkill {
                     SkillEditor(skill: skill, onSave: { updated in
@@ -51,6 +51,7 @@ struct SkillsPreferencesTab: View {
                         selectedSkillID = nil
                         editingSkill = nil
                     })
+                    .id(skill.id)
                 } else if let skill = selectedSkill, skill.builtIn {
                     SkillEditor(skill: skill, readOnly: true, onDuplicate: {
                         var copy = skill
@@ -62,6 +63,7 @@ struct SkillsPreferencesTab: View {
                         selectedSkillID = copy.id
                         editingSkill = copy
                     })
+                    .id(skill.id)
                 } else {
                     Text("Select a skill to edit")
                         .foregroundColor(.secondary)
