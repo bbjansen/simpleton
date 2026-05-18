@@ -41,7 +41,7 @@ struct AIChatPanelView: View {
     @State private var input = ""
     @State private var isStreaming = false
 
-    @State private var autopilotEnabled = false
+    @State private var autopilotMode: AutopilotMode = .off
     @State private var showAutopilotConfirm = false
     @State private var showSkillPicker = false
     @State private var activeSkill: Skill? = nil
@@ -57,7 +57,7 @@ struct AIChatPanelView: View {
         VStack(spacing: 0) {
             // Header
             ChatHeaderView(
-                autopilotEnabled: $autopilotEnabled,
+                autopilotMode: $autopilotMode,
                 showAutopilotConfirm: $showAutopilotConfirm,
                 onDismiss: onDismiss
             )
@@ -65,19 +65,21 @@ struct AIChatPanelView: View {
             Divider()
 
             // Autopilot warning banner
-            if autopilotEnabled {
+            if autopilotMode != .off {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 10))
                         .foregroundColor(.black)
-                    Text("Autopilot active — AI executes commands without approval")
+                    Text(autopilotMode == .full
+                         ? "Autopilot FULL — AI executes all commands without approval"
+                         : "Autopilot SAFE — read-only commands auto-approved, writes need approval")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.black)
                     Spacer()
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(Color.orange)
+                .background(autopilotMode == .full ? Color.orange : Color.yellow.opacity(0.7))
             }
 
             // Pane indicator bar (multi-pane only)
@@ -323,7 +325,16 @@ struct AIChatPanelView: View {
         - After running a command, check the exit code. If non-zero, read the output, diagnose, and retry with a fix (up to 3 attempts per command).
         - Use read_file/write_file for file operations — they're faster and more reliable than shell echo/cat.
         - When answering questions, respond with plain text. Keep it concise.
-        \(autopilotEnabled ? "- AUTOPILOT MODE: Commands execute immediately without user approval. You have full autonomous control. Execute commands directly — do not ask for permission or confirmation." : "- Commands require user approval before executing. The user will see each command and can allow, skip, or stop.")
+        \({
+            switch autopilotMode {
+            case .full:
+                return "- AUTOPILOT MODE (FULL): Commands execute immediately without user approval. You have full autonomous control. Execute commands directly — do not ask for permission or confirmation."
+            case .safe:
+                return "- AUTOPILOT MODE (SAFE): Read-only commands (ls, cat, grep, git status, etc.) execute automatically. Destructive or write commands require user approval."
+            case .off:
+                return "- Commands require user approval before executing. The user will see each command and can allow, skip, or stop."
+            }
+        }())
         """
 
         // Build conversation history as proper turns
@@ -351,7 +362,7 @@ struct AIChatPanelView: View {
                     systemPrompt: system,
                     conversation: conv,
                     focusedPane: resolved.pane,
-                    autopilot: autopilotEnabled
+                    autopilotMode: autopilotMode
                 )
             }
         } else {
@@ -423,7 +434,7 @@ struct AIChatPanelView: View {
             isStreaming = true
             conv.isRunning = true
             Task {
-                await session.run(skill: skill, params: params, conversation: conv, focusedPane: resolved.pane, autopilot: autopilotEnabled)
+                await session.run(skill: skill, params: params, conversation: conv, focusedPane: resolved.pane, autopilotMode: autopilotMode)
             }
         } else if let pane = currentPane {
             configureSession(session, conversation: nil)
@@ -431,7 +442,7 @@ struct AIChatPanelView: View {
             agentBubbles.append(.execution(id: runningID, cmd: "Starting \(skill.name)...", explanation: "", status: .running, output: ""))
             isStreaming = true
             Task {
-                await session.run(skill: skill, params: params, pane: pane, autopilot: autopilotEnabled)
+                await session.run(skill: skill, params: params, pane: pane, autopilotMode: autopilotMode)
             }
         }
     }

@@ -3,6 +3,37 @@ import Foundation
 import AppKit
 import SimpletonCore
 
+enum AutopilotMode: String, Codable {
+    case off       // approve every command
+    case safe      // auto-approve read-only commands, prompt for writes
+    case full      // approve everything (current autopilot=true)
+}
+
+struct CommandClassifier {
+    static let safePatterns: [String] = [
+        "ls", "cat", "head", "tail", "wc", "file", "which", "whoami", "hostname",
+        "pwd", "echo", "date", "uptime", "df", "du", "free", "top -l 1",
+        "git status", "git log", "git diff", "git branch", "git remote",
+        "docker ps", "docker images", "docker logs",
+        "npm list", "npm outdated", "cargo check", "swift build",
+        "env", "printenv", "id", "uname", "sw_vers",
+        "curl -s", "ping -c", "dig", "nslookup", "traceroute",
+        "find", "grep", "rg", "fd", "ag",
+    ]
+
+    static let unsafeOperators: [String] = ["|", ">", ">>", "<"]
+
+    static func isSafe(_ command: String) -> Bool {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        for op in unsafeOperators {
+            if trimmed.contains(op) { return false }
+        }
+        return safePatterns.contains { pattern in
+            trimmed == pattern || trimmed.hasPrefix(pattern + " ") || trimmed.hasPrefix(pattern + "\t")
+        }
+    }
+}
+
 @MainActor
 final class AgentSession: ObservableObject {
 
@@ -63,7 +94,7 @@ final class AgentSession: ObservableObject {
         systemPrompt: String,
         conversation: TabConversation,
         focusedPane: PaneController,
-        autopilot: Bool
+        autopilotMode: AutopilotMode
     ) async {
         isCancelled = false
         turnCount = 0
@@ -102,7 +133,7 @@ final class AgentSession: ObservableObject {
                     let result = await handleToolCall(
                         id: id, name: name, args: args,
                         conversation: conversation, focusedPane: focusedPane,
-                        autopilot: autopilot, turns: &turns
+                        autopilotMode: autopilotMode, turns: &turns
                     )
                     if result == .stopped { return }
                 }
@@ -118,12 +149,12 @@ final class AgentSession: ObservableObject {
     private func handleToolCall(
         id: String, name: String, args: [String: Any],
         conversation: TabConversation, focusedPane: PaneController,
-        autopilot: Bool, turns: inout [ConversationTurn]
+        autopilotMode: AutopilotMode, turns: inout [ConversationTurn]
     ) async -> ToolHandleResult {
         if name == "run_command" {
             return await handleRunCommand(
                 id: id, args: args, conversation: conversation,
-                focusedPane: focusedPane, autopilot: autopilot, turns: &turns
+                focusedPane: focusedPane, autopilotMode: autopilotMode, turns: &turns
             )
         }
 
@@ -140,7 +171,7 @@ final class AgentSession: ObservableObject {
 
     // MARK: - Skill Execution (Multi-Pane)
 
-    func run(skill: Skill, params: [String: String], conversation: TabConversation, focusedPane: PaneController, autopilot: Bool) async {
+    func run(skill: Skill, params: [String: String], conversation: TabConversation, focusedPane: PaneController, autopilotMode: AutopilotMode) async {
         isCancelled = false
         let system = promptBuilder.buildSystemPrompt(skill: skill, params: params, conversation: conversation, focusedPane: focusedPane)
         let initialMessage = "Run the \(skill.name) skill.\(promptBuilder.buildParamSummary(params: params))"
@@ -161,7 +192,7 @@ final class AgentSession: ObservableObject {
                     let result = await handleToolCall(
                         id: id, name: name, args: args,
                         conversation: conversation, focusedPane: focusedPane,
-                        autopilot: autopilot, turns: &turns
+                        autopilotMode: autopilotMode, turns: &turns
                     )
                     if result == .stopped { return }
                 }
@@ -175,7 +206,7 @@ final class AgentSession: ObservableObject {
 
     // MARK: - Legacy Single-Pane Entry Point
 
-    func run(skill: Skill, params: [String: String], pane: PaneController, autopilot: Bool) async {
+    func run(skill: Skill, params: [String: String], pane: PaneController, autopilotMode: AutopilotMode) async {
         isCancelled = false
         let system = promptBuilder.buildSystemPromptLegacy(skill: skill, params: params, pane: pane)
         let initialMessage = "Run the \(skill.name) skill.\(promptBuilder.buildParamSummary(params: params))"
@@ -198,7 +229,7 @@ final class AgentSession: ObservableObject {
                         continue
                     }
                     let explanation = args["explanation"] as? String ?? ""
-                    if autopilot {
+                    if autopilotMode == .full {
                         await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: pane, paneLabel: "focused pane", wasFallback: false, turns: &turns)
                     } else {
                         state = .waitingApproval(cmd: cmd, explanation: explanation, toolCallID: id, paneLabel: "focused pane")

@@ -61,7 +61,7 @@ final class SkillsPanelVM: ObservableObject {
             handler(.allow, nil)
         }
 
-        await session.run(skill: skill, params: paramValues, pane: pane, autopilot: true)
+        await session.run(skill: skill, params: paramValues, pane: pane, autopilotMode: .full)
         isRunning = false
         activeSession = nil
     }

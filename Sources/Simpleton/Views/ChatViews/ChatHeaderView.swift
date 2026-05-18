@@ -2,7 +2,7 @@
 import SwiftUI
 
 struct ChatHeaderView: View {
-    @Binding var autopilotEnabled: Bool
+    @Binding var autopilotMode: AutopilotMode
     @Binding var showAutopilotConfirm: Bool
     var onDismiss: (() -> Void)?
 
@@ -14,26 +14,29 @@ struct ChatHeaderView: View {
                 .font(.system(size: 13, weight: .semibold))
             Spacer()
             Button(action: {
-                if autopilotEnabled {
-                    autopilotEnabled = false
-                } else {
+                switch autopilotMode {
+                case .off:
                     showAutopilotConfirm = true
+                case .safe:
+                    autopilotMode = .full
+                case .full:
+                    autopilotMode = .off
                 }
             }) {
-                Text(autopilotEnabled ? "Autopilot ON" : "Autopilot")
+                Text(autopilotLabel)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(autopilotEnabled ? .white : .secondary)
+                    .foregroundColor(autopilotMode == .off ? .secondary : .white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(autopilotEnabled ? Color.orange : Color.clear)
+                    .background(autopilotBackground)
                     .cornerRadius(4)
             }
             .buttonStyle(.plain)
-            .alert("Enable Autopilot?", isPresented: $showAutopilotConfirm) {
-                Button("Enable", role: .destructive) { autopilotEnabled = true }
+            .alert("Enable Safe Autopilot?", isPresented: $showAutopilotConfirm) {
+                Button("Enable", role: .destructive) { autopilotMode = .safe }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("The AI will execute commands in your terminal without asking for approval. It can run any shell command, modify files, and control processes.")
+                Text("Safe mode auto-approves read-only commands (ls, cat, grep, git status, etc.). Destructive commands still require your approval. Tap again to switch to full autopilot.")
             }
             if let dismiss = onDismiss {
                 Button(action: dismiss) {
@@ -45,5 +48,21 @@ struct ChatHeaderView: View {
         }
         .padding(12)
         .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
+    }
+
+    private var autopilotLabel: String {
+        switch autopilotMode {
+        case .off: return "Autopilot"
+        case .safe: return "Autopilot SAFE"
+        case .full: return "Autopilot FULL"
+        }
+    }
+
+    private var autopilotBackground: Color {
+        switch autopilotMode {
+        case .off: return .clear
+        case .safe: return .yellow.opacity(0.7)
+        case .full: return .orange
+        }
     }
 }

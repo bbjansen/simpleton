@@ -11,7 +11,7 @@ extension AgentSession {
     func handleRunCommand(
         id: String, args: [String: Any],
         conversation: TabConversation, focusedPane: PaneController,
-        autopilot: Bool, turns: inout [ConversationTurn]
+        autopilotMode: AutopilotMode, turns: inout [ConversationTurn]
     ) async -> ToolHandleResult {
         guard let cmd = args["cmd"] as? String else {
             turns.append(.toolResult(toolCallID: id, output: "Missing 'cmd' parameter"))
@@ -23,7 +23,17 @@ extension AgentSession {
         let targetPane = resolved?.pane ?? focusedPane
         let targetLabel = resolved?.label ?? "focused pane"
 
-        if autopilot {
+        let shouldAutoApprove: Bool
+        switch autopilotMode {
+        case .full:
+            shouldAutoApprove = true
+        case .safe:
+            shouldAutoApprove = CommandClassifier.isSafe(cmd)
+        case .off:
+            shouldAutoApprove = false
+        }
+
+        if shouldAutoApprove {
             await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: targetPane, paneLabel: targetLabel, wasFallback: resolved?.wasFallback ?? false, turns: &turns)
             return .continued
         }
