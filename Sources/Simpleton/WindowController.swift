@@ -20,6 +20,15 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     var pluginManager: PluginManager? {
         didSet { tabContainer.pluginManager = pluginManager }
     }
+    var panelRegistry: PanelRegistry? {
+        didSet { tabContainer.panelRegistry = panelRegistry }
+    }
+    var aiService: AIService? {
+        didSet { tabContainer.aiService = aiService }
+    }
+    var skillStore: SkillStore? {
+        didSet { tabContainer.skillStore = skillStore }
+    }
 
     init(config: AppConfig, theme: Theme) {
         self.config = config
@@ -73,6 +82,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         newTabContainer.bookmarkStore = bookmarkStore
         newTabContainer.sshConfigWatcher = sshConfigWatcher
         newTabContainer.pluginManager = pluginManager
+        newTabContainer.panelRegistry = panelRegistry
+        newTabContainer.aiService = aiService
+        newTabContainer.skillStore = skillStore
         let newWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],

@@ -23,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var aiExplainPanel: AIExplainPanel?
     private var aiConfig: AIConfig = AIConfig()
     private var skillStore: SkillStore?
+    private var panelRegistry: PanelRegistry?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -78,6 +79,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         skillStore.load()
         self.skillStore = skillStore
 
+        // Create panel registry and register built-in panels
+        let profilesDir = simpletonDir.appendingPathComponent("profiles")
+        let panelRegistry = PanelRegistry(profilesDir: profilesDir)
+        panelRegistry.loadProfiles()
+        panelRegistry.register(ConnectionsPanelDefinition())
+        panelRegistry.register(AIChatPanelDefinition())
+        panelRegistry.register(SkillsPanelDefinition())
+        panelRegistry.register(NotesPanelDefinition())
+        panelRegistry.register(SnippetsPanelDefinition())
+        // Register JS panel definitions from script plugins
+        for plugin in pluginManager?.scriptPlugins ?? [] {
+            for panelManifest in plugin.manifest.panels ?? [] {
+                let htmlURL = plugin.directory.appendingPathComponent(panelManifest.entrypoint)
+                panelRegistry.register(JSPanelDefinition(manifest: panelManifest, htmlURL: htmlURL))
+            }
+        }
+        self.panelRegistry = panelRegistry
+
         // Fire startup event
         pluginManager?.fireEvent(.onStartup, context: [
             "version": "1.0.0",
@@ -87,7 +106,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 4. Initialize panels
         quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
         commandPalettePanel = CommandPalettePanel()
-        preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, onConfigChanged: { [weak self] newConfig in
+        preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, panelRegistry: panelRegistry, onConfigChanged: { [weak self] newConfig in
             self?.config = newConfig
             self?.saveConfig(newConfig)
         }, onAIConfigChanged: { [weak self] newAIConfig in
@@ -140,6 +159,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(handleExplainError(_:)),
             name: .simpletonExplainError,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(showPreferences),
+            name: .simpletonShowPreferences,
             object: nil
         )
     }
@@ -196,6 +221,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         wc.bookmarkStore = bookmarkStore
         wc.sshConfigWatcher = sshConfigWatcher
         wc.pluginManager = pluginManager
+        wc.panelRegistry = panelRegistry
+        wc.aiService = aiService
+        wc.skillStore = skillStore
         windowControllers.append(wc)
         wc.window?.center()
         wc.window?.makeKeyAndOrderFront(nil)
@@ -204,7 +232,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Focus the terminal in the new window
         if let tabContainer = wc.window?.contentViewController as? TabContainerController {
-            tabContainer.skillStore = skillStore
             wc.window?.makeFirstResponder(
                 tabContainer.splitController.panes[tabContainer.splitController.focusedPaneID]?.terminalView
             )

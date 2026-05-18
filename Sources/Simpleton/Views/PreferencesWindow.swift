@@ -14,12 +14,14 @@ final class PreferencesWindowController {
     private var aiConfig: AIConfig
     private var onAIConfigChanged: ((AIConfig) -> Void)?
     private var skillStore: SkillStore?
+    private var panelRegistry: PanelRegistry?
 
-    init(config: AppConfig, pluginManager: PluginManager? = nil, aiConfig: AIConfig = AIConfig(), skillStore: SkillStore? = nil, onConfigChanged: @escaping (AppConfig) -> Void, onAIConfigChanged: ((AIConfig) -> Void)? = nil) {
+    init(config: AppConfig, pluginManager: PluginManager? = nil, aiConfig: AIConfig = AIConfig(), skillStore: SkillStore? = nil, panelRegistry: PanelRegistry? = nil, onConfigChanged: @escaping (AppConfig) -> Void, onAIConfigChanged: ((AIConfig) -> Void)? = nil) {
         self.config = config
         self.pluginManager = pluginManager
         self.aiConfig = aiConfig
         self.skillStore = skillStore
+        self.panelRegistry = panelRegistry
         self.onConfigChanged = onConfigChanged
         self.onAIConfigChanged = onAIConfigChanged
     }
@@ -30,7 +32,7 @@ final class PreferencesWindowController {
             return
         }
 
-        let prefsView = PreferencesView(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, onChanged: { [weak self] newConfig in
+        let prefsView = PreferencesView(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, panelRegistry: panelRegistry, onChanged: { [weak self] newConfig in
             self?.config = newConfig
             self?.onConfigChanged?(newConfig)
         }, onAIConfigChanged: { [weak self] newAIConfig in
@@ -75,6 +77,7 @@ struct PreferencesView: View {
     let pluginManager: PluginManager?
     @State var aiConfig: AIConfig
     let skillStore: SkillStore?
+    let panelRegistry: PanelRegistry?
     let onChanged: (AppConfig) -> Void
     let onAIConfigChanged: (AIConfig) -> Void
 
