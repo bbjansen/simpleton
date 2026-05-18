@@ -28,6 +28,9 @@ final class TabContainerController: NSViewController {
     private var rightPanelID: String?
     private var cancellables = Set<AnyCancellable>()
 
+    /// Per-tab AI conversation. Created lazily when aiService is available.
+    private(set) var tabConversation: TabConversation?
+
     /// Set before the window is shown. Propagated from AppDelegate → WindowController → here.
     var panelRegistry: PanelRegistry? {
         didSet {
@@ -41,7 +44,17 @@ final class TabContainerController: NSViewController {
     var sshConfigWatcher: SSHConfigWatcher?
     var pluginManager: PluginManager?
     var skillStore: SkillStore?
-    var aiService: AIService?
+    var aiService: AIService? {
+        didSet {
+            if tabConversation == nil, let aiService = aiService {
+                tabConversation = TabConversation(
+                    tabID: UUID(),
+                    splitController: splitController,
+                    aiService: aiService
+                )
+            }
+        }
+    }
 
     private var appSupportDir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
@@ -135,6 +148,11 @@ final class TabContainerController: NSViewController {
         let env = buildEnvironment()
         initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
 
+        // Wire split tree changes to pane label rebuilds
+        splitController.onTreeChange = { [weak self] in
+            self?.tabConversation?.rebuildPaneLabels()
+        }
+
         DispatchQueue.main.async { [weak self] in
             self?.pluginManager?.fireEvent(.onTabOpen, context: [
                 "tabId": UUID().uuidString,
@@ -187,6 +205,8 @@ final class TabContainerController: NSViewController {
     override func viewDidAppear() {
         super.viewDidAppear()
         splitController.setFocus(to: splitController.focusedPaneID)
+        // Rebind AI Chat panel to this tab's conversation
+        panelRegistry?.rebindAIChat(to: tabConversation)
     }
 
     // MARK: - Activity Bars
