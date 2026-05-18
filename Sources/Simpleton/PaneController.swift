@@ -49,8 +49,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// SSH reconnection state.
     private var sshBookmark: Bookmark?
     private var sshConfig: AppConfig?
-    private var reconnectAttempts = 0
-    private var reconnectTimer: Timer?
+    private var sshReconnectManager: SSHReconnectManager?
     private var searchBar: ScrollbackSearchBar?
 
     private var mouseMonitor: Any?
@@ -107,19 +106,18 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         }
         bm.onReconnect = { [weak self] in
             guard let self = self else { return }
-            self.reconnectAttempts = 0
+            self.sshReconnectManager?.reset()
             self.reconnectSSH()
         }
         bm.onCancelReconnect = { [weak self] in
             guard let self = self else { return }
-            self.cancelAutoReconnect()
+            self.sshReconnectManager?.cancel()
             self.bannerManager?.showDisconnectedBanner(canReconnect: true)
         }
         self.bannerManager = bm
     }
 
     deinit {
-        reconnectTimer?.invalidate()
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -168,7 +166,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         sshConfig = config
         connectionType = .ssh(bookmarkID: bookmark.id)
         state = .connecting
-        reconnectAttempts = 0
+        sshReconnectManager = SSHReconnectManager(config: config)
 
         onTitleChange?(statusTitle(bookmark.name))
 
@@ -211,29 +209,6 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         )
     }
 
-    /// Start auto-reconnect with exponential backoff.
-    private func startAutoReconnect(config: AppConfig) {
-        guard config.ssh.autoReconnect,
-              reconnectAttempts < config.ssh.maxReconnectAttempts else {
-            bannerManager?.showDisconnectedBanner(canReconnect: true)
-            return
-        }
-
-        reconnectAttempts += 1
-        let delay = min(pow(2.0, Double(reconnectAttempts - 1)), 30.0)
-
-        bannerManager?.showReconnecting(attempt: reconnectAttempts, delay: delay)
-
-        reconnectTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            self?.reconnectSSH()
-        }
-    }
-
-    private func cancelAutoReconnect() {
-        reconnectTimer?.invalidate()
-        reconnectTimer = nil
-    }
-
     // MARK: - LocalProcessTerminalViewDelegate
 
     func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {
@@ -253,7 +228,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
     func processTerminated(source: TerminalView, exitCode: Int32?) {
         let code = exitCode ?? -1
-        cancelAutoReconnect()
+        sshReconnectManager?.cancel()
 
         if case .ssh = connectionType {
             // SSH session ended
@@ -270,8 +245,16 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
                 ])
             }
 
-            if let config = sshConfig {
-                startAutoReconnect(config: config)
+            if let manager = sshReconnectManager {
+                manager.start(
+                    onReconnect: { [weak self] in self?.reconnectSSH() },
+                    onShowBanner: { [weak self] attempt, delay in
+                        self?.bannerManager?.showReconnecting(attempt: attempt, delay: delay)
+                    },
+                    onExhausted: { [weak self] in
+                        self?.bannerManager?.showDisconnectedBanner(canReconnect: true)
+                    }
+                )
             } else {
                 bannerManager?.showDisconnectedBanner(canReconnect: true)
             }
