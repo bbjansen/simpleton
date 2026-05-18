@@ -12,6 +12,7 @@ final class TabConversation: ObservableObject {
     @Published var activeSession: AgentSession?
     @Published var isRunning = false
     @Published var targetPaneID: PaneID?
+    @Published var watchSession: WatchSession?
 
     /// Ordered pane IDs from depth-first traversal. paneOrder[0] = "Pane 1".
     @Published var paneOrder: [PaneID] = []

@@ -54,6 +54,7 @@ struct AIChatPanelView: View {
     @State private var pendingApprovals: [UUID: (AgentSession.ApprovalAction) -> Void] = [:]
     @State private var selectedPaneID: PaneID? = nil
     @State private var unlimitedTurns = false
+    @State private var watchActive = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -61,6 +62,7 @@ struct AIChatPanelView: View {
             ChatHeaderView(
                 autopilotMode: $autopilotMode,
                 showAutopilotConfirm: $showAutopilotConfirm,
+                watchActive: $watchActive,
                 onDismiss: onDismiss
             )
 
@@ -217,6 +219,29 @@ struct AIChatPanelView: View {
         .onReceive(NotificationCenter.default.publisher(for: .simpletonActivateSkillPicker)) { _ in
             showSkillPicker = true
         }
+        .onChange(of: watchActive) { _, active in
+            guard let conv = conversation, let pane = currentPane else {
+                watchActive = false
+                return
+            }
+            if active {
+                let session = WatchSession(
+                    pane: pane,
+                    triggers: [.exitCodeNonZero],
+                    aiService: aiService,
+                    memoryStore: memoryStore
+                ) { event in
+                    let msg = ChatMessage(role: "assistant", content: "[Watch] \(event)")
+                    self.messages.append(msg)
+                    conv.messages.append(msg)
+                }
+                conv.watchSession = session
+                session.start()
+            } else {
+                conv.watchSession?.stop()
+                conv.watchSession = nil
+            }
+        }
     }
 
     private func configureSession(_ session: AgentSession, conversation: TabConversation?) {
@@ -242,6 +267,7 @@ struct AIChatPanelView: View {
             activeAgentSession = nil
             conversation?.activeSession = nil
             conversation?.isRunning = false
+            conversation?.watchSession?.resume()
         }
         session.onError = { err in
             let errMsg = ChatMessage(role: "assistant", content: "Error: \(err)")
@@ -251,6 +277,7 @@ struct AIChatPanelView: View {
             activeAgentSession = nil
             conversation?.activeSession = nil
             conversation?.isRunning = false
+            conversation?.watchSession?.resume()
         }
         session.onApprovalNeeded = { cmd, explanation, paneLabel, completion in
             let approvalID = UUID()
@@ -278,6 +305,7 @@ struct AIChatPanelView: View {
         input = ""
         messages.append(ChatMessage(role: "user", content: text))
         isStreaming = true
+        conversation?.watchSession?.pause()
 
         // Build system prompt with multi-pane context
         let contextStr: String

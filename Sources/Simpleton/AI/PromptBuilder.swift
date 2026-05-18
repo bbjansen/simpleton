@@ -52,4 +52,22 @@ struct PromptBuilder {
         }
         return result
     }
+
+    static func buildWatchPrompt(trigger: String, paneOutput: String) -> String {
+        return """
+        You are a terminal monitoring agent. A watch trigger fired in the user's terminal.
+
+        TRIGGER: \(trigger)
+
+        RECENT TERMINAL OUTPUT:
+        \(paneOutput)
+
+        Analyze the situation:
+        1. What happened? (brief diagnosis)
+        2. Is this an error that needs fixing? If so, what's the likely cause?
+        3. Suggested next steps (be specific and actionable)
+
+        Be concise — this is a background notification, not a conversation. Focus on the most important information.
+        """
+    }
 }
