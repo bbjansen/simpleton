@@ -27,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var terminalActions: TerminalActions!
     private var aiCoordinator: AICoordinator!
     private var onboardingCoordinator: OnboardingCoordinator!
+    private var sessionCoordinator: SessionCoordinator!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -135,14 +136,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 6. UI launch
         if shouldRestore, let savedState = sessionManager?.loadSavedState(), !savedState.windows.isEmpty {
-            showRestorePrompt(state: savedState)
+            sessionCoordinator.showRestorePrompt(state: savedState)
         } else {
             createNewWindow()
         }
 
         // Set up session state provider
         sessionManager?.setStateProvider { [weak self] in
-            self?.captureSessionState() ?? SessionState()
+            self?.sessionCoordinator.captureSessionState() ?? SessionState()
         }
         sessionManager?.startPeriodicSave()
 
@@ -176,6 +177,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.aiService = AIService(config: newAIConfig)
                 self?.aiCoordinator.saveAIConfig(newAIConfig)
             }
+        )
+
+        sessionCoordinator = SessionCoordinator(
+            windowControllers: { [weak self] in self?.windowControllers ?? [] },
+            config: { [weak self] in self?.config ?? AppConfig() },
+            theme: { [weak self] in self?.theme ?? Theme(name: "default-dark") },
+            bookmarkStore: { [weak self] in self?.bookmarkStore },
+            sshConfigWatcher: { [weak self] in self?.sshConfigWatcher },
+            pluginManager: { [weak self] in self?.pluginManager },
+            panelRegistry: { [weak self] in self?.panelRegistry },
+            aiService: { [weak self] in self?.aiService },
+            skillStore: { [weak self] in self?.skillStore },
+            workspaceManager: { [weak self] in self?.workspaceManager },
+            clearSavedState: { [weak self] in self?.sessionManager?.clearSavedState() },
+            createNewWindow: { [weak self] in self?.createNewWindow() },
+            addWindowController: { [weak self] wc in self?.windowControllers.append(wc) }
         )
 
         NotificationCenter.default.addObserver(
@@ -542,151 +559,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         tabContainer.openSSHConnection(bookmark: bookmark)
     }
 
-    // MARK: - Session
-
-    private func captureSessionState() -> SessionState {
-        let windowStates = windowControllers.compactMap { wc -> WindowState? in
-            guard let window = wc.window else { return nil }
-            let frame = WindowFrame(
-                x: Double(window.frame.origin.x),
-                y: Double(window.frame.origin.y),
-                width: Double(window.frame.width),
-                height: Double(window.frame.height)
-            )
-            // Capture tab state from the window's content view controller
-            guard let tabContainer = window.contentViewController as? TabContainerController else { return nil }
-            let splitTree = captureTree(from: tabContainer.splitController)
-            let tab = TabState(title: window.title, splitTree: splitTree)
-            return WindowState(frame: frame, tabs: [tab])
-        }
-        return SessionState(cleanShutdown: false, savedAt: Date(), windows: windowStates)
-    }
-
-    private func captureTree(from splitController: SplitController) -> SessionSplitNode {
-        captureNode(splitController.tree, panes: splitController.panes)
-    }
-
-    private func captureNode(_ node: SplitNode, panes: [PaneID: PaneController]) -> SessionSplitNode {
-        switch node {
-        case .pane(let id):
-            let connection: PaneConnection
-            if let pane = panes[id] {
-                switch pane.connectionType {
-                case .local(_, let dir):
-                    connection = .local(workingDirectory: dir)
-                case .ssh(let bookmarkID):
-                    connection = .ssh(bookmarkId: bookmarkID)
-                }
-            } else {
-                connection = .local(workingDirectory: NSHomeDirectory())
-            }
-            return .pane(paneConn: connection)
-        case .split(let dir, let children, let ratios):
-            let childNodes = children.map { captureNode($0, panes: panes) }
-            return .split(direction: dir, children: childNodes, ratios: ratios)
-        }
-    }
-
-    private func showRestorePrompt(state: SessionState) {
-        let alert = NSAlert()
-        alert.messageText = "Restore previous session?"
-        alert.informativeText = "Simpleton didn't shut down cleanly. Would you like to restore your previous windows and tabs?"
-        alert.addButton(withTitle: "Restore")
-        alert.addButton(withTitle: "Start Fresh")
-
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            restoreSession(state: state)
-        } else {
-            sessionManager?.clearSavedState()
-            createNewWindow()
-        }
-    }
-
-    private func restoreSession(state: SessionState) {
-        for windowState in state.windows {
-            let wc = WindowController(config: config, theme: theme)
-            wc.bookmarkStore = bookmarkStore
-            wc.sshConfigWatcher = sshConfigWatcher
-            wc.pluginManager = pluginManager
-            windowControllers.append(wc)
-
-            // Apply window frame
-            if let window = wc.window {
-                let frame = NSRect(
-                    x: windowState.frame.x,
-                    y: windowState.frame.y,
-                    width: windowState.frame.width,
-                    height: windowState.frame.height
-                )
-                window.setFrame(frame, display: true)
-            }
-
-            // Restore the first tab's split tree
-            if let firstTab = windowState.tabs.first,
-               let tabContainer = wc.window?.contentViewController as? TabContainerController {
-                restoreSplitTree(firstTab.splitTree, in: tabContainer)
-            }
-
-            wc.window?.makeKeyAndOrderFront(nil)
-            wc.showWindow(nil)
-        }
-
-        if windowControllers.isEmpty {
-            createNewWindow()
-        }
-    }
-
-    private func restoreSplitTree(_ node: SessionSplitNode, in tabContainer: TabContainerController) {
-        // For the initial pane (already exists), reconfigure it based on the first pane in the tree
-        switch node {
-        case .pane(let conn):
-            // The initial pane is already running a local shell.
-            // If the saved connection was SSH, start SSH instead.
-            if case .ssh(let bookmarkId) = conn {
-                Task { @MainActor in
-                    if let bookmark = await bookmarkStore?.bookmark(for: bookmarkId) {
-                        tabContainer.openSSHConnection(bookmark: bookmark)
-                    }
-                }
-            }
-            // For local connections, the pane is already running — nothing to do.
-
-        case .split(let direction, let children, _):
-            // Apply the layout by splitting the current pane
-            // First child reuses the existing pane, subsequent children create new splits
-            if children.count >= 2 {
-                // Split the current pane for each additional child
-                for _ in 1..<children.count {
-                    tabContainer.splitController.splitFocusedPane(direction: direction)
-                }
-                // Now configure each pane based on saved connections
-                let paneIDs = tabContainer.splitController.tree.allPaneIDs
-                for (index, child) in children.enumerated() {
-                    if index < paneIDs.count, case .pane(let conn) = flattenFirstPane(child) {
-                        if case .ssh(let bookmarkId) = conn {
-                            Task { @MainActor [paneIDs] in
-                                if let bookmark = await self.bookmarkStore?.bookmark(for: bookmarkId),
-                                   let pane = tabContainer.splitController.panes[paneIDs[index]] {
-                                    pane.startSSH(bookmark: bookmark, config: self.config)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Extract the first pane connection from a session split node tree.
-    private func flattenFirstPane(_ node: SessionSplitNode) -> SessionSplitNode {
-        switch node {
-        case .pane: return node
-        case .split(_, let children, _):
-            return children.first.map { flattenFirstPane($0) } ?? node
-        }
-    }
-
     // MARK: - Onboarding
 
     private func showOnboardingIfNeeded() {
@@ -696,44 +568,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Workspaces
 
     @objc func saveWorkspace() {
-        guard let window = NSApp.keyWindow else { return }
-        let alert = NSAlert()
-        alert.messageText = "Save Workspace"
-        alert.informativeText = "Enter a name for this workspace:"
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-        input.placeholderString = "Workspace name"
-        alert.accessoryView = input
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        alert.beginSheetModal(for: window) { [weak self] response in
-            guard response == .alertFirstButtonReturn, !input.stringValue.isEmpty else { return }
-            let name = input.stringValue
-
-            guard let self = self,
-                  let tabContainer = window.contentViewController as? TabContainerController else { return }
-
-            let frame = WindowFrame(
-                x: Double(window.frame.origin.x),
-                y: Double(window.frame.origin.y),
-                width: Double(window.frame.width),
-                height: Double(window.frame.height)
-            )
-            let splitTree = self.captureTree(from: tabContainer.splitController)
-            let tab = TabState(title: window.title, splitTree: splitTree)
-            let windowState = WindowState(frame: frame, tabs: [tab])
-            let workspace = Workspace(name: name, window: windowState)
-            try? self.workspaceManager?.save(workspace: workspace)
-        }
+        sessionCoordinator.saveWorkspace()
     }
 
     @objc private func openWorkspace(_ sender: NSMenuItem) {
-        guard let name = sender.representedObject as? String,
-              let workspace = workspaceManager?.load(name: name) else { return }
-
-        // Create a new window and restore the workspace state
-        let state = SessionState(windows: [workspace.window])
-        restoreSession(state: state)
+        guard let name = sender.representedObject as? String else { return }
+        sessionCoordinator.openWorkspace(name: name)
     }
 }
 
