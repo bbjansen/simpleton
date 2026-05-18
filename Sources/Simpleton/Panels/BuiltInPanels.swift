@@ -166,4 +166,17 @@ extension PanelDefinition {
             bookmarkStore: context.bookmarkStore
         ))
     }
+
+    static let git = PanelDefinition(
+        id: PanelProfile.PanelID.git,
+        name: "Git",
+        icon: "arrow.triangle.branch",
+        description: "Branch, status, and recent commits",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: GitPanelView(
+            currentPaneProvider: context.currentPane
+        ))
+    }
 }
