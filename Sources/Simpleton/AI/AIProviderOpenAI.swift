@@ -116,4 +116,76 @@ struct OpenAIProvider: AIProviderProtocol {
             }
         }
     }
+
+    func completeWithTools(
+        system: String, turns: [ConversationTurn], model: String, options: AIOptions
+    ) async throws -> AgentTurnResult {
+        let url = URL(string: "\(baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
+
+        var messages: [[String: Any]] = [["role": "system", "content": system]]
+        for turn in turns {
+            switch turn.role {
+            case .user(let text):
+                messages.append(["role": "user", "content": text])
+            case .assistant(let text):
+                messages.append(["role": "assistant", "content": text])
+            case .toolResult(let toolCallID, let output):
+                messages.append(["role": "tool", "tool_call_id": toolCallID, "content": output])
+            }
+        }
+
+        let tools: [[String: Any]] = [[
+            "type": "function",
+            "function": [
+                "name": "run_command",
+                "description": "Execute a shell command in the terminal",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "cmd": ["type": "string"],
+                        "explanation": ["type": "string"]
+                    ] as [String: Any],
+                    "required": ["cmd", "explanation"]
+                ] as [String: Any]
+            ] as [String: Any]
+        ]]
+
+        let body: [String: Any] = [
+            "model": model, "max_tokens": options.maxTokens,
+            "temperature": options.temperature,
+            "messages": messages, "tools": tools, "tool_choice": "auto"
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw AIError.providerError("OpenAI tool use error: \(msg)")
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let first = choices.first,
+              let message = first["message"] as? [String: Any] else {
+            throw AIError.invalidResponse
+        }
+
+        if let toolCalls = message["tool_calls"] as? [[String: Any]],
+           let call = toolCalls.first,
+           let toolID = call["id"] as? String,
+           let function = call["function"] as? [String: Any],
+           let argsStr = function["arguments"] as? String,
+           let argsData = argsStr.data(using: .utf8),
+           let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any],
+           let cmd = args["cmd"] as? String {
+            let explanation = args["explanation"] as? String ?? ""
+            return .toolCall(id: toolID, cmd: cmd, explanation: explanation)
+        }
+
+        let content = message["content"] as? String ?? ""
+        return .text(content.isEmpty ? "[No response]" : content)
+    }
 }
