@@ -181,10 +181,91 @@ final class AgentSession: ObservableObject {
             }
             return .continued
 
+        case "list_directory":
+            let path = args["path"] as? String ?? "."
+            let expandedPath = NSString(string: path).expandingTildeInPath
+            do {
+                let items = try FileManager.default.contentsOfDirectory(atPath: expandedPath)
+                var lines: [String] = []
+                for item in items.sorted() {
+                    let fullPath = (expandedPath as NSString).appendingPathComponent(item)
+                    var isDir: ObjCBool = false
+                    FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir)
+                    let attrs = try? FileManager.default.attributesOfItem(atPath: fullPath)
+                    let size = attrs?[.size] as? UInt64 ?? 0
+                    let suffix = isDir.boolValue ? "/" : ""
+                    lines.append("\(item)\(suffix)  \(isDir.boolValue ? "dir" : formatFileSize(size))")
+                }
+                turns.append(.toolResult(toolCallID: id, output: lines.isEmpty ? "[Empty directory]" : lines.joined(separator: "\n")))
+            } catch {
+                turns.append(.toolResult(toolCallID: id, output: "Error listing \(path): \(error.localizedDescription)"))
+            }
+            return .continued
+
+        case "search_files":
+            guard let pattern = args["pattern"] as? String else {
+                turns.append(.toolResult(toolCallID: id, output: "Missing 'pattern' parameter"))
+                return .continued
+            }
+            let dir = args["directory"] as? String ?? "."
+            let expandedDir = NSString(string: dir).expandingTildeInPath
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/grep")
+            process.arguments = ["-r", "-n", "-l", "--include=*", pattern, expandedDir]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = Pipe()
+            do {
+                try process.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                let lines = output.components(separatedBy: "\n").filter { !$0.isEmpty }
+                if lines.isEmpty {
+                    turns.append(.toolResult(toolCallID: id, output: "No files matching '\(pattern)' in \(dir)"))
+                } else {
+                    let maxFiles = 50
+                    let truncated = lines.count > maxFiles
+                    let result = lines.prefix(maxFiles).joined(separator: "\n") + (truncated ? "\n\n[... and \(lines.count - maxFiles) more files]" : "")
+                    turns.append(.toolResult(toolCallID: id, output: result))
+                }
+            } catch {
+                turns.append(.toolResult(toolCallID: id, output: "Error searching: \(error.localizedDescription)"))
+            }
+            return .continued
+
+        case "get_system_info":
+            let info = ProcessInfo.processInfo
+            let output = """
+            OS: macOS \(info.operatingSystemVersionString)
+            Host: \(Host.current().localizedName ?? "unknown")
+            CPU cores: \(info.processorCount)
+            Memory: \(info.physicalMemory / (1024 * 1024 * 1024)) GB
+            Uptime: \(formatUptime(info.systemUptime))
+            User: \(NSUserName())
+            Home: \(NSHomeDirectory())
+            Shell: \(ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+            """
+            turns.append(.toolResult(toolCallID: id, output: output))
+            return .continued
+
         default:
             turns.append(.toolResult(toolCallID: id, output: "Unknown tool: \(name)"))
             return .continued
         }
+    }
+
+    private func formatFileSize(_ bytes: UInt64) -> String {
+        if bytes < 1024 { return "\(bytes) B" }
+        if bytes < 1024 * 1024 { return "\(bytes / 1024) KB" }
+        return "\(bytes / (1024 * 1024)) MB"
+    }
+
+    private func formatUptime(_ seconds: TimeInterval) -> String {
+        let hours = Int(seconds) / 3600
+        let mins = (Int(seconds) % 3600) / 60
+        if hours > 24 { return "\(hours / 24)d \(hours % 24)h" }
+        return "\(hours)h \(mins)m"
     }
 
     /// Handle run_command tool call with approval flow.

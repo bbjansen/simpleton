@@ -181,6 +181,38 @@ struct AnthropicProvider: AIProviderProtocol {
                     ] as [String: Any],
                     "required": ["path", "content"]
                 ] as [String: Any]
+            ],
+            [
+                "name": "list_directory",
+                "description": "List files and directories at a path. Returns names, types (file/dir), and sizes.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "path": ["type": "string", "description": "Directory path (default: current directory). ~ expansion supported."]
+                    ] as [String: Any],
+                    "required": [] as [String]
+                ] as [String: Any]
+            ],
+            [
+                "name": "search_files",
+                "description": "Search for a text pattern across files in a directory (recursive grep). Returns matching file paths.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "pattern": ["type": "string", "description": "Text or regex pattern to search for"],
+                        "directory": ["type": "string", "description": "Directory to search in (default: current directory)"]
+                    ] as [String: Any],
+                    "required": ["pattern"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "get_system_info",
+                "description": "Get system information: OS version, hostname, CPU cores, memory, uptime, current user, shell.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [:] as [String: Any],
+                    "required": [] as [String]
+                ] as [String: Any]
             ]
         ]
 

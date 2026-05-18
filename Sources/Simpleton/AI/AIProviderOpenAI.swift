@@ -220,6 +220,43 @@ struct OpenAIProvider: AIProviderProtocol {
                         "required": ["path", "content"]
                     ] as [String: Any]
                 ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "list_directory",
+                    "description": "List files and directories at a path with types and sizes.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "path": ["type": "string", "description": "Directory path (default: cwd). ~ supported."]
+                        ] as [String: Any],
+                        "required": [] as [String]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "search_files",
+                    "description": "Recursive grep for a pattern across files.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "pattern": ["type": "string", "description": "Text or regex pattern"],
+                            "directory": ["type": "string", "description": "Directory to search (default: cwd)"]
+                        ] as [String: Any],
+                        "required": ["pattern"]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "get_system_info",
+                    "description": "Get OS, hostname, CPU, memory, uptime, user, shell.",
+                    "parameters": ["type": "object", "properties": [:] as [String: Any], "required": [] as [String]] as [String: Any]
+                ] as [String: Any]
             ]
         ]
 

@@ -81,33 +81,36 @@ struct ProcessesPanelView: View {
     }
 
     private func fetchProcesses() async -> [ProcessEntry] {
+        // Use -U to filter to current user directly, avoiding per-process sysctl calls
+        let currentUser = NSUserName()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-eo", "pid,pcpu,pmem,comm"]
+        process.arguments = ["-U", currentUser, "-o", "pid,pcpu,pmem,comm"]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = Pipe()
-        do { try process.run(); process.waitUntilExit() } catch { return [] }
+        do {
+            try process.run()
+        } catch {
+            return []
+        }
+        // Read output BEFORE waitUntilExit to avoid pipe buffer deadlock
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         guard let output = String(data: data, encoding: .utf8) else { return [] }
-        let currentUID = getuid()
         return output.components(separatedBy: "\n")
             .dropFirst() // header
             .compactMap { line -> ProcessEntry? in
-                let parts = line.trimmingCharacters(in: .whitespaces)
-                    .components(separatedBy: .whitespaces)
-                    .filter { !$0.isEmpty }
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { return nil }
+                let parts = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
                 guard parts.count >= 4,
                       let pid = Int32(parts[0]),
                       let cpu = Double(parts[1]),
                       let mem = Double(parts[2]) else { return nil }
-                let command = URL(fileURLWithPath: parts[3]).lastPathComponent
-                // Filter to current user's processes
-                var kinfo = kinfo_proc()
-                var size = MemoryLayout<kinfo_proc>.size
-                var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
-                guard sysctl(&mib, 4, &kinfo, &size, nil, 0) == 0 else { return nil }
-                guard kinfo.kp_eproc.e_ucred.cr_uid == currentUID else { return nil }
+                // comm may contain spaces — rejoin everything from index 3 onward
+                let fullPath = parts[3...].joined(separator: " ")
+                let command = URL(fileURLWithPath: fullPath).lastPathComponent
                 return ProcessEntry(id: pid, pid: pid, cpu: cpu, mem: mem, command: command)
             }
             .sorted { $0.cpu > $1.cpu }

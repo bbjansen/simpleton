@@ -308,6 +308,9 @@ struct AIChatPanelView: View {
         - **get_pane_state(pane)**: Detailed pane info including CWD, shell, connection type, recent output.
         - **read_file(path)**: Read a file directly (up to 10k chars). Avoids shell quoting issues.
         - **write_file(path, content)**: Write a file directly. Creates parent directories. Avoids heredoc escaping.
+        - **list_directory(path?)**: List files/dirs with types and sizes. Faster than ls.
+        - **search_files(pattern, directory?)**: Recursive grep across files. Find code, config values, etc.
+        - **get_system_info()**: OS, hostname, CPU, memory, uptime, user, shell.
 
         ## How to act
         - When the user asks you to DO something (install, run, fix, deploy, set up, create files, etc.), use your tools to execute it directly. Don't just suggest — act.
