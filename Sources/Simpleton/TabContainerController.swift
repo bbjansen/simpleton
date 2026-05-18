@@ -39,6 +39,9 @@ final class TabContainerController: NSViewController {
         }
     }
 
+    /// Lightweight project indexer — shared across AI chat messages for caching.
+    private let projectIndexer = ProjectIndexer()
+
     /// Set from WindowController after init.
     var bookmarkStore: BookmarkStore?
     var sshConfigWatcher: SSHConfigWatcher?
@@ -54,6 +57,10 @@ final class TabContainerController: NSViewController {
                     aiService: aiService
                 )
                 panelRegistry?.rebindAIChat(to: tabConversation)
+            }
+            // Propagate to all existing panes so active AI hints work.
+            for pane in splitController.panes.values {
+                pane.aiService = aiService
             }
         }
     }
@@ -353,6 +360,7 @@ final class TabContainerController: NSViewController {
             tabContainer: { [weak self] in self },
             skillStore: skillStore,
             memoryStore: memoryStore,
+            projectIndexer: projectIndexer,
             bookmarkStore: bookmarkStore,
             aiService: aiService,
             sshConfigWatcher: sshConfigWatcher,
@@ -382,6 +390,7 @@ final class TabContainerController: NSViewController {
             connectionType: .local(shell: shell, workingDirectory: workingDir)
         )
         pane.pluginManager = pluginManager
+        pane.aiService = aiService
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
         let env = buildEnvironment()
         pane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
@@ -430,6 +439,7 @@ final class TabContainerController: NSViewController {
             connectionType: .ssh(bookmarkID: bookmark.id)
         )
         pane.pluginManager = pluginManager
+        pane.aiService = aiService
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
         pane.startSSH(bookmark: bookmark, config: config)
         pane.onTitleChange = { [weak self] title in self?.view.window?.tab.title = title }

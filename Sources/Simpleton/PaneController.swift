@@ -49,6 +49,15 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Plugin manager reference for firing events.
     var pluginManager: PluginManager?
 
+    /// AI service for active hints on command failure.
+    var aiService: AIService?
+
+    /// Generates AI hints when commands fail (rate-limited).
+    private let activeAIHint = ActiveAIHint()
+
+    /// The currently-visible AI hint toast (if any).
+    private var currentHintView: ActiveAIHintView?
+
     /// SSH reconnection state.
     private var sshBookmark: Bookmark?
     private var sshConfig: AppConfig?
@@ -85,6 +94,11 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
             let row = self.terminalView.terminal.buffer.yDisp + self.terminalView.terminal.buffer.y
             if let event = ShellPromptTracker.parsePayload(payload) {
                 self.promptTracker.handleEvent(event, atRow: row)
+
+                // Trigger active AI hint on non-zero exit code
+                if case .commandEnd(let code) = event, let exitCode = code, exitCode != 0 {
+                    self.requestActiveAIHint(exitCode: exitCode)
+                }
             }
         }
 
@@ -130,6 +144,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     }
 
     deinit {
+        activeAIHint.purgePane(id)
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -391,6 +406,54 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+
+    // MARK: - Active AI Hints
+
+    /// Fire-and-forget: request an AI hint for a failed command and show it
+    /// as a toast at the bottom of the terminal pane.
+    private func requestActiveAIHint(exitCode: Int32) {
+        guard let aiService = aiService, aiService.isEnabled else { return }
+
+        let context = AIContextBuilder.build(
+            terminalView: terminalView,
+            cwd: currentDirectory,
+            recentOutputLines: 50,
+            maxOutputChars: 1500
+        )
+        let recentOutput = context.recentOutput ?? ""
+        let paneID = self.id
+
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            guard let hint = await self.activeAIHint.requestHint(
+                paneID: paneID,
+                exitCode: exitCode,
+                recentOutput: recentOutput,
+                aiService: aiService
+            ) else { return }
+
+            self.showHintToast(hint)
+        }
+    }
+
+    /// Display the hint toast overlay on the terminal view.
+    private func showHintToast(_ hint: ActiveAIHint.Hint) {
+        // Remove any existing hint toast first.
+        currentHintView?.removeFromSuperview()
+        currentHintView = nil
+
+        let toast = ActiveAIHintView(hint: hint.text, hostBounds: terminalView.bounds)
+        toast.onDismiss = { [weak self] in
+            self?.currentHintView = nil
+        }
+        toast.onAskAI = { [weak self] in
+            guard let self = self else { return }
+            self.currentHintView = nil
+            NotificationCenter.default.post(name: .simpletonExplainError, object: self.id)
+        }
+        terminalView.addSubview(toast)
+        currentHintView = toast
     }
 }
 
