@@ -207,6 +207,20 @@ struct GeneralTab: View {
             }
 
             Section {
+                Picker("Check for updates", selection: $config.general.checkForUpdates) {
+                    Text("Automatically").tag(UpdateCheckMode.automatic)
+                    Text("Manually").tag(UpdateCheckMode.manual)
+                    Text("Disabled").tag(UpdateCheckMode.disabled)
+                }
+                .onChange(of: config.general.checkForUpdates) { onChanged(config) }
+                Text("Automatic checks run in the background and notify you when an update is available")
+                    .font(.system(size: 11))
+                    .foregroundColor(DT.textHelp)
+            } header: {
+                PrefsSectionHeader(title: "Updates")
+            }
+
+            Section {
                 TextField("TERM variable", text: $config.general.termVariable)
                     .onChange(of: config.general.termVariable) { onChanged(config) }
                 Text("The TERM environment variable sent to remote hosts (default: xterm-256color)")
