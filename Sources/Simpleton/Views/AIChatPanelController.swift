@@ -27,6 +27,8 @@ final class AIChatPanelController: NSViewController {
     var onDismiss: (() -> Void)?
     var skillStore: SkillStore?
     var memoryStore: MemoryStore?
+    var mcpConfigStore: MCPConfigStore?
+    var eventBus: WorkspaceEventBus?
     var projectIndexer: ProjectIndexer?
     var currentPaneProvider: (() -> PaneController?)?
 
@@ -65,6 +67,8 @@ final class AIChatPanelController: NSViewController {
         )
         chatView.skillStore = skillStore
         chatView.memoryStore = memoryStore
+        chatView.mcpConfigStore = mcpConfigStore
+        chatView.eventBus = eventBus
         chatView.projectIndexer = projectIndexer
         chatView.currentPaneProvider = currentPaneProvider
         chatView.conversation = conversation

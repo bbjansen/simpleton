@@ -97,6 +97,18 @@ extension AgentSession {
         result += output
         onCommandExecuted?(cmd, result, paneLabel)
         turns.append(.toolResult(toolCallID: toolCallID, output: result))
+
+        // Publish to workspace event bus for cross-tab awareness
+        if let bus = eventBus, let tabID = pane.eventBusTabID {
+            let snippet = String(output.prefix(200))
+            bus.publish(WorkspaceEvent(
+                id: UUID(),
+                timestamp: Date(),
+                tabID: tabID,
+                paneLabel: pane.paneLabel ?? paneLabel,
+                type: .commandCompleted(cmd: cmd, exitCode: Int32(exitCode ?? 0), outputSnippet: snippet)
+            ))
+        }
     }
 
     /// Poll terminal buffer for sentinel indicating command completion.

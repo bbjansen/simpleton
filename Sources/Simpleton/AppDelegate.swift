@@ -24,6 +24,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var skillStore: SkillStore?
     private var panelRegistry: PanelRegistry?
     private var memoryStore: MemoryStore?
+    private var mcpConfigStore: MCPConfigStore?
+    private var mcpClients: [MCPClient] = []
+    private let workspaceEventBus = WorkspaceEventBus()
     private var terminalActions: TerminalActions!
     private var aiCoordinator: AICoordinator!
     private var onboardingCoordinator: OnboardingCoordinator!
@@ -97,6 +100,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create memory store
         let memoryDir = simpletonDir.appendingPathComponent("memory")
         self.memoryStore = MemoryStore(storageDir: memoryDir)
+
+        // Load MCP server configs
+        let mcpConfigStore = MCPConfigStore(directory: simpletonDir)
+        mcpConfigStore.load()
+        self.mcpConfigStore = mcpConfigStore
 
         // Create panel registry and register built-in panels
         let profilesDir = simpletonDir.appendingPathComponent("profiles")
@@ -202,6 +210,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             aiService: { [weak self] in self?.aiService },
             skillStore: { [weak self] in self?.skillStore },
             memoryStore: { [weak self] in self?.memoryStore },
+            eventBus: { [weak self] in self?.workspaceEventBus },
             workspaceManager: { [weak self] in self?.workspaceManager },
             clearSavedState: { [weak self] in self?.sessionManager?.clearSavedState() },
             createNewWindow: { [weak self] in self?.createNewWindow() },
@@ -283,6 +292,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Disconnect all MCP server processes
+        for client in mcpClients {
+            client.disconnect()
+        }
+        mcpClients.removeAll()
+
         pluginManager?.fireEvent(.onShutdown, context: ["version": "1.0.0"])
         pluginManager?.unloadAll()
         sessionManager?.saveCurrentState()
@@ -304,6 +319,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         wc.aiService = aiService
         wc.skillStore = skillStore
         wc.memoryStore = memoryStore
+        wc.mcpConfigStore = mcpConfigStore
+        wc.eventBus = workspaceEventBus
         windowControllers.append(wc)
         wc.window?.center()
         wc.window?.makeKeyAndOrderFront(nil)

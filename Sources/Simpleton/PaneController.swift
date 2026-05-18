@@ -52,6 +52,15 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// AI service for active hints on command failure.
     var aiService: AIService?
 
+    /// Event bus for cross-tab context awareness.
+    var eventBus: WorkspaceEventBus?
+
+    /// Tab ID for event bus publishing.
+    var eventBusTabID: UUID?
+
+    /// Human-readable label for event bus publishing (e.g., "Tab 2").
+    var paneLabel: String?
+
     /// Generates AI hints when commands fail (rate-limited).
     private let activeAIHint = ActiveAIHint()
 
@@ -250,6 +259,17 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         if let dir = directory {
             currentDirectory = dir
             onDirectoryChange?(dir)
+
+            if let bus = eventBus, let tabID = eventBusTabID {
+                let label = paneLabel ?? "Pane"
+                bus.publish(WorkspaceEvent(
+                    id: UUID(),
+                    timestamp: Date(),
+                    tabID: tabID,
+                    paneLabel: label,
+                    type: .directoryChanged(path: dir)
+                ))
+            }
         }
     }
 

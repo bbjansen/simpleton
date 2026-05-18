@@ -66,6 +66,7 @@ final class AgentSession: ObservableObject {
     private let toolRegistry: ToolHandlerRegistry
     private let memoryStore: MemoryStore?
     private let skillStore: SkillStore?
+    let eventBus: WorkspaceEventBus?
     var isCancelled = false
     var pendingApprovalContinuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>?
     private var turnCount = 0
@@ -74,10 +75,11 @@ final class AgentSession: ObservableObject {
     var maxTurns = 25
     private var warningTurn: Int { max(maxTurns - 10, 10) }
 
-    init(aiService: AIService, memoryStore: MemoryStore? = nil, skillStore: SkillStore? = nil) {
+    init(aiService: AIService, memoryStore: MemoryStore? = nil, skillStore: SkillStore? = nil, eventBus: WorkspaceEventBus? = nil) {
         self.aiService = aiService
         self.memoryStore = memoryStore
         self.skillStore = skillStore
+        self.eventBus = eventBus
         var handlers: [ToolHandler] = [
             FileTools(), TerminalTools(), GitTools(),
             SystemTools(), NetworkTools(), ProcessTools(),

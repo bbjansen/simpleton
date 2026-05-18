@@ -32,6 +32,12 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     var memoryStore: MemoryStore? {
         didSet { tabContainer.memoryStore = memoryStore }
     }
+    var mcpConfigStore: MCPConfigStore? {
+        didSet { tabContainer.mcpConfigStore = mcpConfigStore }
+    }
+    var eventBus: WorkspaceEventBus? {
+        didSet { tabContainer.eventBus = eventBus }
+    }
 
     init(config: AppConfig, theme: Theme) {
         self.config = config
@@ -88,6 +94,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         newTabContainer.panelRegistry = panelRegistry
         newTabContainer.aiService = aiService
         newTabContainer.skillStore = skillStore
+        newTabContainer.memoryStore = memoryStore
+        newTabContainer.mcpConfigStore = mcpConfigStore
+        newTabContainer.eventBus = eventBus
         let newWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],

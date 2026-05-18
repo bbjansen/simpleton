@@ -36,6 +36,8 @@ struct AIChatPanelView: View {
     var conversation: TabConversation?
 
     var memoryStore: MemoryStore?
+    var mcpConfigStore: MCPConfigStore?
+    var eventBus: WorkspaceEventBus?
     var projectIndexer: ProjectIndexer?
 
     private var currentPane: PaneController? { currentPaneProvider?() }
@@ -56,6 +58,7 @@ struct AIChatPanelView: View {
     @State private var selectedPaneID: PaneID? = nil
     @State private var unlimitedTurns = false
     @State private var watchActive = false
+    @State private var mcpClients: [MCPClient] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -336,10 +339,16 @@ struct AIChatPanelView: View {
                 memorySection = "\n\n## Known context (from memory)\n\(memList)"
             }
         }
+        var crossTabSection = ""
+        if let bus = eventBus, let tabID = conversation?.tabID {
+            if let summary = bus.formatForPrompt(excludingTab: tabID) {
+                crossTabSection = "\n\n\(summary)"
+            }
+        }
         let system = """
         You are a powerful terminal agent embedded in a native macOS terminal emulator. You have full access to the user's terminal panes and can execute commands, read output, and orchestrate multi-step workflows.
 
-        \(contextStr)\(skillsSection)\(memorySection)
+        \(contextStr)\(skillsSection)\(memorySection)\(crossTabSection)
 
         ## Your tools
         - **run_command(cmd, pane?)**: Execute shell commands. Target a specific pane by number. Output + exit code are captured automatically.
@@ -418,7 +427,7 @@ struct AIChatPanelView: View {
 
         // Use agent session so the AI can execute commands across panes
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
-            let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore)
+            let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus)
             configureSession(session, conversation: conv)
             conv.activeSession = session
             conv.isRunning = true
@@ -494,7 +503,7 @@ struct AIChatPanelView: View {
         skillValues = [:]
         aiSuggestedKeys = []
 
-        let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore)
+        let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus)
 
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
             configureSession(session, conversation: conv)

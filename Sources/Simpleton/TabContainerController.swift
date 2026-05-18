@@ -48,6 +48,8 @@ final class TabContainerController: NSViewController {
     var pluginManager: PluginManager?
     var skillStore: SkillStore?
     var memoryStore: MemoryStore?
+    var mcpConfigStore: MCPConfigStore?
+    var eventBus: WorkspaceEventBus?
     var aiService: AIService? {
         didSet {
             if tabConversation == nil, let aiService = aiService {
@@ -360,6 +362,8 @@ final class TabContainerController: NSViewController {
             tabContainer: { [weak self] in self },
             skillStore: skillStore,
             memoryStore: memoryStore,
+            mcpConfigStore: mcpConfigStore,
+            eventBus: eventBus,
             projectIndexer: projectIndexer,
             bookmarkStore: bookmarkStore,
             aiService: aiService,
@@ -391,10 +395,16 @@ final class TabContainerController: NSViewController {
         )
         pane.pluginManager = pluginManager
         pane.aiService = aiService
+        pane.eventBus = eventBus
+        pane.eventBusTabID = tabConversation?.tabID
+        pane.paneLabel = tabConversation?.paneLabels[id] ?? "Pane"
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
         let env = buildEnvironment()
         pane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
-        pane.onTitleChange = { [weak self] title in self?.view.window?.tab.title = title }
+        pane.onTitleChange = { [weak self] title in
+            self?.view.window?.tab.title = title
+            pane.paneLabel = self?.tabConversation?.paneLabels[pane.id] ?? title
+        }
         pane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)
         }
@@ -440,9 +450,15 @@ final class TabContainerController: NSViewController {
         )
         pane.pluginManager = pluginManager
         pane.aiService = aiService
+        pane.eventBus = eventBus
+        pane.eventBusTabID = tabConversation?.tabID
+        pane.paneLabel = tabConversation?.paneLabels[id] ?? "Pane"
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
         pane.startSSH(bookmark: bookmark, config: config)
-        pane.onTitleChange = { [weak self] title in self?.view.window?.tab.title = title }
+        pane.onTitleChange = { [weak self] title in
+            self?.view.window?.tab.title = title
+            pane.paneLabel = self?.tabConversation?.paneLabels[pane.id] ?? title
+        }
         pane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)
         }
