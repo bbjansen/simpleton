@@ -142,7 +142,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 7. Import wizard check
         showOnboardingIfNeeded()
 
-        buildMenuBar()
+        let menuResult = MenuBarBuilder.build(target: self, workspacesMenuDelegate: self)
+        self.workspacesMenu = menuResult.workspacesMenu
 
         NotificationCenter.default.addObserver(
             self,
@@ -296,199 +297,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         try? AtomicFileWriter.writeJSON(ConfigFile(config: config), to: simpletonDir.appendingPathComponent("config.json"))
     }
 
-    // MARK: - Menu Bar
-
-    private func buildMenuBar() {
-        let mainMenu = NSMenu()
-
-        // App menu
-        let appMenuItem = NSMenuItem()
-        let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Simpleton", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Preferences...", action: #selector(showPreferences), keyEquivalent: ",")
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit Simpleton", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        appMenuItem.submenu = appMenu
-        mainMenu.addItem(appMenuItem)
-
-        // File menu
-        let fileMenuItem = NSMenuItem()
-        let fileMenu = NSMenu(title: "File")
-        fileMenu.addItem(withTitle: "New Window", action: #selector(createNewWindow), keyEquivalent: "n")
-        fileMenu.addItem(withTitle: "New Tab", action: #selector(newTab), keyEquivalent: "t")
-        fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "New Connection...", action: #selector(showNewConnection), keyEquivalent: "")
-        fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "Close Pane", action: #selector(closePane), keyEquivalent: "w")
-
-        let closeTabItem = NSMenuItem(title: "Close Tab", action: #selector(closeTab), keyEquivalent: "W")
-        closeTabItem.keyEquivalentModifierMask = [.command, .shift]
-        fileMenu.addItem(closeTabItem)
-
-        fileMenuItem.submenu = fileMenu
-        mainMenu.addItem(fileMenuItem)
-
-        // Edit menu
-        let editMenuItem = NSMenuItem()
-        let editMenu = NSMenu(title: "Edit")
-        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "Clear Terminal", action: #selector(clearTerminal), keyEquivalent: "k")
-        editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "Find...", action: #selector(showScrollbackSearch), keyEquivalent: "f")
-        editMenuItem.submenu = editMenu
-        mainMenu.addItem(editMenuItem)
-
-        // View menu
-        let viewMenuItem = NSMenuItem()
-        let viewMenu = NSMenu(title: "View")
-        viewMenu.addItem(withTitle: "Increase Font Size", action: #selector(increaseFontSize), keyEquivalent: "=")
-        viewMenu.addItem(withTitle: "Decrease Font Size", action: #selector(decreaseFontSize), keyEquivalent: "-")
-        viewMenu.addItem(withTitle: "Reset Font Size", action: #selector(resetFontSize), keyEquivalent: "0")
-        viewMenuItem.submenu = viewMenu
-        mainMenu.addItem(viewMenuItem)
-
-        // Split menu
-        let splitMenuItem = NSMenuItem()
-        let splitMenu = NSMenu(title: "Split")
-        splitMenu.addItem(withTitle: "Split Right", action: #selector(splitRight), keyEquivalent: "d")
-
-        let splitDownItem = NSMenuItem(title: "Split Down", action: #selector(splitDown), keyEquivalent: "D")
-        splitDownItem.keyEquivalentModifierMask = [.command, .shift]
-        splitMenu.addItem(splitDownItem)
-
-        splitMenu.addItem(.separator())
-
-        let layoutItem = NSMenuItem(title: "Pick Layout…", action: #selector(pickLayout), keyEquivalent: "L")
-        layoutItem.keyEquivalentModifierMask = [.command, .shift]
-        splitMenu.addItem(layoutItem)
-
-        splitMenu.addItem(.separator())
-
-        let zoomItem = NSMenuItem(title: "Toggle Fullscreen Pane", action: #selector(togglePaneZoom), keyEquivalent: "\r")
-        zoomItem.keyEquivalentModifierMask = [.command, .shift]
-        splitMenu.addItem(zoomItem)
-
-        splitMenu.addItem(.separator())
-
-        // Focus navigation
-        let focusLeftItem = NSMenuItem(title: "Focus Left", action: #selector(focusLeft), keyEquivalent: String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!)))
-        focusLeftItem.keyEquivalentModifierMask = [.command, .option]
-        splitMenu.addItem(focusLeftItem)
-
-        let focusRightItem = NSMenuItem(title: "Focus Right", action: #selector(focusRight), keyEquivalent: String(Character(UnicodeScalar(NSRightArrowFunctionKey)!)))
-        focusRightItem.keyEquivalentModifierMask = [.command, .option]
-        splitMenu.addItem(focusRightItem)
-
-        let focusUpItem = NSMenuItem(title: "Focus Up", action: #selector(focusUp), keyEquivalent: String(Character(UnicodeScalar(NSUpArrowFunctionKey)!)))
-        focusUpItem.keyEquivalentModifierMask = [.command, .option]
-        splitMenu.addItem(focusUpItem)
-
-        let focusDownItem = NSMenuItem(title: "Focus Down", action: #selector(focusDown), keyEquivalent: String(Character(UnicodeScalar(NSDownArrowFunctionKey)!)))
-        focusDownItem.keyEquivalentModifierMask = [.command, .option]
-        splitMenu.addItem(focusDownItem)
-
-        splitMenuItem.submenu = splitMenu
-        mainMenu.addItem(splitMenuItem)
-
-        // SSH menu
-        let sshMenuItem = NSMenuItem()
-        let sshMenu = NSMenu(title: "SSH")
-
-        let quickConnectItem = NSMenuItem(title: "Quick Connect...", action: #selector(showQuickConnect), keyEquivalent: "k")
-        sshMenu.addItem(quickConnectItem)
-
-        sshMenu.addItem(withTitle: "New Connection...", action: #selector(showNewConnection), keyEquivalent: "")
-
-        let toggleSidebarItem = NSMenuItem(title: "Toggle Sidebar", action: #selector(toggleSidebar), keyEquivalent: "S")
-        toggleSidebarItem.keyEquivalentModifierMask = [.command, .shift]
-        sshMenu.addItem(toggleSidebarItem)
-
-        sshMenuItem.submenu = sshMenu
-        mainMenu.addItem(sshMenuItem)
-
-        // AI menu
-        let aiMenuItem = NSMenuItem()
-        let aiMenu = NSMenu(title: "AI")
-        let chatItem = NSMenuItem(title: "AI Chat", action: #selector(toggleAIChat), keyEquivalent: "A")
-        chatItem.keyEquivalentModifierMask = [.command, .shift]
-        aiMenu.addItem(chatItem)
-        let skillItem = NSMenuItem(title: "Run Skill…", action: #selector(showSkillPicker), keyEquivalent: "K")
-        skillItem.keyEquivalentModifierMask = [.command, .shift]
-        aiMenu.addItem(skillItem)
-        aiMenu.addItem(withTitle: "AI: Explain Selection", action: #selector(explainSelection), keyEquivalent: "")
-        aiMenu.addItem(withTitle: "AI: Explain Error", action: #selector(explainLastError), keyEquivalent: "")
-        aiMenuItem.submenu = aiMenu
-        mainMenu.addItem(aiMenuItem)
-
-        // Window menu
-        let windowMenuItem = NSMenuItem()
-        let windowMenu = NSMenu(title: "Window")
-        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.miniaturize(_:)), keyEquivalent: "m")
-
-        let nextTabItem = NSMenuItem(title: "Next Tab", action: #selector(nextTab), keyEquivalent: "}")
-        nextTabItem.keyEquivalentModifierMask = [.command, .shift]
-        windowMenu.addItem(nextTabItem)
-
-        let prevTabItem = NSMenuItem(title: "Previous Tab", action: #selector(prevTab), keyEquivalent: "{")
-        prevTabItem.keyEquivalentModifierMask = [.command, .shift]
-        windowMenu.addItem(prevTabItem)
-
-        windowMenu.addItem(.separator())
-        let saveWorkspaceItem = NSMenuItem(title: "Save Workspace...", action: #selector(saveWorkspace), keyEquivalent: "S")
-        saveWorkspaceItem.keyEquivalentModifierMask = [.command, .option]
-        windowMenu.addItem(saveWorkspaceItem)
-
-        // Workspace submenu (dynamic — rebuilt each time the menu opens)
-        let workspacesItem = NSMenuItem(title: "Workspaces", action: nil, keyEquivalent: "")
-        let workspacesMenu = NSMenu(title: "Workspaces")
-        workspacesMenu.delegate = self
-        self.workspacesMenu = workspacesMenu
-        workspacesItem.submenu = workspacesMenu
-        windowMenu.addItem(workspacesItem)
-
-        windowMenu.addItem(.separator())
-        for i in 1...9 {
-            let tabItem = NSMenuItem(title: "Tab \(i)", action: #selector(switchToTabN(_:)), keyEquivalent: String(i))
-            tabItem.tag = i
-            windowMenu.addItem(tabItem)
-        }
-
-        windowMenuItem.submenu = windowMenu
-        mainMenu.addItem(windowMenuItem)
-
-        // Help menu
-        let helpMenuItem = NSMenuItem()
-        let helpMenu = NSMenu(title: "Help")
-        let paletteItem = NSMenuItem(title: "Command Palette...", action: #selector(showCommandPalette), keyEquivalent: "P")
-        paletteItem.keyEquivalentModifierMask = [.command, .shift]
-        helpMenu.addItem(paletteItem)
-        helpMenuItem.submenu = helpMenu
-        mainMenu.addItem(helpMenuItem)
-
-        NSApp.mainMenu = mainMenu
-        NSApp.windowsMenu = windowMenu
-    }
-
     // MARK: - Split Actions
 
-    @objc private func splitRight() {
+    @objc func splitRight() {
         activeSplitController?.splitFocusedPane(direction: .vertical)
     }
 
-    @objc private func splitDown() {
+    @objc func splitDown() {
         activeSplitController?.splitFocusedPane(direction: .horizontal)
     }
 
-    @objc private func closePane() {
+    @objc func closePane() {
         guard let sc = activeSplitController else { return }
         sc.closePane(sc.focusedPaneID)
     }
 
-    @objc private func pickLayout() {
+    @objc func pickLayout() {
         guard let window = NSApp.keyWindow,
               let sc = activeSplitController else { return }
 
@@ -508,11 +332,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func togglePaneZoom() {
+    @objc func togglePaneZoom() {
         activeSplitController?.toggleZoom()
     }
 
-    @objc private func switchToTabN(_ sender: NSMenuItem) {
+    @objc func switchToTabN(_ sender: NSMenuItem) {
         guard let window = NSApp.keyWindow,
               let tabbedWindows = window.tabbedWindows,
               sender.tag > 0, sender.tag <= tabbedWindows.count else { return }
@@ -521,22 +345,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Focus Navigation
 
-    @objc private func focusLeft() {
+    @objc func focusLeft() {
         activeSplitController?.moveFocus(.left)
     }
-    @objc private func focusRight() {
+    @objc func focusRight() {
         activeSplitController?.moveFocus(.right)
     }
-    @objc private func focusUp() {
+    @objc func focusUp() {
         activeSplitController?.moveFocus(.up)
     }
-    @objc private func focusDown() {
+    @objc func focusDown() {
         activeSplitController?.moveFocus(.down)
     }
 
     // MARK: - Tab Actions
 
-    @objc private func newTab() {
+    @objc func newTab() {
         // Find the WindowController that owns the key window (or its tab group)
         guard let keyWindow = NSApp.keyWindow else { return }
         if let wc = windowControllers.first(where: { $0.window === keyWindow || $0.window?.tabbedWindows?.contains(keyWindow) == true }) {
@@ -546,21 +370,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func closeTab() {
+    @objc func closeTab() {
         NSApp.keyWindow?.close()
     }
 
-    @objc private func nextTab() {
+    @objc func nextTab() {
         NSApp.keyWindow?.selectNextTab(nil)
     }
 
-    @objc private func prevTab() {
+    @objc func prevTab() {
         NSApp.keyWindow?.selectPreviousTab(nil)
     }
 
     // MARK: - Font Actions
 
-    @objc private func increaseFontSize() {
+    @objc func increaseFontSize() {
         guard let sc = activeSplitController else { return }
         for pane in sc.panes.values {
             let size = pane.terminalView.font.pointSize
@@ -568,7 +392,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func decreaseFontSize() {
+    @objc func decreaseFontSize() {
         guard let sc = activeSplitController else { return }
         for pane in sc.panes.values {
             let size = pane.terminalView.font.pointSize
@@ -578,7 +402,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func resetFontSize() {
+    @objc func resetFontSize() {
         guard let sc = activeSplitController else { return }
         let defaultSize = CGFloat(config.appearance.fontSize)
         for pane in sc.panes.values {
@@ -588,7 +412,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Quick Connect
 
-    @objc private func showQuickConnect() {
+    @objc func showQuickConnect() {
         guard bookmarkStore != nil else { return }
         if quickConnectPanel?.isVisible == true {
             quickConnectPanel?.dismiss()
@@ -605,7 +429,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Command Palette
 
-    @objc private func showCommandPalette() {
+    @objc func showCommandPalette() {
         if commandPalettePanel?.isVisible == true {
             commandPalettePanel?.dismiss()
             return
@@ -654,7 +478,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Preferences
 
-    @objc private func showPreferences() {
+    @objc func showPreferences() {
         preferencesController?.show()
     }
 
@@ -690,7 +514,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - New Connection
 
-    @objc private func showNewConnection() {
+    @objc func showNewConnection() {
         showNewConnectionSheet(on: NSApp.keyWindow)
     }
 
@@ -723,22 +547,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Sidebar
 
-    @objc private func toggleSidebar() {
+    @objc func toggleSidebar() {
         NotificationCenter.default.post(name: .simpletonToggleSidebar, object: nil)
     }
 
     // MARK: - AI Actions
 
-    @objc private func toggleAIChat() {
+    @objc func toggleAIChat() {
         NotificationCenter.default.post(name: .simpletonToggleAIChat, object: aiService)
     }
 
-    @objc private func showSkillPicker() {
+    @objc func showSkillPicker() {
         guard let ai = aiService, ai.isEnabled else { return }
         NotificationCenter.default.post(name: .simpletonRunSkillPicker, object: ai)
     }
 
-    @objc private func explainSelection() {
+    @objc func explainSelection() {
         guard let ai = aiService, ai.isEnabled,
               let sc = activeSplitController,
               let pane = sc.panes[sc.focusedPaneID] else { return }
@@ -755,7 +579,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    @objc private func explainLastError() {
+    @objc func explainLastError() {
         guard let ai = aiService, ai.isEnabled,
               let sc = activeSplitController,
               let pane = sc.panes[sc.focusedPaneID] else { return }
@@ -806,11 +630,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Scrollback Search
 
-    @objc private func showScrollbackSearch() {
+    @objc func showScrollbackSearch() {
         NotificationCenter.default.post(name: .simpletonShowSearch, object: nil)
     }
 
-    @objc private func clearTerminal() {
+    @objc func clearTerminal() {
         guard let pane = activeSplitController?.panes[activeSplitController?.focusedPaneID ?? UUID()] else { return }
         // Send Ctrl+L (form feed) to clear the terminal, then "clear" command for a full reset
         pane.terminalView.send(data: Array("\u{0C}".utf8)[...])
@@ -1045,7 +869,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Workspaces
 
-    @objc private func saveWorkspace() {
+    @objc func saveWorkspace() {
         guard let window = NSApp.keyWindow else { return }
         let alert = NSAlert()
         alert.messageText = "Save Workspace"
