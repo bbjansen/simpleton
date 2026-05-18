@@ -42,6 +42,7 @@ struct AIChatPanelView: View {
     @State private var isStreaming = false
 
     @State private var autopilotEnabled = false
+    @State private var showAutopilotConfirm = false
     @State private var showSkillPicker = false
     @State private var activeSkill: Skill? = nil
     @State private var skillValues: [String: String] = [:]
@@ -61,14 +62,28 @@ struct AIChatPanelView: View {
                 Text("AI Assistant")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Toggle(isOn: $autopilotEnabled) {
-                    Text("Autopilot")
+                Button(action: {
+                    if autopilotEnabled {
+                        autopilotEnabled = false
+                    } else {
+                        showAutopilotConfirm = true
+                    }
+                }) {
+                    Text(autopilotEnabled ? "Autopilot ON" : "Autopilot")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(autopilotEnabled ? .white : .secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(autopilotEnabled ? Color.orange : Color.clear)
+                        .cornerRadius(4)
                 }
-                .toggleStyle(.button)
-                .controlSize(.mini)
-                .tint(.purple)
+                .buttonStyle(.plain)
+                .alert("Enable Autopilot?", isPresented: $showAutopilotConfirm) {
+                    Button("Enable", role: .destructive) { autopilotEnabled = true }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("The AI will execute commands in your terminal without asking for approval. It can run any shell command, modify files, and control processes.")
+                }
                 if let dismiss = onDismiss {
                     Button(action: dismiss) {
                         Image(systemName: "xmark.circle.fill")
@@ -81,6 +96,22 @@ struct AIChatPanelView: View {
             .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
 
             Divider()
+
+            // Autopilot warning banner
+            if autopilotEnabled {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.black)
+                    Text("Autopilot active — AI executes commands without approval")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.black)
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.orange)
+            }
 
             // Pane indicator bar (multi-pane only)
             if let conv = conversation, conv.paneOrder.count > 1 {
@@ -390,12 +421,13 @@ struct AIChatPanelView: View {
 
         ## How to act
         - When the user asks you to DO something (install, run, fix, deploy, set up, create files, etc.), use your tools to execute it directly. Don't just suggest — act.
+        - ALWAYS use run_command to execute commands. NEVER suggest commands in code blocks when you can execute them directly. The user expects action, not suggestions.
         - When there are multiple panes, target the right one based on CWD context.
         - Chain tools across panes: start a server in pane 1, read_pane_output to confirm it's ready, then run tests in pane 2.
         - After running a command, check the exit code. If non-zero, read the output, diagnose, and retry with a fix (up to 3 attempts per command).
         - Use read_file/write_file for file operations — they're faster and more reliable than shell echo/cat.
         - When answering questions, respond with plain text. Keep it concise.
-        - For commands you're suggesting but NOT executing, use fenced code blocks.
+        \(autopilotEnabled ? "- AUTOPILOT MODE: Commands execute immediately without user approval. You have full autonomous control. Execute commands directly — do not ask for permission or confirmation." : "- Commands require user approval before executing. The user will see each command and can allow, skip, or stop.")
         """
 
         // Build conversation history as proper turns

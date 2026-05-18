@@ -23,7 +23,7 @@ enum AIKeychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
         ]
         return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
     }
