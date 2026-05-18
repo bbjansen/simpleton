@@ -69,6 +69,8 @@ final class AgentSession: ObservableObject {
     var isCancelled = false
     var pendingApprovalContinuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>?
     private var turnCount = 0
+    private var lastErrorCmd: String?
+    private var lastErrorOutput: String?
     var maxTurns = 25
     private var warningTurn: Int { max(maxTurns - 10, 10) }
 
@@ -111,6 +113,8 @@ final class AgentSession: ObservableObject {
         isCancelled = false
         turnCount = 0
         stepNumber = 0
+        lastErrorCmd = nil
+        lastErrorOutput = nil
         var turns = history
         turns.append(.user(message))
 
@@ -164,10 +168,29 @@ final class AgentSession: ObservableObject {
         autopilotMode: AutopilotMode, turns: inout [ConversationTurn]
     ) async -> ToolHandleResult {
         if name == "run_command" {
-            return await handleRunCommand(
+            let result = await handleRunCommand(
                 id: id, args: args, conversation: conversation,
                 focusedPane: focusedPane, autopilotMode: autopilotMode, turns: &turns
             )
+
+            // Track error→fix transitions for automatic resolution capture
+            if case .toolResult(_, let output) = turns.last?.role {
+                let cmd = args["cmd"] as? String ?? ""
+                if let exitCode = parseExitCode(from: output) {
+                    if exitCode != 0 {
+                        lastErrorCmd = cmd
+                        lastErrorOutput = output
+                    } else if lastErrorOutput != nil {
+                        // Transition from failure → success: hint the agent to save the fix
+                        let hint = "[SYSTEM NOTE: You just fixed an error. The original error was from command '\(lastErrorCmd ?? "unknown")'. Consider saving this fix to memory using save_memory with type \"errorFix\" so it can help in future sessions.]"
+                        turns.append(.user(hint))
+                        lastErrorCmd = nil
+                        lastErrorOutput = nil
+                    }
+                }
+            }
+
+            return result
         }
 
         let context = ToolContext(conversation: conversation, focusedPane: focusedPane, processRunner: processRunner, memoryStore: memoryStore, skillStore: skillStore)
@@ -270,6 +293,16 @@ final class AgentSession: ObservableObject {
                 return
             }
         }
+    }
+
+    // MARK: - Exit Code Parsing
+
+    /// Extract the exit code from a tool result string containing `[exit code: N]`.
+    private func parseExitCode(from output: String) -> Int? {
+        guard let range = output.range(of: "[exit code: ") else { return nil }
+        let rest = output[range.upperBound...]
+        guard let end = rest.firstIndex(of: "]") else { return nil }
+        return Int(rest[..<end])
     }
 
 }
