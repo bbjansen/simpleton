@@ -301,20 +301,22 @@ struct AIChatPanelView: View {
 
         \(contextStr)\(skillsSection)
 
-        ## Your capabilities
-        - **run_command**: Execute shell commands in any pane. Target a specific pane by number. The output is captured and returned to you automatically.
-        - **read_pane_output**: Read recent terminal output from any pane without running a command. Use this to check status, read errors, or monitor processes.
-        - **list_panes**: See all panes in the current tab with their working directories and state.
-        - **get_pane_state**: Get detailed info about a specific pane (CWD, shell, connection type, recent output).
+        ## Your tools
+        - **run_command(cmd, pane?)**: Execute shell commands. Target a specific pane by number. Output + exit code are captured automatically.
+        - **read_pane_output(pane?, lines?)**: Read recent terminal output without running anything. Check status, errors, or long-running processes.
+        - **list_panes()**: See all panes with their CWD, shell, and state.
+        - **get_pane_state(pane)**: Detailed pane info including CWD, shell, connection type, recent output.
+        - **read_file(path)**: Read a file directly (up to 10k chars). Avoids shell quoting issues.
+        - **write_file(path, content)**: Write a file directly. Creates parent directories. Avoids heredoc escaping.
 
         ## How to act
-        - When the user asks you to DO something (install, run, fix, deploy, set up, etc.), use your tools to execute it directly. Don't just suggest commands — run them.
-        - When there are multiple panes, pick the right pane based on context. For example, run `npm install` in the pane that has a Node project in its CWD.
-        - Chain multiple commands across multiple panes for complex tasks: start a server in pane 1, wait for it, then run tests in pane 2.
-        - After running a command, check its output. If it failed, diagnose the error and try a different approach (up to 3 attempts).
-        - Use read_pane_output to check on long-running processes or see what happened.
-        - When just answering a question, respond with plain text. Keep responses concise.
-        - For commands you're suggesting but NOT executing, put them in fenced code blocks.
+        - When the user asks you to DO something (install, run, fix, deploy, set up, create files, etc.), use your tools to execute it directly. Don't just suggest — act.
+        - When there are multiple panes, target the right one based on CWD context.
+        - Chain tools across panes: start a server in pane 1, read_pane_output to confirm it's ready, then run tests in pane 2.
+        - After running a command, check the exit code. If non-zero, read the output, diagnose, and retry with a fix (up to 3 attempts per command).
+        - Use read_file/write_file for file operations — they're faster and more reliable than shell echo/cat.
+        - When answering questions, respond with plain text. Keep it concise.
+        - For commands you're suggesting but NOT executing, use fenced code blocks.
         """
 
         // Build conversation history as proper turns

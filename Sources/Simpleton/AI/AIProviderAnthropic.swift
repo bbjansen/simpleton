@@ -158,6 +158,29 @@ struct AnthropicProvider: AIProviderProtocol {
                     ] as [String: Any],
                     "required": ["pane"]
                 ] as [String: Any]
+            ],
+            [
+                "name": "read_file",
+                "description": "Read the contents of a file. Returns up to 10,000 characters. Use this instead of cat to avoid shell quoting issues.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "path": ["type": "string", "description": "Absolute or relative file path (~ expansion supported)"]
+                    ] as [String: Any],
+                    "required": ["path"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "write_file",
+                "description": "Write content to a file. Creates parent directories if needed. Use this instead of echo/heredoc to avoid shell escaping issues.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "path": ["type": "string", "description": "Absolute or relative file path"],
+                        "content": ["type": "string", "description": "The full file content to write"]
+                    ] as [String: Any],
+                    "required": ["path", "content"]
+                ] as [String: Any]
             ]
         ]
 

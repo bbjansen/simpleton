@@ -191,6 +191,35 @@ struct OpenAIProvider: AIProviderProtocol {
                         "required": ["pane"]
                     ] as [String: Any]
                 ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "read_file",
+                    "description": "Read file contents (up to 10k chars). Use instead of cat.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "path": ["type": "string", "description": "File path (~ expansion supported)"]
+                        ] as [String: Any],
+                        "required": ["path"]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "write_file",
+                    "description": "Write content to a file. Creates parent dirs if needed.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "path": ["type": "string", "description": "File path"],
+                            "content": ["type": "string", "description": "Full file content"]
+                        ] as [String: Any],
+                        "required": ["path", "content"]
+                    ] as [String: Any]
+                ] as [String: Any]
             ]
         ]
 
