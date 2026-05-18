@@ -31,6 +31,9 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Last known working directory (updated via OSC 7 / shell integration).
     private(set) var currentDirectory: String?
 
+    /// Tracks prompt/command boundaries from OSC 133 shell integration.
+    let promptTracker = ShellPromptTracker()
+
     var sshHost: String? {
         guard case .ssh = connectionType else { return nil }
         return sshBookmark?.host
@@ -75,6 +78,15 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         menu.addItem(withTitle: "Search Scrollback", action: #selector(contextSearchScrollback(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Clear Scrollback", action: #selector(contextClearScrollback(_:)), keyEquivalent: "")
         terminalView.menu = menu
+
+        // Register OSC 133 (semantic prompts) handler for shell integration
+        terminalView.terminal.registerOscHandler(code: 133) { [weak self] payload in
+            guard let self = self else { return }
+            let row = self.terminalView.terminal.buffer.yDisp + self.terminalView.terminal.buffer.y
+            if let event = ShellPromptTracker.parsePayload(payload) {
+                self.promptTracker.handleEvent(event, atRow: row)
+            }
+        }
 
         // Track when user clicks this terminal pane to update focus
         mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
@@ -347,6 +359,38 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         searchBar?.removeFromSuperview()
         searchBar = nil
         terminalView.window?.makeFirstResponder(terminalView)
+    }
+
+    // MARK: - Prompt Navigation
+
+    func navigateToPreviousPrompt() {
+        let currentRow = terminalView.terminal.buffer.yDisp
+        guard let targetRow = promptTracker.previousPromptRow(before: currentRow) else { return }
+        terminalView.scrollTo(row: targetRow)
+    }
+
+    func navigateToNextPrompt() {
+        let currentRow = terminalView.terminal.buffer.yDisp
+        guard let targetRow = promptTracker.nextPromptRow(after: currentRow) else { return }
+        terminalView.scrollTo(row: targetRow)
+    }
+
+    func selectCommandOutput() {
+        let currentRow = terminalView.terminal.buffer.yDisp + terminalView.terminal.buffer.y
+        guard let range = promptTracker.commandOutputRange(at: currentRow) else { return }
+
+        var lines: [String] = []
+        for row in range.start...range.end {
+            if let line = terminalView.terminal.getScrollInvariantLine(row: row) {
+                lines.append(line.translateToString().trimmingCharacters(in: .whitespaces))
+            }
+        }
+        let text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 }
 
