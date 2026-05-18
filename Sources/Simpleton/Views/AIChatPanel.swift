@@ -250,7 +250,11 @@ struct AIChatPanelView: View {
         You are a helpful terminal assistant. The user is working in a terminal emulator.
         \(AIContextBuilder.formatForPrompt(context))
 
-        When suggesting commands, wrap them in backticks like `command here`.
+        When suggesting terminal commands, always put them in a fenced code block:
+        ```bash
+        command here
+        ```
+        Use inline backticks only for referencing command names or flags inline with text.
         Keep responses concise and practical.
         """
 
@@ -389,16 +393,68 @@ struct ChatBubble: View {
     }
 
     private func extractCommands(from text: String) -> [String] {
-        let pattern = "`([^`]+)`"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let nsString = text as NSString
-        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
-        return matches.compactMap { match -> String? in
-            guard match.numberOfRanges >= 2 else { return nil }
-            let cmd = nsString.substring(with: match.range(at: 1))
-            // Only return things that look like commands (not single words)
-            return cmd.contains(" ") || cmd.hasPrefix("/") || cmd.hasPrefix("$") ? cmd : nil
+        var results: [String] = []
+        var seen = Set<String>()
+
+        // 1. Triple-backtick code blocks: every non-empty, non-comment line is a command.
+        //    Match ``` optionally followed by a language tag, then capture the body.
+        let fencePattern = "```[a-zA-Z0-9]*\\n([\\s\\S]*?)```"
+        if let fenceRE = try? NSRegularExpression(pattern: fencePattern) {
+            let ns = text as NSString
+            let fullRange = NSRange(location: 0, length: ns.length)
+            for m in fenceRE.matches(in: text, range: fullRange) {
+                guard m.numberOfRanges >= 2 else { continue }
+                let body = ns.substring(with: m.range(at: 1))
+                for line in body.components(separatedBy: "\n") {
+                    let cmd = line.trimmingCharacters(in: .whitespaces)
+                    guard !cmd.isEmpty, !cmd.hasPrefix("#"), seen.insert(cmd).inserted else { continue }
+                    results.append(cmd)
+                }
+            }
         }
+
+        // 2. Inline single-backtick spans — strip code-block regions first so
+        //    the opening/closing fence backticks don't confuse the inline regex.
+        var stripped = text
+        if let fenceRE = try? NSRegularExpression(pattern: "```[\\s\\S]*?```") {
+            stripped = fenceRE.stringByReplacingMatches(
+                in: stripped,
+                range: NSRange(location: 0, length: (stripped as NSString).length),
+                withTemplate: ""
+            )
+        }
+
+        let inlinePattern = "`([^`\\n]+)`"
+        if let inlineRE = try? NSRegularExpression(pattern: inlinePattern) {
+            let ns = stripped as NSString
+            for m in inlineRE.matches(in: stripped, range: NSRange(location: 0, length: ns.length)) {
+                guard m.numberOfRanges >= 2 else { continue }
+                let cmd = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces)
+                guard isRunnableCommand(cmd), seen.insert(cmd).inserted else { continue }
+                results.append(cmd)
+            }
+        }
+
+        return results
+    }
+
+    /// Returns true when an inline backtick span looks like a runnable shell command
+    /// (multi-word, starts with a command name, not an English sentence fragment).
+    private func isRunnableCommand(_ text: String) -> Bool {
+        guard text.contains(" ") else { return false }
+        let first = text.components(separatedBy: " ").first ?? ""
+        guard !first.isEmpty else { return false }
+        // Must start with a lowercase letter (command name) or common prefixes
+        guard first.first?.isLowercase == true
+                || text.hasPrefix("./") || text.hasPrefix("~/") else { return false }
+        // Skip common English sentence-starter words that aren't commands
+        let prose: Set<String> = [
+            "you", "the", "this", "that", "it", "if", "in", "on", "at", "to", "a",
+            "an", "and", "or", "for", "of", "with", "by", "from", "make", "note",
+            "use", "run", "check", "see", "also", "ensure", "when", "where", "then",
+            "just", "now", "here", "these", "those", "both", "all", "each"
+        ]
+        return !prose.contains(first.lowercased())
     }
 }
 
