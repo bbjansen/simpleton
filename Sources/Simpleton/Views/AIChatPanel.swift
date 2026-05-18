@@ -36,6 +36,7 @@ struct AIChatPanelView: View {
     var conversation: TabConversation?
 
     var memoryStore: MemoryStore?
+    var projectIndexer: ProjectIndexer?
 
     private var currentPane: PaneController? { currentPaneProvider?() }
 
@@ -307,6 +308,10 @@ struct AIChatPanelView: View {
         isStreaming = true
         conversation?.watchSession?.pause()
 
+        // Capture for async project indexing inside Task blocks
+        let indexer = projectIndexer
+        let projectDir = currentPane?.currentDirectory
+
         // Build system prompt with multi-pane context
         let contextStr: String
         if let conv = conversation, let composite = conv.buildCompositeContext() {
@@ -418,10 +423,11 @@ struct AIChatPanelView: View {
             conv.activeSession = session
             conv.isRunning = true
             Task {
+                let projectSection = await Self.buildProjectSection(indexer: indexer, directory: projectDir)
                 await session.chat(
                     message: text,
                     history: history,
-                    systemPrompt: system,
+                    systemPrompt: system + projectSection,
                     conversation: conv,
                     focusedPane: resolved.pane,
                     autopilotMode: autopilotMode
@@ -431,6 +437,8 @@ struct AIChatPanelView: View {
             // Fallback: no conversation — use simple streaming (legacy)
             messages.append(ChatMessage(role: "assistant", content: ""))
             Task {
+                let projectSection = await Self.buildProjectSection(indexer: indexer, directory: projectDir)
+                let enrichedSystem = system + projectSection
                 do {
                     let userPrompt: String
                     if !history.isEmpty {
@@ -446,7 +454,7 @@ struct AIChatPanelView: View {
                     } else {
                         userPrompt = text
                     }
-                    let stream = aiService.stream(system: system, user: userPrompt, options: AIOptions(maxTokens: 4000, temperature: 0.3))
+                    let stream = aiService.stream(system: enrichedSystem, user: userPrompt, options: AIOptions(maxTokens: 4000, temperature: 0.3))
                     for try await token in stream {
                         if let lastIndex = messages.indices.last, messages[lastIndex].role == "assistant" {
                             messages[lastIndex].content += token
@@ -507,6 +515,14 @@ struct AIChatPanelView: View {
                 await session.run(skill: skill, params: params, pane: pane, autopilotMode: autopilotMode)
             }
         }
+    }
+
+    // MARK: - Project Indexing
+
+    private static func buildProjectSection(indexer: ProjectIndexer?, directory: String?) async -> String {
+        guard let indexer, let directory else { return "" }
+        guard let index = await indexer.index(for: directory) else { return "" }
+        return "\n\n## Project context\n\(index.promptSummary)"
     }
 }
 

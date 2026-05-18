@@ -26,6 +26,7 @@ struct PanelContext {
     var tabContainer: () -> TabContainerController?
     var skillStore: SkillStore?
     var memoryStore: MemoryStore?
+    var projectIndexer: ProjectIndexer?
     var bookmarkStore: BookmarkStore?
     var aiService: AIService?
     var sshConfigWatcher: SSHConfigWatcher?
