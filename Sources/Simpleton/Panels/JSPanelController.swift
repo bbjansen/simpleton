@@ -3,26 +3,18 @@ import AppKit
 import WebKit
 import SimpletonCore
 
-final class JSPanelDefinition: PanelDefinition {
-    let id: String
-    let name: String
-    let icon: String
-    let defaultSide: PanelSide
-    let isBuiltIn = false
-    let description: String
-    private let htmlURL: URL
-
-    init(manifest: ScriptPluginPanelManifest, htmlURL: URL) {
-        self.id = manifest.id
-        self.name = manifest.name
-        self.icon = manifest.icon
-        self.defaultSide = manifest.defaultSide
-        self.description = manifest.name
-        self.htmlURL = htmlURL
-    }
-
-    func makeViewController(context: PanelContext) -> NSViewController {
-        JSPanelController(id: id, htmlURL: htmlURL, context: context)
+extension PanelDefinition {
+    static func jsPanel(manifest: ScriptPluginPanelManifest, htmlURL: URL) -> PanelDefinition {
+        PanelDefinition(
+            id: manifest.id,
+            name: manifest.name,
+            icon: manifest.icon,
+            description: manifest.name,
+            defaultSide: manifest.defaultSide,
+            isBuiltIn: false
+        ) { context in
+            JSPanelController(id: manifest.id, htmlURL: htmlURL, context: context)
+        }
     }
 }
 

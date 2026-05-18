@@ -3,45 +3,38 @@ import AppKit
 import SwiftUI
 import SimpletonCore
 
-// MARK: - Connections
+extension PanelDefinition {
 
-final class ConnectionsPanelDefinition: PanelDefinition {
-    let id = "connections"
-    let name = "Connections"
-    let icon = "network"
-    let description = "SSH connections and bookmarks"
-    let defaultSide = PanelSide.left
-    let isBuiltIn = true
-
-    func makeViewController(context: PanelContext) -> NSViewController {
+    static let connections = PanelDefinition(
+        id: PanelProfile.PanelID.connections,
+        name: "Connections",
+        icon: "network",
+        description: "SSH connections and bookmarks",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
         guard let bookmarkStore = context.bookmarkStore else { return NSViewController() }
         let host = SidebarHostController(
             bookmarkStore: bookmarkStore,
             sshConfigWatcher: context.sshConfigWatcher,
             config: context.appConfig
         )
-        host.onConnect = { bookmark in
-            context.tabContainer()?.openSSHConnection(bookmark: bookmark)
-        }
+        host.onConnect = { bookmark in context.tabContainer()?.openSSHConnection(bookmark: bookmark) }
         host.onNewConnection = {
             guard let window = context.tabContainer()?.view.window else { return }
             NotificationCenter.default.post(name: .simpletonShowNewConnection, object: window)
         }
         return host
     }
-}
 
-// MARK: - AI Chat
-
-final class AIChatPanelDefinition: PanelDefinition {
-    let id = "ai-chat"
-    let name = "AI Chat"
-    let icon = "sparkles"
-    let description = "AI-powered terminal assistant"
-    let defaultSide = PanelSide.right
-    let isBuiltIn = true
-
-    func makeViewController(context: PanelContext) -> NSViewController {
+    static let aiChat = PanelDefinition(
+        id: PanelProfile.PanelID.aiChat,
+        name: "AI Chat",
+        icon: "sparkles",
+        description: "AI-powered terminal assistant",
+        defaultSide: .right,
+        isBuiltIn: true
+    ) { context in
         guard let aiService = context.aiService else { return NSViewController() }
         let vc = AIChatPanelController(aiService: aiService)
         vc.skillStore = context.skillStore
@@ -60,52 +53,50 @@ final class AIChatPanelDefinition: PanelDefinition {
             )
         }
         vc.onInsertCommand = context.onInsertCommand
-        vc.onDismiss = nil  // Panel system manages visibility; dismiss button hidden
+        vc.onDismiss = nil
         return vc
     }
-}
 
-// MARK: - Skills (placeholder — replaced in Task 8)
-
-final class SkillsPanelDefinition: PanelDefinition {
-    let id = "skills"
-    let name = "Skills"
-    let icon = "bolt"
-    let description = "Run and manage AI skills"
-    let defaultSide = PanelSide.right
-    let isBuiltIn = true
-
-    func makeViewController(context: PanelContext) -> NSViewController {
-        SkillsPanelController(context: context)
+    static let skills = PanelDefinition(
+        id: PanelProfile.PanelID.skills,
+        name: "Skills",
+        icon: "bolt",
+        description: "Run and manage AI skills",
+        defaultSide: .right,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: SkillsPanelView(
+            skillStore: context.skillStore,
+            aiService: context.aiService,
+            currentPaneProvider: context.currentPane
+        ))
     }
-}
 
-// MARK: - Notes (placeholder — replaced in Task 6)
-
-final class NotesPanelDefinition: PanelDefinition {
-    let id = "notes"
-    let name = "Notes"
-    let icon = "note.text"
-    let description = "Per-directory scratchpad"
-    let defaultSide = PanelSide.left
-    let isBuiltIn = true
-
-    func makeViewController(context: PanelContext) -> NSViewController {
-        NotesPanelController(context: context)
+    static let notes = PanelDefinition(
+        id: PanelProfile.PanelID.notes,
+        name: "Notes",
+        icon: "note.text",
+        description: "Per-directory scratchpad",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: NotesPanelView(
+            appSupportDir: context.appSupportDir,
+            currentPaneProvider: context.currentPane
+        ))
     }
-}
 
-// MARK: - Snippets (placeholder — replaced in Task 7)
-
-final class SnippetsPanelDefinition: PanelDefinition {
-    let id = "snippets"
-    let name = "Snippets"
-    let icon = "text.insert"
-    let description = "Command templates with placeholders"
-    let defaultSide = PanelSide.left
-    let isBuiltIn = true
-
-    func makeViewController(context: PanelContext) -> NSViewController {
-        SnippetsPanelController(context: context)
+    static let snippets = PanelDefinition(
+        id: PanelProfile.PanelID.snippets,
+        name: "Snippets",
+        icon: "text.insert",
+        description: "Command templates with placeholders",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: SnippetsPanelView(
+            appSupportDir: context.appSupportDir,
+            onInsert: context.onInsertCommand
+        ))
     }
 }

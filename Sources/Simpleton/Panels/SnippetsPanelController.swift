@@ -3,28 +3,11 @@ import AppKit
 import SwiftUI
 import SimpletonCore
 
-final class SnippetsPanelController: NSViewController {
-    private let context: PanelContext
-    private let store: SnippetStore
-
-    init(context: PanelContext) {
-        self.context = context
-        self.store = SnippetStore(appSupportDir: context.appSupportDir)
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func loadView() {
-        let v = SnippetsPanelView(store: store, onInsert: context.onInsertCommand)
-        self.view = NSHostingView(rootView: v)
-        self.view.frame = NSRect(x: 0, y: 0, width: 240, height: 600)
-    }
-}
-
 struct SnippetsPanelView: View {
-    @ObservedObject var store: SnippetStore
+    let appSupportDir: URL
     let onInsert: (String) -> Void
+
+    @StateObject private var store: SnippetStore
 
     @State private var query = ""
     @State private var selectedID: UUID?
@@ -32,6 +15,12 @@ struct SnippetsPanelView: View {
     @State private var isAdding = false
     @State private var newName = ""
     @State private var newCommand = ""
+
+    init(appSupportDir: URL, onInsert: @escaping (String) -> Void) {
+        self.appSupportDir = appSupportDir
+        self.onInsert = onInsert
+        _store = StateObject(wrappedValue: SnippetStore(appSupportDir: appSupportDir))
+    }
 
     private var filtered: [Snippet] {
         if query.isEmpty { return store.snippets }

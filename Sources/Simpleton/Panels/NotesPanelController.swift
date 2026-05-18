@@ -1,29 +1,7 @@
 // Sources/Simpleton/Panels/NotesPanelController.swift
-import AppKit
 import SwiftUI
 import Combine
 import SimpletonCore
-
-final class NotesPanelController: NSViewController {
-    private let context: PanelContext
-
-    init(context: PanelContext) {
-        self.context = context
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func loadView() {
-        let notesView = NotesPanelView(
-            appSupportDir: context.appSupportDir,
-            currentPaneProvider: context.currentPane
-        )
-        let host = NSHostingView(rootView: notesView)
-        host.frame = NSRect(x: 0, y: 0, width: 240, height: 600)
-        self.view = host
-    }
-}
 
 struct NotesPanelView: View {
     let appSupportDir: URL

@@ -5,11 +5,11 @@ import SimpletonCore
 
 @MainActor
 final class PanelRegistry: ObservableObject {
-    @Published private(set) var definitions: [any PanelDefinition] = []
+    @Published private(set) var definitions: [PanelDefinition] = []
     @Published var activeProfile: PanelProfile
     @Published private(set) var profiles: [PanelProfile]
 
-    // Cached NSViewControllers keyed by panel id — created lazily, evicted on profile activation
+    // Cached NSViewControllers keyed by panel id — created lazily on first show, retained indefinitely.
     private var controllers: [String: NSViewController] = [:]
     private let profilesDir: URL
 
@@ -21,7 +21,7 @@ final class PanelRegistry: ObservableObject {
 
     // MARK: - Registration
 
-    func register(_ panel: any PanelDefinition) {
+    func register(_ panel: PanelDefinition) {
         guard !definitions.contains(where: { $0.id == panel.id }) else { return }
         definitions.append(panel)
     }
@@ -32,7 +32,7 @@ final class PanelRegistry: ObservableObject {
     func makeController(for id: String, context: PanelContext) -> NSViewController? {
         if let cached = controllers[id] { return cached }
         guard let def = definitions.first(where: { $0.id == id }) else { return nil }
-        let vc = def.makeViewController(context: context)
+        let vc = def.make(context)
         controllers[id] = vc
         return vc
     }

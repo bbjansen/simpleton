@@ -1,28 +1,6 @@
 // Sources/Simpleton/Panels/SkillsPanelController.swift
-import AppKit
 import SwiftUI
 import SimpletonCore
-
-final class SkillsPanelController: NSViewController {
-    private let context: PanelContext
-
-    init(context: PanelContext) {
-        self.context = context
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func loadView() {
-        let v = SkillsPanelView(
-            skillStore: context.skillStore,
-            aiService: context.aiService,
-            currentPaneProvider: context.currentPane
-        )
-        self.view = NSHostingView(rootView: v)
-        self.view.frame = NSRect(x: 0, y: 0, width: 280, height: 600)
-    }
-}
 
 @MainActor
 final class SkillsPanelVM: ObservableObject {

@@ -62,6 +62,9 @@ enum AIContextBuilder {
     }
 
     /// Format context into a string for inclusion in AI prompts.
+    /// Selection takes priority: if the user highlighted text, only that is sent (it's the
+    /// explicit signal). Otherwise, recent terminal output is included with blank lines stripped
+    /// to maximise signal per token.
     static func formatForPrompt(_ context: AIContext) -> String {
         var parts: [String] = []
         if let cwd = context.cwd { parts.append("Working directory: \(cwd)") }
@@ -69,6 +72,19 @@ enum AIContextBuilder {
         parts.append("OS: \(context.os)")
         if !context.recentCommands.isEmpty {
             parts.append("Recent commands:\n" + context.recentCommands.map { "  $ \($0)" }.joined(separator: "\n"))
+        }
+        if let selection = context.selection, !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // User selected specific text — highest signal, skip the full output blob
+            parts.append("Selected text:\n\(selection)")
+        } else if let output = context.recentOutput {
+            // Strip blank lines so we pack more meaningful content into fewer tokens
+            let stripped = output
+                .components(separatedBy: "\n")
+                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                .joined(separator: "\n")
+            if !stripped.isEmpty {
+                parts.append("Recent terminal output:\n\(stripped)")
+            }
         }
         return parts.joined(separator: "\n")
     }

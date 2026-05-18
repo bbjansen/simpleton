@@ -83,16 +83,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let profilesDir = simpletonDir.appendingPathComponent("profiles")
         let panelRegistry = PanelRegistry(profilesDir: profilesDir)
         panelRegistry.loadProfiles()
-        panelRegistry.register(ConnectionsPanelDefinition())
-        panelRegistry.register(AIChatPanelDefinition())
-        panelRegistry.register(SkillsPanelDefinition())
-        panelRegistry.register(NotesPanelDefinition())
-        panelRegistry.register(SnippetsPanelDefinition())
-        // Register JS panel definitions from script plugins
+        panelRegistry.register(.connections)
+        panelRegistry.register(.aiChat)
+        panelRegistry.register(.skills)
+        panelRegistry.register(.notes)
+        panelRegistry.register(.snippets)
+        // Register JS panels from script plugins
         for plugin in pluginManager?.scriptPlugins ?? [] {
             for panelManifest in plugin.manifest.panels ?? [] {
                 let htmlURL = plugin.directory.appendingPathComponent(panelManifest.entrypoint)
-                panelRegistry.register(JSPanelDefinition(manifest: panelManifest, htmlURL: htmlURL))
+                panelRegistry.register(.jsPanel(manifest: panelManifest, htmlURL: htmlURL))
             }
         }
         self.panelRegistry = panelRegistry

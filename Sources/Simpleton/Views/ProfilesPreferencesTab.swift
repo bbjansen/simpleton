@@ -97,7 +97,7 @@ struct ProfilesPreferencesTab: View {
 
 struct ProfileEditor: View {
     @State var profile: PanelProfile
-    let allPanels: [any PanelDefinition]
+    let allPanels: [PanelDefinition]
     let isActive: Bool
     let isDefault: Bool
     let onSave: (PanelProfile) -> Void
