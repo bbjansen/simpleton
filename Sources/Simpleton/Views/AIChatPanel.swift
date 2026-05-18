@@ -314,9 +314,30 @@ struct AIChatPanelView: View {
         Keep responses concise and practical.
         """
 
+        // Build user prompt with conversation history so the AI has memory
+        let historyMessages = messages.dropLast() // drop the empty assistant placeholder we just appended
+        let userPrompt: String
+        if historyMessages.count > 1 { // more than just the current user message
+            var history: [String] = []
+            for msg in historyMessages.dropLast() { // exclude the current user message (it's at the end before the placeholder)
+                let role = msg.role == "user" ? "User" : "Assistant"
+                let content = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !content.isEmpty {
+                    history.append("\(role): \(content)")
+                }
+            }
+            if history.isEmpty {
+                userPrompt = text
+            } else {
+                userPrompt = "[Previous conversation]\n\(history.joined(separator: "\n\n"))\n\n[Current message]\n\(text)"
+            }
+        } else {
+            userPrompt = text
+        }
+
         Task {
             do {
-                let stream = aiService.stream(system: system, user: text, options: AIOptions(maxTokens: 1000, temperature: 0.3))
+                let stream = aiService.stream(system: system, user: userPrompt, options: AIOptions(maxTokens: 1000, temperature: 0.3))
                 for try await token in stream {
                     if let lastIndex = messages.indices.last, messages[lastIndex].role == "assistant" {
                         messages[lastIndex].content += token
@@ -605,7 +626,10 @@ final class AIChatPanelController: NSViewController {
     private func rebuildHostingView() {
         guard isViewLoaded else { return }
         let chatView = buildChatView()
-        self.view = NSHostingView(rootView: chatView)
+        // Update rootView in place — replacing self.view would orphan it from the parent NSSplitView
+        if let hostingView = self.view as? NSHostingView<AIChatPanelView> {
+            hostingView.rootView = chatView
+        }
     }
 
     private func buildChatView() -> AIChatPanelView {
