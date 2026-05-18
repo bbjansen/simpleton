@@ -10,6 +10,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.0.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
     ],
     targets: [
         .target(
@@ -18,7 +19,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "Simpleton",
-            dependencies: ["SimpletonCore", "SwiftTerm"],
+            dependencies: ["SimpletonCore", "SwiftTerm", .product(name: "Sparkle", package: "Sparkle")],
             resources: [.process("Resources")]
         ),
         .testTarget(
