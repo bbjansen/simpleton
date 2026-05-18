@@ -32,6 +32,9 @@ struct AIChatPanelView: View {
     var skillStore: SkillStore?
     var currentPaneProvider: (() -> PaneController?)?
 
+    /// Per-tab conversation. When set, multi-pane context is used.
+    var conversation: TabConversation?
+
     private var currentPane: PaneController? { currentPaneProvider?() }
 
     @State private var messages: [ChatMessage] = []
@@ -78,9 +81,44 @@ struct AIChatPanelView: View {
 
             Divider()
 
+            // Pane indicator bar (multi-pane only)
+            if let conv = conversation, conv.paneOrder.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(conv.paneOrder, id: \.self) { paneID in
+                            let label = conv.paneLabels[paneID] ?? "Pane"
+                            let isFocused = conv.buildCompositeContext()?.focusedPaneID == paneID
+                            Button(action: { conversation?.targetPaneID = paneID }) {
+                                HStack(spacing: 3) {
+                                    Circle()
+                                        .fill(isFocused ? Color.green : Color.secondary.opacity(0.4))
+                                        .frame(width: 6, height: 6)
+                                    Text(label)
+                                        .font(.system(size: 9))
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(conv.targetPaneID == paneID ? Color.accentColor.opacity(0.2) : Color(nsColor: NSColor(white: 0.12, alpha: 1)))
+                                .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+                .padding(.vertical, 4)
+                .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+            }
+
             // Skill parameter form overlay (shown when a skill is selected)
             if let skill = activeSkill {
                 let paneList: [(id: PaneID, label: String)] = {
+                    if let conv = conversation {
+                        return conv.paneOrder.map { id in
+                            (id: id, label: conv.paneLabels[id] ?? "Pane")
+                        }
+                    }
                     if let pane = currentPane { return [(id: pane.id, label: "Current pane")] }
                     return []
                 }()
@@ -247,7 +285,13 @@ struct AIChatPanelView: View {
         messages.append(ChatMessage(role: "assistant", content: ""))
         isStreaming = true
 
-        let context = contextProvider()
+        let contextStr: String
+        if let conv = conversation, let composite = conv.buildCompositeContext() {
+            contextStr = AIContextBuilder.formatCompositeForPrompt(composite)
+        } else {
+            let context = contextProvider()
+            contextStr = AIContextBuilder.formatForPrompt(context)
+        }
         var skillsSection = ""
         if let store = skillStore, !store.allSkills.isEmpty {
             let list = store.allSkills.map { "  /\($0.slug) — \($0.name)" }.joined(separator: "\n")
@@ -260,7 +304,7 @@ struct AIChatPanelView: View {
         }
         let system = """
         You are a helpful terminal assistant. The user is working in a terminal emulator.
-        \(AIContextBuilder.formatForPrompt(context))\(skillsSection)
+        \(contextStr)\(skillsSection)
 
         When suggesting terminal commands, always put them in a fenced code block:
         ```bash
@@ -305,49 +349,109 @@ struct AIChatPanelView: View {
     }
 
     private func runSkill() {
-        guard let skill = activeSkill, let pane = currentPane else { return }
-        activeSkill = nil
-        let params = skillValues
-        skillValues = [:]
-        aiSuggestedKeys = []
+        guard let skill = activeSkill else { return }
 
-        let session = AgentSession(aiService: aiService)
-        activeAgentSession = session
+        // Resolve target pane — prefer conversation-aware path
+        if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
+            let pane = resolved.pane
+            activeSkill = nil
+            let params = skillValues
+            skillValues = [:]
+            aiSuggestedKeys = []
 
-        let runningID = UUID()
-        agentBubbles.append(.execution(id: runningID, cmd: "Starting \(skill.name)…", explanation: "", status: .running, output: ""))
+            let session = AgentSession(aiService: aiService)
+            activeAgentSession = session
+            conv.activeSession = session
 
-        session.onMessage = { msg in
-            messages.append(msg)
-        }
-        session.onCommandExecuted = { cmd, output in
-            if let idx = agentBubbles.indices.last(where: {
-                if case .execution(_, _, _, let s, _) = agentBubbles[$0], s == .running { return true }
-                return false
-            }) {
-                if case .execution(let id, let c, let exp, _, _) = agentBubbles[idx] {
-                    agentBubbles[idx] = .execution(id: id, cmd: c, explanation: exp, status: .done, output: output)
+            let runningID = UUID()
+            agentBubbles.append(.execution(id: runningID, cmd: "Starting \(skill.name)…", explanation: "", status: .running, output: ""))
+
+            session.onMessage = { msg in
+                messages.append(msg)
+                conv.messages.append(msg)
+            }
+            session.onCommandExecuted = { cmd, output, paneLabel in
+                if let idx = agentBubbles.indices.last(where: {
+                    if case .execution(_, _, _, let s, _) = agentBubbles[$0], s == .running { return true }
+                    return false
+                }) {
+                    if case .execution(let id, _, let exp, _, _) = agentBubbles[idx] {
+                        agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: "[\(paneLabel)] \(exp)", status: .done, output: output)
+                    }
                 }
             }
-        }
-        session.onComplete = {
-            isStreaming = false
-            activeAgentSession = nil
-        }
-        session.onError = { err in
-            messages.append(ChatMessage(role: "assistant", content: "Error: \(err)"))
-            isStreaming = false
-            activeAgentSession = nil
-        }
-        session.onApprovalNeeded = { cmd, explanation, completion in
-            let approvalID = UUID()
-            pendingApprovals[approvalID] = completion
-            agentBubbles.append(.execution(id: approvalID, cmd: cmd, explanation: explanation, status: .waitingApproval, output: ""))
-        }
+            session.onComplete = {
+                isStreaming = false
+                activeAgentSession = nil
+                conv.activeSession = nil
+                conv.isRunning = false
+            }
+            session.onError = { err in
+                let errMsg = ChatMessage(role: "assistant", content: "Error: \(err)")
+                messages.append(errMsg)
+                conv.messages.append(errMsg)
+                isStreaming = false
+                activeAgentSession = nil
+                conv.activeSession = nil
+                conv.isRunning = false
+            }
+            session.onApprovalNeeded = { cmd, explanation, paneLabel, completion in
+                let approvalID = UUID()
+                pendingApprovals[approvalID] = { action in completion(action, nil) }
+                agentBubbles.append(.execution(id: approvalID, cmd: cmd, explanation: "[\(paneLabel)] \(explanation)", status: .waitingApproval, output: ""))
+            }
 
-        isStreaming = true
-        Task {
-            await session.run(skill: skill, params: params, pane: pane, autopilot: autopilotEnabled)
+            isStreaming = true
+            conv.isRunning = true
+            Task {
+                await session.run(skill: skill, params: params, conversation: conv, focusedPane: pane, autopilot: autopilotEnabled)
+            }
+        } else {
+            // Legacy single-pane path
+            guard let pane = currentPane else { return }
+            activeSkill = nil
+            let params = skillValues
+            skillValues = [:]
+            aiSuggestedKeys = []
+
+            let session = AgentSession(aiService: aiService)
+            activeAgentSession = session
+
+            let runningID = UUID()
+            agentBubbles.append(.execution(id: runningID, cmd: "Starting \(skill.name)…", explanation: "", status: .running, output: ""))
+
+            session.onMessage = { msg in
+                messages.append(msg)
+            }
+            session.onCommandExecuted = { cmd, output, _ in
+                if let idx = agentBubbles.indices.last(where: {
+                    if case .execution(_, _, _, let s, _) = agentBubbles[$0], s == .running { return true }
+                    return false
+                }) {
+                    if case .execution(let id, let c, let exp, _, _) = agentBubbles[idx] {
+                        agentBubbles[idx] = .execution(id: id, cmd: c, explanation: exp, status: .done, output: output)
+                    }
+                }
+            }
+            session.onComplete = {
+                isStreaming = false
+                activeAgentSession = nil
+            }
+            session.onError = { err in
+                messages.append(ChatMessage(role: "assistant", content: "Error: \(err)"))
+                isStreaming = false
+                activeAgentSession = nil
+            }
+            session.onApprovalNeeded = { cmd, explanation, _, completion in
+                let approvalID = UUID()
+                pendingApprovals[approvalID] = { action in completion(action, nil) }
+                agentBubbles.append(.execution(id: approvalID, cmd: cmd, explanation: explanation, status: .waitingApproval, output: ""))
+            }
+
+            isStreaming = true
+            Task {
+                await session.run(skill: skill, params: params, pane: pane, autopilot: autopilotEnabled)
+            }
         }
     }
 }
@@ -480,6 +584,11 @@ final class AIChatPanelController: NSViewController {
     var skillStore: SkillStore?
     var currentPaneProvider: (() -> PaneController?)?
 
+    /// Per-tab conversation. Set by PanelRegistry.rebindAIChat(to:) when the active tab changes.
+    var conversation: TabConversation? {
+        didSet { rebuildHostingView() }
+    }
+
     init(aiService: AIService) {
         self.aiService = aiService
         super.init(nibName: nil, bundle: nil)
@@ -488,6 +597,18 @@ final class AIChatPanelController: NSViewController {
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
+        let chatView = buildChatView()
+        self.view = NSHostingView(rootView: chatView)
+        self.view.frame = NSRect(x: 0, y: 0, width: 320, height: 600)
+    }
+
+    private func rebuildHostingView() {
+        guard isViewLoaded else { return }
+        let chatView = buildChatView()
+        self.view = NSHostingView(rootView: chatView)
+    }
+
+    private func buildChatView() -> AIChatPanelView {
         var chatView = AIChatPanelView(
             aiService: aiService,
             contextProvider: { [weak self] in self?.contextProvider?() ?? AIContext(os: "macOS", recentCommands: []) },
@@ -496,7 +617,7 @@ final class AIChatPanelController: NSViewController {
         )
         chatView.skillStore = skillStore
         chatView.currentPaneProvider = currentPaneProvider
-        self.view = NSHostingView(rootView: chatView)
-        self.view.frame = NSRect(x: 0, y: 0, width: 320, height: 600)
+        chatView.conversation = conversation
+        return chatView
     }
 }
