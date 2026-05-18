@@ -1,5 +1,6 @@
 // Sources/Simpleton/AI/AgentSession.swift
 import Foundation
+import AppKit
 import SimpletonCore
 
 @MainActor
@@ -249,9 +250,127 @@ final class AgentSession: ObservableObject {
             turns.append(.toolResult(toolCallID: id, output: output))
             return .continued
 
+        case "edit_file":
+            guard let path = args["path"] as? String,
+                  let oldText = args["old_text"] as? String,
+                  let newText = args["new_text"] as? String else {
+                turns.append(.toolResult(toolCallID: id, output: "Missing 'path', 'old_text', or 'new_text' parameter"))
+                return .continued
+            }
+            let expandedPath = NSString(string: path).expandingTildeInPath
+            do {
+                var content = try String(contentsOfFile: expandedPath, encoding: .utf8)
+                let occurrences = content.components(separatedBy: oldText).count - 1
+                if occurrences == 0 {
+                    turns.append(.toolResult(toolCallID: id, output: "Error: old_text not found in \(path). Make sure it matches exactly (including whitespace)."))
+                } else if occurrences > 1 && !(args["replace_all"] as? Bool ?? false) {
+                    turns.append(.toolResult(toolCallID: id, output: "Error: old_text found \(occurrences) times in \(path). Set replace_all=true or provide more context to make the match unique."))
+                } else {
+                    if args["replace_all"] as? Bool ?? false {
+                        content = content.replacingOccurrences(of: oldText, with: newText)
+                    } else {
+                        if let range = content.range(of: oldText) {
+                            content.replaceSubrange(range, with: newText)
+                        }
+                    }
+                    try content.write(toFile: expandedPath, atomically: true, encoding: .utf8)
+                    turns.append(.toolResult(toolCallID: id, output: "Edited \(path): replaced \(oldText.count) chars with \(newText.count) chars"))
+                }
+            } catch {
+                turns.append(.toolResult(toolCallID: id, output: "Error editing \(path): \(error.localizedDescription)"))
+            }
+            return .continued
+
+        case "get_git_status":
+            let dir = args["directory"] as? String
+            let result = runSubprocess("/usr/bin/git", args: ["status", "--short"], cwd: dir)
+            turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[Clean working tree]" : result))
+            return .continued
+
+        case "get_git_diff":
+            let dir = args["directory"] as? String
+            let staged = args["staged"] as? Bool ?? false
+            var gitArgs = ["diff"]
+            if staged { gitArgs.append("--cached") }
+            gitArgs.append("--stat")
+            let result = runSubprocess("/usr/bin/git", args: gitArgs, cwd: dir)
+            turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[No changes]" : result))
+            return .continued
+
+        case "get_git_log":
+            let dir = args["directory"] as? String
+            let count = args["count"] as? Int ?? 10
+            let result = runSubprocess("/usr/bin/git", args: ["log", "--oneline", "-\(min(count, 50))"], cwd: dir)
+            turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[No commits]" : result))
+            return .continued
+
+        case "clipboard_copy":
+            guard let text = args["text"] as? String else {
+                turns.append(.toolResult(toolCallID: id, output: "Missing 'text' parameter"))
+                return .continued
+            }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            turns.append(.toolResult(toolCallID: id, output: "Copied \(text.count) chars to clipboard"))
+            return .continued
+
+        case "send_keys":
+            guard let keys = args["keys"] as? String else {
+                turns.append(.toolResult(toolCallID: id, output: "Missing 'keys' parameter"))
+                return .continued
+            }
+            let paneNum = args["pane"] as? Int
+            let resolved = conversation.resolvePane(number: paneNum)
+            let pane = resolved?.pane ?? focusedPane
+            let label = resolved?.label ?? "focused pane"
+            // Map special key names to control characters
+            let mapped: String
+            switch keys.lowercased() {
+            case "ctrl+c", "ctrl-c": mapped = "\u{03}"
+            case "ctrl+d", "ctrl-d": mapped = "\u{04}"
+            case "ctrl+z", "ctrl-z": mapped = "\u{1A}"
+            case "ctrl+l", "ctrl-l": mapped = "\u{0C}"
+            case "enter", "return": mapped = "\n"
+            case "tab": mapped = "\t"
+            case "escape", "esc": mapped = "\u{1B}"
+            case "up": mapped = "\u{1B}[A"
+            case "down": mapped = "\u{1B}[B"
+            case "left": mapped = "\u{1B}[D"
+            case "right": mapped = "\u{1B}[C"
+            default: mapped = keys
+            }
+            pane.terminalView.send(data: Array(mapped.utf8)[...])
+            turns.append(.toolResult(toolCallID: id, output: "Sent '\(keys)' to \(label)"))
+            return .continued
+
         default:
             turns.append(.toolResult(toolCallID: id, output: "Unknown tool: \(name)"))
             return .continued
+        }
+    }
+
+    private func runSubprocess(_ executable: String, args: [String], cwd: String? = nil) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = args
+        if let cwd = cwd {
+            process.currentDirectoryURL = URL(fileURLWithPath: NSString(string: cwd).expandingTildeInPath)
+        }
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            let output = String(data: data, encoding: .utf8) ?? ""
+            let maxChars = 8000
+            if output.count > maxChars {
+                return String(output.prefix(maxChars)) + "\n[... truncated]"
+            }
+            return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            return "Error: \(error.localizedDescription)"
         }
     }
 

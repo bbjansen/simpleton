@@ -308,8 +308,14 @@ struct AIChatPanelView: View {
         - **get_pane_state(pane)**: Detailed pane info including CWD, shell, connection type, recent output.
         - **read_file(path)**: Read a file directly (up to 10k chars). Avoids shell quoting issues.
         - **write_file(path, content)**: Write a file directly. Creates parent directories. Avoids heredoc escaping.
+        - **edit_file(path, old_text, new_text)**: Search-and-replace in a file. Safer than write_file for targeted edits.
         - **list_directory(path?)**: List files/dirs with types and sizes. Faster than ls.
         - **search_files(pattern, directory?)**: Recursive grep across files. Find code, config values, etc.
+        - **get_git_status(directory?)**: Git status (short format).
+        - **get_git_diff(directory?, staged?)**: Git diff summary.
+        - **get_git_log(directory?, count?)**: Recent commit history.
+        - **clipboard_copy(text)**: Copy text to the system clipboard.
+        - **send_keys(keys, pane?)**: Send keystrokes to a pane — ctrl+c, ctrl+d, enter, arrow keys, etc. Use to stop processes, navigate menus, or provide interactive input.
         - **get_system_info()**: OS, hostname, CPU, memory, uptime, user, shell.
 
         ## How to act

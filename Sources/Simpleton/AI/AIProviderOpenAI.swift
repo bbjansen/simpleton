@@ -257,6 +257,88 @@ struct OpenAIProvider: AIProviderProtocol {
                     "description": "Get OS, hostname, CPU, memory, uptime, user, shell.",
                     "parameters": ["type": "object", "properties": [:] as [String: Any], "required": [] as [String]] as [String: Any]
                 ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "edit_file",
+                    "description": "Replace specific text in a file. Safer than write_file for targeted changes.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "path": ["type": "string"],
+                            "old_text": ["type": "string", "description": "Exact text to find"],
+                            "new_text": ["type": "string", "description": "Replacement"],
+                            "replace_all": ["type": "boolean", "description": "Replace all matches (default false)"]
+                        ] as [String: Any],
+                        "required": ["path", "old_text", "new_text"]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "get_git_status",
+                    "description": "Git status (short format).",
+                    "parameters": ["type": "object", "properties": ["directory": ["type": "string"]] as [String: Any], "required": [] as [String]] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "get_git_diff",
+                    "description": "Git diff summary. staged=true for staged changes.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "directory": ["type": "string"],
+                            "staged": ["type": "boolean"]
+                        ] as [String: Any],
+                        "required": [] as [String]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "get_git_log",
+                    "description": "Recent git commits (oneline).",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "directory": ["type": "string"],
+                            "count": ["type": "integer"]
+                        ] as [String: Any],
+                        "required": [] as [String]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "clipboard_copy",
+                    "description": "Copy text to system clipboard.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": ["text": ["type": "string"]] as [String: Any],
+                        "required": ["text"]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "send_keys",
+                    "description": "Send keystrokes to a pane: ctrl+c, ctrl+d, enter, tab, escape, arrow keys, or raw text.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "keys": ["type": "string", "description": "Key name or raw text"],
+                            "pane": ["type": "integer", "description": "Target pane (1-based)"]
+                        ] as [String: Any],
+                        "required": ["keys"]
+                    ] as [String: Any]
+                ] as [String: Any]
             ]
         ]
 

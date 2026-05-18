@@ -213,6 +213,78 @@ struct AnthropicProvider: AIProviderProtocol {
                     "properties": [:] as [String: Any],
                     "required": [] as [String]
                 ] as [String: Any]
+            ],
+            [
+                "name": "edit_file",
+                "description": "Edit a file by replacing specific text. Safer than write_file for targeted changes — preserves the rest of the file.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "path": ["type": "string", "description": "File path"],
+                        "old_text": ["type": "string", "description": "Exact text to find (must match including whitespace)"],
+                        "new_text": ["type": "string", "description": "Replacement text"],
+                        "replace_all": ["type": "boolean", "description": "Replace all occurrences (default: false, fails if multiple matches)"]
+                    ] as [String: Any],
+                    "required": ["path", "old_text", "new_text"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "get_git_status",
+                "description": "Get git status (short format) for a repository.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "directory": ["type": "string", "description": "Repository path (default: pane CWD)"]
+                    ] as [String: Any],
+                    "required": [] as [String]
+                ] as [String: Any]
+            ],
+            [
+                "name": "get_git_diff",
+                "description": "Get git diff summary (stat format). Use staged=true for staged changes.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "directory": ["type": "string", "description": "Repository path"],
+                        "staged": ["type": "boolean", "description": "Show staged changes (default: false)"]
+                    ] as [String: Any],
+                    "required": [] as [String]
+                ] as [String: Any]
+            ],
+            [
+                "name": "get_git_log",
+                "description": "Get recent git commit history (oneline format).",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "directory": ["type": "string", "description": "Repository path"],
+                        "count": ["type": "integer", "description": "Number of commits (default 10, max 50)"]
+                    ] as [String: Any],
+                    "required": [] as [String]
+                ] as [String: Any]
+            ],
+            [
+                "name": "clipboard_copy",
+                "description": "Copy text to the system clipboard.",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "text": ["type": "string", "description": "Text to copy"]
+                    ] as [String: Any],
+                    "required": ["text"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "send_keys",
+                "description": "Send keystrokes or control sequences to a terminal pane. Use for interactive input (Ctrl+C to stop a process, Enter to confirm, arrow keys, etc.).",
+                "input_schema": [
+                    "type": "object",
+                    "properties": [
+                        "keys": ["type": "string", "description": "Keys to send: 'ctrl+c', 'ctrl+d', 'ctrl+z', 'enter', 'tab', 'escape', 'up', 'down', 'left', 'right', or raw text"],
+                        "pane": ["type": "integer", "description": "Target pane number (1-based). Omit for focused pane."]
+                    ] as [String: Any],
+                    "required": ["keys"]
+                ] as [String: Any]
             ]
         ]
 
