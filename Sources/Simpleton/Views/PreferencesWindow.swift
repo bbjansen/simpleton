@@ -13,11 +13,13 @@ final class PreferencesWindowController {
     private var pluginManager: PluginManager?
     private var aiConfig: AIConfig
     private var onAIConfigChanged: ((AIConfig) -> Void)?
+    private var skillStore: SkillStore?
 
-    init(config: AppConfig, pluginManager: PluginManager? = nil, aiConfig: AIConfig = AIConfig(), onConfigChanged: @escaping (AppConfig) -> Void, onAIConfigChanged: ((AIConfig) -> Void)? = nil) {
+    init(config: AppConfig, pluginManager: PluginManager? = nil, aiConfig: AIConfig = AIConfig(), skillStore: SkillStore? = nil, onConfigChanged: @escaping (AppConfig) -> Void, onAIConfigChanged: ((AIConfig) -> Void)? = nil) {
         self.config = config
         self.pluginManager = pluginManager
         self.aiConfig = aiConfig
+        self.skillStore = skillStore
         self.onConfigChanged = onConfigChanged
         self.onAIConfigChanged = onAIConfigChanged
     }
@@ -28,7 +30,7 @@ final class PreferencesWindowController {
             return
         }
 
-        let prefsView = PreferencesView(config: config, pluginManager: pluginManager, aiConfig: aiConfig, onChanged: { [weak self] newConfig in
+        let prefsView = PreferencesView(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, onChanged: { [weak self] newConfig in
             self?.config = newConfig
             self?.onConfigChanged?(newConfig)
         }, onAIConfigChanged: { [weak self] newAIConfig in
@@ -43,6 +45,7 @@ final class PreferencesWindowController {
             defer: false
         )
         window.title = "Preferences"
+        window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
         window.contentView = NSHostingView(rootView: prefsView)
         window.center()
@@ -71,6 +74,7 @@ struct PreferencesView: View {
     @State var config: AppConfig
     let pluginManager: PluginManager?
     @State var aiConfig: AIConfig
+    let skillStore: SkillStore?
     let onChanged: (AppConfig) -> Void
     let onAIConfigChanged: (AIConfig) -> Void
 
@@ -88,6 +92,7 @@ struct PreferencesView: View {
             t.append((5, "Plugins", "puzzlepiece.extension"))
         }
         t.append((6, "AI", "sparkles"))
+        t.append((7, "Skills", "bolt"))
         return t
     }
 
@@ -117,7 +122,7 @@ struct PreferencesView: View {
                 Spacer()
             }
             .padding(12)
-            .frame(width: 160)
+            .frame(width: 180)
             .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
 
             // Content
@@ -138,6 +143,10 @@ struct PreferencesView: View {
                             aiConfig = newAIConfig
                             onAIConfigChanged(newAIConfig)
                         })
+                    case 7:
+                        if let store = skillStore {
+                            SkillsPreferencesTab(skillStore: store)
+                        }
                     default: EmptyView()
                     }
                 }
