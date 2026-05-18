@@ -66,6 +66,18 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Callback when this pane gains focus (user clicks it).
     var onFocused: ((PaneController) -> Void)?
 
+    /// Last known working directory (updated via OSC 7 / shell integration).
+    private(set) var currentDirectory: String?
+
+    var sshHost: String? {
+        guard case .ssh = connectionType else { return nil }
+        return sshBookmark?.host
+    }
+    var sshUser: String? {
+        guard case .ssh = connectionType else { return nil }
+        return sshBookmark?.user
+    }
+
     /// Stored environment for shell restarts.
     var shellEnvironment: [String]?
 
@@ -242,6 +254,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
         if let dir = directory {
+            currentDirectory = dir
             onDirectoryChange?(dir)
         }
     }
