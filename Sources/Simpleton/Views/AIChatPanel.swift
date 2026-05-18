@@ -316,6 +316,21 @@ struct AIChatPanelView: View {
         - **find_process(name)**: Find running processes by name.
         - **kill_process(pid, signal?)**: Send signals (TERM, KILL, INT) to processes.
         - **get_system_info()**: OS, hostname, CPU, memory, uptime, user, shell.
+        - **web_search(query, count?)**: Search the web via DuckDuckGo. Returns titles, snippets, and URLs. Default 5 results, max 10.
+        - **fetch_url(url)**: Fetch a web page and return text content (HTML stripped, max 5000 chars). Use to read documentation, API responses, etc.
+
+        ## Interactive commands
+        Some commands require interactive input (y/n prompts, selection menus, passwords).
+        When a command appears to be waiting for input (no new output for several seconds):
+        1. Use read_pane_output to check what the command is showing
+        2. Use send_keys to send the appropriate response (e.g., "y", "enter", arrow keys)
+        3. For password prompts: STOP and tell the user — never type passwords
+
+        Common patterns:
+        - "y/n" or "[Y/n]" prompts: send_keys with "y" then "enter"
+        - "Press any key": send_keys with "enter"
+        - Arrow-key menus: send_keys with "up"/"down" then "enter"
+        - "password:" or "Password:": STOP immediately, ask the user to enter it manually
 
         ## How to act
         - When the user asks you to DO something (install, run, fix, deploy, set up, create files, etc.), use your tools to execute it directly. Don't just suggest — act.

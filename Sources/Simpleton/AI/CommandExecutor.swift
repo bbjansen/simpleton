@@ -105,6 +105,8 @@ extension AgentSession {
         let maxWait = 30_000
         let pollMs  = 200
         var elapsed = 0
+        var lastBufferHash: Int = 0
+        var stableElapsed = 0
         // Pattern: __SIMPLETON_DONE_xxxx_EXIT_N__
         let exitPattern = "\(sentinel)_EXIT_"
 
@@ -123,7 +125,6 @@ extension AgentSession {
 
             if let range = buffer.range(of: exitPattern) {
                 let before = String(buffer[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-                // Extract exit code number after _EXIT_
                 let afterPrefix = String(buffer[range.upperBound...])
                 let exitCode: Int?
                 if let endRange = afterPrefix.range(of: "__") {
@@ -140,6 +141,33 @@ extension AgentSession {
                     let before = String(buffer[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
                     return (before, nil)
                 }
+            }
+
+            // Stall detection: check if buffer has changed
+            let currentHash = buffer.hashValue
+            if currentHash == lastBufferHash {
+                stableElapsed += pollMs
+            } else {
+                stableElapsed = 0
+                lastBufferHash = currentHash
+            }
+
+            // After 5 seconds with no output change, check for interactive prompt
+            if stableElapsed >= 5000 {
+                let lastLine = lines.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?
+                    .trimmingCharacters(in: .whitespaces) ?? ""
+                let looksLikePrompt = lastLine.hasSuffix(":") || lastLine.hasSuffix("?") ||
+                    lastLine.hasSuffix(">") || lastLine.hasSuffix("]") ||
+                    lastLine.lowercased().contains("password") ||
+                    lastLine.contains("[y/") || lastLine.contains("[Y/") ||
+                    lastLine.contains("(y/n)") || lastLine.contains("(Y/N)")
+                if looksLikePrompt {
+                    let output = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                        .joined(separator: "\n")
+                    return ("[Command appears to be waiting for input. Last line: '\(lastLine)'. Use read_pane_output to check and send_keys to respond.]" +
+                            "\n\nOutput so far:\n\(output)", nil)
+                }
+                stableElapsed = 0
             }
         }
         return ("[Timed out waiting for command output after \(maxWait/1000)s]", nil)

@@ -75,6 +75,7 @@ final class AgentSession: ObservableObject {
         self.toolRegistry = ToolHandlerRegistry([
             FileTools(), TerminalTools(), GitTools(),
             SystemTools(), NetworkTools(), ProcessTools(),
+            WebTools(),
         ])
     }
 
