@@ -27,7 +27,7 @@ struct AIChatPanelView: View {
     let aiService: AIService
     let contextProvider: () -> AIContext
     let onInsertCommand: (String) -> Void
-    let onDismiss: () -> Void
+    var onDismiss: (() -> Void)?
 
     var skillStore: SkillStore?
     var currentPaneProvider: (() -> PaneController?)?
@@ -65,11 +65,13 @@ struct AIChatPanelView: View {
                 .toggleStyle(.button)
                 .controlSize(.mini)
                 .tint(.purple)
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                if let dismiss = onDismiss {
+                    Button(action: dismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(12)
             .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
@@ -246,9 +248,19 @@ struct AIChatPanelView: View {
         isStreaming = true
 
         let context = contextProvider()
+        var skillsSection = ""
+        if let store = skillStore, !store.allSkills.isEmpty {
+            let list = store.allSkills.map { "  /\($0.slug) — \($0.name)" }.joined(separator: "\n")
+            skillsSection = """
+
+
+        Available skills (invoke with /slug or the bolt button):
+        \(list)
+        """
+        }
         let system = """
         You are a helpful terminal assistant. The user is working in a terminal emulator.
-        \(AIContextBuilder.formatForPrompt(context))
+        \(AIContextBuilder.formatForPrompt(context))\(skillsSection)
 
         When suggesting terminal commands, always put them in a fenced code block:
         ```bash
@@ -480,7 +492,7 @@ final class AIChatPanelController: NSViewController {
             aiService: aiService,
             contextProvider: { [weak self] in self?.contextProvider?() ?? AIContext(os: "macOS", recentCommands: []) },
             onInsertCommand: { [weak self] cmd in self?.onInsertCommand?(cmd) },
-            onDismiss: { [weak self] in self?.onDismiss?() }
+            onDismiss: onDismiss.map { _ in { [weak self] in self?.onDismiss?() } }
         )
         chatView.skillStore = skillStore
         chatView.currentPaneProvider = currentPaneProvider
