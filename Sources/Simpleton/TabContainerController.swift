@@ -74,10 +74,14 @@ final class TabContainerController: NSViewController {
         super.init(nibName: nil, bundle: nil)
 
         splitController.paneFactory = { [weak self] paneID in
-            self?.createPane(id: paneID) ?? PaneController(
-                id: paneID, frame: .zero,
-                connectionType: .local(shell: "/bin/zsh", workingDirectory: NSHomeDirectory())
-            )
+            guard let self else {
+                return PaneController(
+                    id: paneID, frame: .zero,
+                    connectionType: .local(shell: "/bin/zsh", workingDirectory: NSHomeDirectory())
+                )
+            }
+            let focusedCWD = self.splitController.panes[self.splitController.focusedPaneID]?.currentDirectory
+            return self.createPane(id: paneID, inheritedWorkingDirectory: focusedCWD)
         }
 
         closeObserver = NotificationCenter.default.addObserver(
@@ -367,9 +371,9 @@ final class TabContainerController: NSViewController {
 
     // MARK: - Pane Factory
 
-    private func createPane(id: PaneID) -> PaneController {
+    private func createPane(id: PaneID, inheritedWorkingDirectory: String? = nil) -> PaneController {
         let shell = ShellDetector.detectShell(config: config)
-        let workingDir = ShellDetector.workingDirectory(config: config)
+        let workingDir = inheritedWorkingDirectory ?? ShellDetector.workingDirectory(config: config)
         let pane = PaneController(
             id: id,
             frame: NSRect(x: 0, y: 0, width: 400, height: 300),
