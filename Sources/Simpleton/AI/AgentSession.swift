@@ -32,6 +32,7 @@ final class AgentSession: ObservableObject {
     private let aiService: AIService
     private let processRunner = ProcessRunner()
     private let promptBuilder = PromptBuilder()
+    private let toolRegistry: ToolHandlerRegistry
     private var isCancelled = false
     private var pendingApprovalContinuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>?
     private var turnCount = 0
@@ -40,6 +41,10 @@ final class AgentSession: ObservableObject {
 
     init(aiService: AIService) {
         self.aiService = aiService
+        self.toolRegistry = ToolHandlerRegistry([
+            FileTools(), TerminalTools(), GitTools(),
+            SystemTools(), NetworkTools(), ProcessTools(),
+        ])
     }
 
     func cancel() {
@@ -117,325 +122,22 @@ final class AgentSession: ObservableObject {
         conversation: TabConversation, focusedPane: PaneController,
         autopilot: Bool, turns: inout [ConversationTurn]
     ) async -> ToolHandleResult {
-        switch name {
-        case "run_command":
+        if name == "run_command" {
             return await handleRunCommand(
                 id: id, args: args, conversation: conversation,
                 focusedPane: focusedPane, autopilot: autopilot, turns: &turns
             )
-        case "read_pane_output":
-            let paneNum = args["pane"] as? Int
-            let lines = min(args["lines"] as? Int ?? 50, 200)
-            let resolved = conversation.resolvePane(number: paneNum)
-            let pane = resolved?.pane ?? focusedPane
-            let label = resolved?.label ?? "focused pane"
+        }
 
-            let output = readTerminalOutput(pane: pane, lines: lines)
-            turns.append(.toolResult(toolCallID: id, output: "[\(label)] Recent output (\(lines) lines):\n\(output)"))
-            return .continued
-
-        case "list_panes":
-            let output = listPanesOutput(conversation: conversation, focusedPane: focusedPane)
+        let context = ToolContext(conversation: conversation, focusedPane: focusedPane, processRunner: processRunner)
+        if let handler = toolRegistry.handler(for: name) {
+            let output = await handler.handle(name: name, args: args, context: context)
             turns.append(.toolResult(toolCallID: id, output: output))
-            return .continued
-
-        case "get_pane_state":
-            let paneNum = args["pane"] as? Int ?? 1
-            let resolved = conversation.resolvePane(number: paneNum)
-            if let pane = resolved?.pane {
-                let output = paneStateOutput(pane: pane, label: resolved?.label ?? "Pane \(paneNum)")
-                turns.append(.toolResult(toolCallID: id, output: output))
-            } else {
-                turns.append(.toolResult(toolCallID: id, output: "Pane \(paneNum) not found."))
-            }
-            return .continued
-
-        case "read_file":
-            guard let path = args["path"] as? String else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'path' parameter"))
-                return .continued
-            }
-            let expandedPath = NSString(string: path).expandingTildeInPath
-            do {
-                let content = try String(contentsOfFile: expandedPath, encoding: .utf8)
-                let maxChars = 10_000
-                let truncated = content.count > maxChars
-                let result = truncated ? String(content.prefix(maxChars)) + "\n\n[... truncated at \(maxChars) chars, file is \(content.count) chars total]" : content
-                turns.append(.toolResult(toolCallID: id, output: result))
-            } catch {
-                turns.append(.toolResult(toolCallID: id, output: "Error reading \(path): \(error.localizedDescription)"))
-            }
-            return .continued
-
-        case "write_file":
-            guard let path = args["path"] as? String,
-                  let content = args["content"] as? String else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'path' or 'content' parameter"))
-                return .continued
-            }
-            let expandedPath = NSString(string: path).expandingTildeInPath
-            do {
-                let dir = (expandedPath as NSString).deletingLastPathComponent
-                try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-                try content.write(toFile: expandedPath, atomically: true, encoding: .utf8)
-                turns.append(.toolResult(toolCallID: id, output: "Wrote \(content.count) chars to \(path)"))
-            } catch {
-                turns.append(.toolResult(toolCallID: id, output: "Error writing \(path): \(error.localizedDescription)"))
-            }
-            return .continued
-
-        case "list_directory":
-            let path = args["path"] as? String ?? "."
-            let expandedPath = NSString(string: path).expandingTildeInPath
-            do {
-                let items = try FileManager.default.contentsOfDirectory(atPath: expandedPath)
-                var lines: [String] = []
-                for item in items.sorted() {
-                    let fullPath = (expandedPath as NSString).appendingPathComponent(item)
-                    var isDir: ObjCBool = false
-                    FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir)
-                    let attrs = try? FileManager.default.attributesOfItem(atPath: fullPath)
-                    let size = attrs?[.size] as? UInt64 ?? 0
-                    let suffix = isDir.boolValue ? "/" : ""
-                    lines.append("\(item)\(suffix)  \(isDir.boolValue ? "dir" : processRunner.formatFileSize(size))")
-                }
-                turns.append(.toolResult(toolCallID: id, output: lines.isEmpty ? "[Empty directory]" : lines.joined(separator: "\n")))
-            } catch {
-                turns.append(.toolResult(toolCallID: id, output: "Error listing \(path): \(error.localizedDescription)"))
-            }
-            return .continued
-
-        case "search_files":
-            guard let pattern = args["pattern"] as? String else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'pattern' parameter"))
-                return .continued
-            }
-            let dir = args["directory"] as? String ?? "."
-            let expandedDir = NSString(string: dir).expandingTildeInPath
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/grep")
-            process.arguments = ["-r", "-n", "-l", "--include=*", pattern, expandedDir]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = Pipe()
-            do {
-                try process.run()
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                let lines = output.components(separatedBy: "\n").filter { !$0.isEmpty }
-                if lines.isEmpty {
-                    turns.append(.toolResult(toolCallID: id, output: "No files matching '\(pattern)' in \(dir)"))
-                } else {
-                    let maxFiles = 50
-                    let truncated = lines.count > maxFiles
-                    let result = lines.prefix(maxFiles).joined(separator: "\n") + (truncated ? "\n\n[... and \(lines.count - maxFiles) more files]" : "")
-                    turns.append(.toolResult(toolCallID: id, output: result))
-                }
-            } catch {
-                turns.append(.toolResult(toolCallID: id, output: "Error searching: \(error.localizedDescription)"))
-            }
-            return .continued
-
-        case "get_system_info":
-            let info = ProcessInfo.processInfo
-            let output = """
-            OS: macOS \(info.operatingSystemVersionString)
-            Host: \(Host.current().localizedName ?? "unknown")
-            CPU cores: \(info.processorCount)
-            Memory: \(info.physicalMemory / (1024 * 1024 * 1024)) GB
-            Uptime: \(processRunner.formatUptime(info.systemUptime))
-            User: \(NSUserName())
-            Home: \(NSHomeDirectory())
-            Shell: \(ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-            """
-            turns.append(.toolResult(toolCallID: id, output: output))
-            return .continued
-
-        case "edit_file":
-            guard let path = args["path"] as? String,
-                  let oldText = args["old_text"] as? String,
-                  let newText = args["new_text"] as? String else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'path', 'old_text', or 'new_text' parameter"))
-                return .continued
-            }
-            let expandedPath = NSString(string: path).expandingTildeInPath
-            do {
-                var content = try String(contentsOfFile: expandedPath, encoding: .utf8)
-                let occurrences = content.components(separatedBy: oldText).count - 1
-                if occurrences == 0 {
-                    turns.append(.toolResult(toolCallID: id, output: "Error: old_text not found in \(path). Make sure it matches exactly (including whitespace)."))
-                } else if occurrences > 1 && !(args["replace_all"] as? Bool ?? false) {
-                    turns.append(.toolResult(toolCallID: id, output: "Error: old_text found \(occurrences) times in \(path). Set replace_all=true or provide more context to make the match unique."))
-                } else {
-                    if args["replace_all"] as? Bool ?? false {
-                        content = content.replacingOccurrences(of: oldText, with: newText)
-                    } else {
-                        if let range = content.range(of: oldText) {
-                            content.replaceSubrange(range, with: newText)
-                        }
-                    }
-                    try content.write(toFile: expandedPath, atomically: true, encoding: .utf8)
-                    turns.append(.toolResult(toolCallID: id, output: "Edited \(path): replaced \(oldText.count) chars with \(newText.count) chars"))
-                }
-            } catch {
-                turns.append(.toolResult(toolCallID: id, output: "Error editing \(path): \(error.localizedDescription)"))
-            }
-            return .continued
-
-        case "get_git_status":
-            let dir = args["directory"] as? String
-            let result = processRunner.run("/usr/bin/git", args: ["status", "--short"], cwd: dir)
-            turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[Clean working tree]" : result))
-            return .continued
-
-        case "get_git_diff":
-            let dir = args["directory"] as? String
-            let staged = args["staged"] as? Bool ?? false
-            var gitArgs = ["diff"]
-            if staged { gitArgs.append("--cached") }
-            gitArgs.append("--stat")
-            let result = processRunner.run("/usr/bin/git", args: gitArgs, cwd: dir)
-            turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[No changes]" : result))
-            return .continued
-
-        case "get_git_log":
-            let dir = args["directory"] as? String
-            let count = args["count"] as? Int ?? 10
-            let result = processRunner.run("/usr/bin/git", args: ["log", "--oneline", "-\(min(count, 50))"], cwd: dir)
-            turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "[No commits]" : result))
-            return .continued
-
-        case "clipboard_copy":
-            guard let text = args["text"] as? String else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'text' parameter"))
-                return .continued
-            }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-            turns.append(.toolResult(toolCallID: id, output: "Copied \(text.count) chars to clipboard"))
-            return .continued
-
-        case "send_keys":
-            guard let keys = args["keys"] as? String else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'keys' parameter"))
-                return .continued
-            }
-            let paneNum = args["pane"] as? Int
-            let resolved = conversation.resolvePane(number: paneNum)
-            let pane = resolved?.pane ?? focusedPane
-            let label = resolved?.label ?? "focused pane"
-            // Map special key names to control characters
-            let mapped: String
-            switch keys.lowercased() {
-            case "ctrl+c", "ctrl-c": mapped = "\u{03}"
-            case "ctrl+d", "ctrl-d": mapped = "\u{04}"
-            case "ctrl+z", "ctrl-z": mapped = "\u{1A}"
-            case "ctrl+l", "ctrl-l": mapped = "\u{0C}"
-            case "enter", "return": mapped = "\n"
-            case "tab": mapped = "\t"
-            case "escape", "esc": mapped = "\u{1B}"
-            case "up": mapped = "\u{1B}[A"
-            case "down": mapped = "\u{1B}[B"
-            case "left": mapped = "\u{1B}[D"
-            case "right": mapped = "\u{1B}[C"
-            default: mapped = keys
-            }
-            pane.terminalView.send(data: Array(mapped.utf8)[...])
-            turns.append(.toolResult(toolCallID: id, output: "Sent '\(keys)' to \(label)"))
-            return .continued
-
-        case "get_env":
-            let varName = args["name"] as? String
-            if let name = varName {
-                let value = ProcessInfo.processInfo.environment[name]
-                turns.append(.toolResult(toolCallID: id, output: value ?? "[Not set]"))
-            } else {
-                // Return all env vars
-                let env = ProcessInfo.processInfo.environment
-                    .sorted(by: { $0.key < $1.key })
-                    .map { "\($0.key)=\($0.value)" }
-                    .joined(separator: "\n")
-                turns.append(.toolResult(toolCallID: id, output: env))
-            }
-            return .continued
-
-        case "http_request":
-            guard let urlStr = args["url"] as? String,
-                  let url = URL(string: urlStr) else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing or invalid 'url' parameter"))
-                return .continued
-            }
-            let method = (args["method"] as? String ?? "GET").uppercased()
-            var request = URLRequest(url: url)
-            request.httpMethod = method
-            request.timeoutInterval = 15
-            if let headers = args["headers"] as? [String: String] {
-                for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
-            }
-            if let body = args["body"] as? String {
-                request.httpBody = body.data(using: .utf8)
-                if request.value(forHTTPHeaderField: "Content-Type") == nil {
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                }
-            }
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                let httpResponse = response as? HTTPURLResponse
-                let status = httpResponse?.statusCode ?? 0
-                let bodyStr = String(data: data, encoding: .utf8) ?? "[Binary data, \(data.count) bytes]"
-                let maxChars = 5000
-                let truncated = bodyStr.count > maxChars ? String(bodyStr.prefix(maxChars)) + "\n[... truncated]" : bodyStr
-                turns.append(.toolResult(toolCallID: id, output: "HTTP \(status)\n\(truncated)"))
-            } catch {
-                turns.append(.toolResult(toolCallID: id, output: "HTTP error: \(error.localizedDescription)"))
-            }
-            return .continued
-
-        case "check_port":
-            guard let port = args["port"] as? Int else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'port' parameter"))
-                return .continued
-            }
-            let host = args["host"] as? String ?? "localhost"
-            let result = processRunner.run("/usr/sbin/lsof", args: ["-i", ":\(port)", "-P", "-n"])
-            if result.isEmpty {
-                turns.append(.toolResult(toolCallID: id, output: "Port \(port) on \(host): not in use"))
-            } else {
-                turns.append(.toolResult(toolCallID: id, output: "Port \(port) on \(host):\n\(result)"))
-            }
-            return .continued
-
-        case "find_process":
-            guard let name = args["name"] as? String else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'name' parameter"))
-                return .continued
-            }
-            let result = processRunner.run("/usr/bin/pgrep", args: ["-fl", name])
-            turns.append(.toolResult(toolCallID: id, output: result.isEmpty ? "No processes matching '\(name)'" : result))
-            return .continued
-
-        case "kill_process":
-            guard let pid = args["pid"] as? Int else {
-                turns.append(.toolResult(toolCallID: id, output: "Missing 'pid' parameter"))
-                return .continued
-            }
-            let signal = args["signal"] as? String ?? "TERM"
-            let sigNum: Int32
-            switch signal.uppercased() {
-            case "KILL", "9": sigNum = SIGKILL
-            case "INT", "2": sigNum = SIGINT
-            case "HUP", "1": sigNum = SIGHUP
-            default: sigNum = SIGTERM
-            }
-            let rc = kill(Int32(pid), sigNum)
-            turns.append(.toolResult(toolCallID: id, output: rc == 0 ? "Sent SIG\(signal.uppercased()) to PID \(pid)" : "Failed to signal PID \(pid): errno \(errno)"))
-            return .continued
-
-        default:
-            turns.append(.toolResult(toolCallID: id, output: "Unknown tool: \(name)"))
             return .continued
         }
+
+        turns.append(.toolResult(toolCallID: id, output: "Unknown tool: \(name)"))
+        return .continued
     }
 
     /// Handle run_command tool call with approval flow.
@@ -490,74 +192,6 @@ final class AgentSession: ObservableObject {
             onComplete?()
             return .stopped
         }
-    }
-
-    // MARK: - Read-Only Tool Implementations
-
-    private func readTerminalOutput(pane: PaneController, lines: Int) -> String {
-        let terminal = pane.terminalView.getTerminal()
-        let totalRows = terminal.rows
-        let startRow = max(0, totalRows - lines)
-        var outputLines: [String] = []
-        for row in startRow..<totalRows {
-            if let line = terminal.getLine(row: row) {
-                let text = line.translateToString(trimRight: true)
-                if !text.isEmpty { outputLines.append(text) }
-            }
-        }
-        let output = outputLines.joined(separator: "\n")
-        return output.isEmpty ? "[No output]" : output
-    }
-
-    private func listPanesOutput(conversation: TabConversation, focusedPane: PaneController) -> String {
-        guard let context = conversation.buildCompositeContext() else {
-            return "Panes: 1 (focused)\nCWD: \(focusedPane.currentDirectory ?? "unknown")"
-        }
-        var lines: [String] = ["Panes in this tab:\n"]
-        for pane in context.panes {
-            let focus = pane.isFocused ? " (focused)" : ""
-            let cwdStr = pane.cwd ?? "unknown"
-            let shellStr = pane.shell ?? "shell"
-            let connStr: String
-            switch pane.connectionType {
-            case .local: connStr = "local"
-            case .ssh: connStr = "SSH"
-            }
-            lines.append("  \(pane.label)\(focus) — \(cwdStr) [\(shellStr), \(connStr)]")
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    private func paneStateOutput(pane: PaneController, label: String) -> String {
-        let cwd = pane.currentDirectory ?? "unknown"
-        let connStr: String
-        let shellStr: String
-        switch pane.connectionType {
-        case .local(let shell, _):
-            connStr = "local"
-            shellStr = URL(fileURLWithPath: shell).lastPathComponent
-        case .ssh:
-            connStr = "SSH (\(pane.sshHost ?? "unknown"))"
-            shellStr = "remote"
-        }
-        let stateStr: String
-        switch pane.state {
-        case .running: stateStr = "running"
-        case .exited(let code): stateStr = "exited (code \(code))"
-        case .disconnected: stateStr = "disconnected"
-        case .connecting: stateStr = "connecting"
-        case .authRequired: stateStr = "auth required"
-        }
-        let output = readTerminalOutput(pane: pane, lines: 30)
-        return """
-        \(label)
-        CWD: \(cwd)
-        Shell: \(shellStr)
-        Connection: \(connStr)
-        State: \(stateStr)
-        Recent output:
-        \(output)
-        """
     }
 
     // MARK: - Skill Execution (Multi-Pane)
