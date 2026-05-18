@@ -270,56 +270,54 @@ final class TabContainerController: NSViewController {
     private func updatePanels(for profile: PanelProfile) {
         guard let split = contentSplit else { return }
 
-        // Left panel
-        let wantedLeft = profile.leftActivePanelID
-        if wantedLeft != leftPanelID {
-            if let vc = leftPanelVC {
-                vc.view.removeFromSuperview()
-                vc.removeFromParent()
-                leftPanelVC = nil
-                leftPanelID = nil
-            }
-            if let id = wantedLeft,
-               let vc = panelRegistry?.makeController(for: id, context: makeContext()) {
-                addChild(vc)
-                vc.view.frame = NSRect(x: 0, y: 0, width: profile.leftWidth, height: split.bounds.height)
-                split.insertArrangedSubview(vc.view, at: 0)
-                let width = profile.leftWidth
-                DispatchQueue.main.async { split.setPosition(width, ofDividerAt: 0) }
-                leftPanelVC = vc
-                leftPanelID = id
-            }
+        // ── 1. Tear down any existing panel VCs ────────────────
+        if let vc = leftPanelVC {
+            vc.view.removeFromSuperview()
+            vc.removeFromParent()
+            leftPanelVC = nil
+            leftPanelID = nil
+        }
+        if let vc = rightPanelVC {
+            vc.view.removeFromSuperview()
+            vc.removeFromParent()
+            rightPanelVC = nil
+            rightPanelID = nil
         }
 
-        // Right panel
-        let wantedRight = profile.rightActivePanelID
-        if wantedRight != rightPanelID {
-            if let vc = rightPanelVC {
-                vc.view.removeFromSuperview()
-                vc.removeFromParent()
-                rightPanelVC = nil
-                rightPanelID = nil
-            }
-            if let id = wantedRight,
-               let vc = panelRegistry?.makeController(for: id, context: makeContext()) {
-                addChild(vc)
-                vc.view.frame = NSRect(x: 0, y: 0, width: profile.rightWidth, height: split.bounds.height)
-                split.addArrangedSubview(vc.view)
-                let rightWidth = profile.rightWidth
-                DispatchQueue.main.async {
-                    let dividerIdx = split.arrangedSubviews.count - 2
-                    if dividerIdx >= 0 {
-                        split.setPosition(split.bounds.width - rightWidth, ofDividerAt: dividerIdx)
-                    }
-                }
-                rightPanelVC = vc
-                rightPanelID = id
-            }
+        // After teardown, split.arrangedSubviews == [terminal rootView]
+
+        // ── 2. Insert left panel at index 0 (before terminal) ──
+        if let id = profile.leftActivePanelID,
+           let vc = panelRegistry?.makeController(for: id, context: makeContext()) {
+            addChild(vc)
+            vc.view.frame = NSRect(x: 0, y: 0, width: profile.leftWidth, height: split.bounds.height)
+            split.insertArrangedSubview(vc.view, at: 0)
+            leftPanelVC = vc
+            leftPanelID = id
         }
 
-        // Refocus terminal
+        // ── 3. Append right panel at end (after terminal) ──────
+        if let id = profile.rightActivePanelID,
+           let vc = panelRegistry?.makeController(for: id, context: makeContext()) {
+            addChild(vc)
+            vc.view.frame = NSRect(x: 0, y: 0, width: profile.rightWidth, height: split.bounds.height)
+            split.addArrangedSubview(vc.view)
+            rightPanelVC = vc
+            rightPanelID = id
+        }
+
+        // ── 4. Set divider positions ───────────────────────────
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, let split = self.contentSplit else { return }
+            var dividerIdx = 0
+            if self.leftPanelVC != nil {
+                split.setPosition(profile.leftWidth, ofDividerAt: dividerIdx)
+                dividerIdx += 1
+            }
+            if self.rightPanelVC != nil {
+                let rightPos = split.bounds.width - profile.rightWidth
+                split.setPosition(rightPos, ofDividerAt: dividerIdx)
+            }
             self.splitController.setFocus(to: self.splitController.focusedPaneID)
         }
     }
