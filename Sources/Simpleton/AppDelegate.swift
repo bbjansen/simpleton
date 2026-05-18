@@ -25,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var skillStore: SkillStore?
     private var panelRegistry: PanelRegistry?
     private var terminalActions: TerminalActions!
+    private var aiCoordinator: AICoordinator!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -155,6 +156,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             activeWindowController: { [weak self] in self?.activeWindowController },
             windowControllers: { [weak self] in self?.windowControllers ?? [] },
             config: { [weak self] in self?.config ?? AppConfig() }
+        )
+
+        aiCoordinator = AICoordinator(
+            aiService: { [weak self] in self?.aiService },
+            aiExplainPanel: { [weak self] in self?.aiExplainPanel },
+            activeSplitController: { [weak self] in self?.activeSplitController },
+            windowControllers: { [weak self] in self?.windowControllers ?? [] }
         )
 
         NotificationCenter.default.addObserver(
@@ -484,79 +492,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - AI Actions
 
-    @objc func toggleAIChat() {
-        NotificationCenter.default.post(name: .simpletonToggleAIChat, object: aiService)
-    }
-
-    @objc func showSkillPicker() {
-        guard let ai = aiService, ai.isEnabled else { return }
-        NotificationCenter.default.post(name: .simpletonRunSkillPicker, object: ai)
-    }
-
-    @objc func explainSelection() {
-        guard let ai = aiService, ai.isEnabled,
-              let sc = activeSplitController,
-              let pane = sc.panes[sc.focusedPaneID] else { return }
-
-        let selected = pane.terminalView.getSelection() ?? ""
-        guard !selected.isEmpty else { return }
-
-        aiExplainPanel?.show(
-            title: "Explain Selection",
-            aiService: ai,
-            system: "You are a helpful terminal assistant. Explain the following terminal output or command concisely.",
-            user: selected,
-            relativeTo: NSApp.keyWindow
-        )
-    }
-
-    @objc func explainLastError() {
-        guard let ai = aiService, ai.isEnabled,
-              let sc = activeSplitController,
-              let pane = sc.panes[sc.focusedPaneID] else { return }
-
-        let context = AIContextBuilder.build(terminalView: pane.terminalView, recentOutputLines: 50)
-        let output = context.recentOutput ?? "(no output captured)"
-
-        aiExplainPanel?.show(
-            title: "Explain Error",
-            aiService: ai,
-            system: "You are a helpful terminal assistant. Explain this error and suggest a fix. Be concise.",
-            user: "The command failed. Here is the recent terminal output:\n\n\(output)",
-            relativeTo: NSApp.keyWindow
-        )
-    }
+    @objc func toggleAIChat() { aiCoordinator.toggleAIChat() }
+    @objc func showSkillPicker() { aiCoordinator.showSkillPicker() }
+    @objc func explainSelection() { aiCoordinator.explainSelection() }
+    @objc func explainLastError() { aiCoordinator.explainLastError() }
 
     @objc private func handleExplainError(_ notification: Notification) {
-        guard let paneID = notification.object as? PaneID,
-              let ai = aiService, ai.isEnabled else { return }
-
-        // Find the pane across all window controllers
-        for wc in windowControllers {
-            guard let tabContainer = wc.window?.contentViewController as? TabContainerController,
-                  let pane = tabContainer.splitController.panes[paneID] else { continue }
-
-            let context = AIContextBuilder.build(terminalView: pane.terminalView, recentOutputLines: 50)
-            let output = context.recentOutput ?? "(no output captured)"
-
-            aiExplainPanel?.show(
-                title: "Explain Error",
-                aiService: ai,
-                system: "You are a helpful terminal assistant. Explain this error and suggest a fix. Be concise.",
-                user: "The command failed. Here is the recent terminal output:\n\n\(output)",
-                relativeTo: pane.terminalView.window
-            )
-            break
-        }
+        guard let paneID = notification.object as? PaneID else { return }
+        aiCoordinator.handleExplainError(paneID: paneID)
     }
 
     private func saveAIConfig(_ config: AIConfig) {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
-        let aiConfigFile = simpletonDir.appendingPathComponent("ai-config.json")
-        if let data = try? JSONEncoder().encode(AIConfigFile(config: config)) {
-            try? data.write(to: aiConfigFile)
-        }
+        aiCoordinator.saveAIConfig(config)
     }
 
     // MARK: - Scrollback Search
