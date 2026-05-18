@@ -34,8 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Check App Translocation
         AppTranslocationCheck.checkAndWarn()
 
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        let simpletonDir = AppPaths.appSupport
         try? FileManager.default.createDirectory(at: simpletonDir, withIntermediateDirectories: true)
 
         // 1. Load config
@@ -331,8 +330,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Config
 
     private func loadConfig() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        let simpletonDir = AppPaths.appSupport
         let configFile = simpletonDir.appendingPathComponent("config.json")
 
         if FileManager.default.fileExists(atPath: configFile.path) {
@@ -348,8 +346,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func saveConfig(_ config: AppConfig) {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        let simpletonDir = AppPaths.appSupport
         do {
             try AtomicFileWriter.writeJSON(ConfigFile(config: config), to: simpletonDir.appendingPathComponent("config.json"))
         } catch {

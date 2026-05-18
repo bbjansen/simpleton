@@ -94,14 +94,10 @@ struct PluginsPreferencesTab: View {
             Section {
                 HStack {
                     Button("Open Themes Folder") {
-                        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-                            .appendingPathComponent("Simpleton/themes")
-                        NSWorkspace.shared.open(url)
+                        NSWorkspace.shared.open(AppPaths.appSupport.appendingPathComponent("themes"))
                     }
                     Button("Open Scripts Folder") {
-                        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-                            .appendingPathComponent("Simpleton/scripts")
-                        NSWorkspace.shared.open(url)
+                        NSWorkspace.shared.open(AppPaths.appSupport.appendingPathComponent("scripts"))
                     }
                     Spacer()
                     Button("Reload Plugins") {

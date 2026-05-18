@@ -33,8 +33,7 @@ final class ScriptPluginRunner {
         // Environment
         var env = ProcessInfo.processInfo.environment
         env["SIMPLETON_VERSION"] = "1.0.0"
-        env["SIMPLETON_CONFIG_DIR"] = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Simpleton").path ?? ""
+        env["SIMPLETON_CONFIG_DIR"] = AppPaths.appSupport.path
         process.environment = env
 
         // Start in a new process group for clean kill

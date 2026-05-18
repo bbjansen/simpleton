@@ -87,8 +87,7 @@ final class AICoordinator {
     }
 
     func saveAIConfig(_ config: AIConfig) {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        let simpletonDir = AppPaths.appSupport
         let aiConfigFile = simpletonDir.appendingPathComponent("ai-config.json")
         do {
             let data = try JSONEncoder().encode(AIConfigFile(config: config))

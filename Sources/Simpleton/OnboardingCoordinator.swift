@@ -26,8 +26,7 @@ final class OnboardingCoordinator {
     }
 
     func showOnboardingIfNeeded() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let simpletonDir = appSupport.appendingPathComponent("Simpleton")
+        let simpletonDir = AppPaths.appSupport
         let legacy  = simpletonDir.appendingPathComponent(".wizard-done")
         let current = simpletonDir.appendingPathComponent(".onboarding-done")
         guard !FileManager.default.fileExists(atPath: current.path),

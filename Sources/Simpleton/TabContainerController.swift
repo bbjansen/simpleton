@@ -57,10 +57,7 @@ final class TabContainerController: NSViewController {
         }
     }
 
-    private var appSupportDir: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first!.appendingPathComponent("Simpleton")
-    }
+    private var appSupportDir: URL { AppPaths.appSupport }
 
     init(config: AppConfig, theme: Theme) {
         self.config = config
