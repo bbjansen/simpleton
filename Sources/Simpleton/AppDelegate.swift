@@ -150,29 +150,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.saveAIConfig(newAIConfig)
         })
 
-        // 5. Session restore check
-        sessionManager = SessionManager(directory: simpletonDir)
-        let shouldRestore = config.general.restorePreviousSession && sessionManager?.didCrashLastSession() ?? false
-
-        // 6. UI launch
-        if shouldRestore, let savedState = sessionManager?.loadSavedState(), !savedState.windows.isEmpty {
-            sessionCoordinator.showRestorePrompt(state: savedState)
-        } else {
-            createNewWindow()
-        }
-
-        // Set up session state provider
-        sessionManager?.setStateProvider { [weak self] in
-            self?.sessionCoordinator.captureSessionState() ?? SessionState()
-        }
-        sessionManager?.startPeriodicSave()
-
-        // 7. Import wizard check
-        showOnboardingIfNeeded()
-
-        let menuResult = MenuBarBuilder.build(target: self, workspacesMenuDelegate: self)
-        self.workspacesMenu = menuResult.workspacesMenu
-
+        // Coordinators — constructed before the launch sequence (restore / onboarding) below, which use them.
         terminalActions = TerminalActions(
             activeSplitController: { [weak self] in self?.activeSplitController },
             activeWindowController: { [weak self] in self?.activeWindowController },
@@ -217,6 +195,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             createNewWindow: { [weak self] in self?.createNewWindow() },
             addWindowController: { [weak self] wc in self?.windowControllers.append(wc) }
         )
+
+        // 5. Session restore check
+        sessionManager = SessionManager(directory: simpletonDir)
+        let shouldRestore = config.general.restorePreviousSession && sessionManager?.didCrashLastSession() ?? false
+
+        // 6. UI launch
+        if shouldRestore, let savedState = sessionManager?.loadSavedState(), !savedState.windows.isEmpty {
+            sessionCoordinator.showRestorePrompt(state: savedState)
+        } else {
+            createNewWindow()
+        }
+
+        // Set up session state provider
+        sessionManager?.setStateProvider { [weak self] in
+            self?.sessionCoordinator.captureSessionState() ?? SessionState()
+        }
+        sessionManager?.startPeriodicSave()
+
+        // 7. Import wizard check
+        showOnboardingIfNeeded()
+
+        let menuResult = MenuBarBuilder.build(target: self, workspacesMenuDelegate: self)
+        self.workspacesMenu = menuResult.workspacesMenu
 
         updateManager = UpdateManager(checkMode: config.general.checkForUpdates)
 
