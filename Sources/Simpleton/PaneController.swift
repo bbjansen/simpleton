@@ -335,6 +335,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     private func markSSHConnected() {
         guard case .ssh = connectionType, state == .connecting else { return }
         state = .running
+        sshReconnectManager?.reset()   // a successful (re)connect clears the auto-reconnect attempt counter
         let title = lastTerminalTitle.isEmpty ? (sshBookmark?.name ?? "SSH") : lastTerminalTitle
         onTitleChange?(statusTitle(title))
     }

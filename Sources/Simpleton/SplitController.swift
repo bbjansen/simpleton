@@ -248,7 +248,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
             splitView.delegate = self
 
             for (index, child) in children.enumerated() {
-                let ratio = ratios[index]
+                let ratio = index < ratios.count ? ratios[index] : (children.isEmpty ? 1.0 : 1.0 / CGFloat(children.count))
                 let childFrame: NSRect
                 if direction == .vertical {
                     let width = frame.width * ratio

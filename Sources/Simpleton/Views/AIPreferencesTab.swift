@@ -301,7 +301,8 @@ struct AIPreferencesTab: View {
         case .openai:
             url = URL(string: "https://platform.openai.com/api-keys")!
         case .custom:
-            url = URL(string: config.baseURL ?? "https://example.com")!
+            guard let customURL = URL(string: config.baseURL ?? "https://example.com") else { return }
+            url = customURL
         default:
             return
         }
@@ -354,7 +355,7 @@ struct AIPreferencesTab: View {
 
     private func testAPIKey(_ key: String) async -> KeyStatus {
         do {
-            let (url, headers, body) = buildTestRequest(key: key)
+            guard let (url, headers, body) = buildTestRequest(key: key) else { return .invalid("Invalid endpoint URL") }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.timeoutInterval = 10
@@ -379,7 +380,7 @@ struct AIPreferencesTab: View {
         }
     }
 
-    private func buildTestRequest(key: String) -> (URL, [(String, String)], Data?) {
+    private func buildTestRequest(key: String) -> (URL, [(String, String)], Data?)? {
         switch config.provider {
         case .anthropic:
             let url = URL(string: "https://api.anthropic.com/v1/messages")!
@@ -397,7 +398,7 @@ struct AIPreferencesTab: View {
 
         case .openai, .custom:
             let baseURL = config.provider == .custom ? (config.baseURL ?? "https://api.openai.com/v1") : "https://api.openai.com/v1"
-            let url = URL(string: "\(baseURL)/chat/completions")!
+            guard let url = URL(string: "\(baseURL)/chat/completions") else { return nil }
             var headers = [("Content-Type", "application/json")]
             if !key.isEmpty { headers.append(("Authorization", "Bearer \(key)")) }
             let body = try? JSONSerialization.data(withJSONObject: [
@@ -408,7 +409,7 @@ struct AIPreferencesTab: View {
             return (url, headers, body)
 
         case .ollama:
-            let url = URL(string: "\(config.localOllamaURL)/v1/chat/completions")!
+            guard let url = URL(string: "\(config.localOllamaURL)/v1/chat/completions") else { return nil }
             let headers = [("Content-Type", "application/json")]
             let body = try? JSONSerialization.data(withJSONObject: [
                 "model": config.model,

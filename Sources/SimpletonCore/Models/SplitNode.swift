@@ -26,7 +26,12 @@ public indirect enum SplitNode: Codable, Equatable {
         case "split":
             let direction = try container.decode(SplitDirection.self, forKey: .direction)
             let children = try container.decode([SplitNode].self, forKey: .children)
-            let ratios = try container.decode([CGFloat].self, forKey: .ratios)
+            var ratios = try container.decode([CGFloat].self, forKey: .ratios)
+            // Guard against corrupt/truncated state where ratios and children lengths differ:
+            // fall back to equal ratios so restore can't crash when the view is built.
+            if ratios.count != children.count {
+                ratios = children.isEmpty ? [] : Array(repeating: 1.0 / CGFloat(children.count), count: children.count)
+            }
             self = .split(direction: direction, children: children, ratios: ratios)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Unknown type: \(type)")

@@ -75,4 +75,23 @@ func runSplitNodeChecks(_ t: TestRunner) {
         t.expectEqual(tree.paneCount, 2, "split pane count")
         t.expectEqual(SplitNode.pane(UUID()).paneCount, 1, "single pane count")
     }
+
+    t.suite("SplitNode.decode — mismatched ratios are normalized (crash regression)") {
+        // 3 children but only 1 ratio (truncated/corrupt state): must normalize, not crash.
+        let json = "{\"type\":\"split\",\"direction\":\"vertical\",\"children\":[" +
+            "{\"type\":\"pane\",\"id\":\"11111111-1111-1111-1111-111111111111\"}," +
+            "{\"type\":\"pane\",\"id\":\"22222222-2222-2222-2222-222222222222\"}," +
+            "{\"type\":\"pane\",\"id\":\"33333333-3333-3333-3333-333333333333\"}],\"ratios\":[1.0]}"
+        do {
+            let decoded = try JSONDecoder().decode(SplitNode.self, from: Data(json.utf8))
+            if case .split(_, let children, let ratios) = decoded {
+                t.expectEqual(children.count, 3, "children preserved")
+                t.expectEqual(ratios.count, children.count, "ratios normalized to match children")
+            } else {
+                t.expect(false, "expected .split")
+            }
+        } catch {
+            t.expect(false, "should decode without throwing: \(error)")
+        }
+    }
 }
