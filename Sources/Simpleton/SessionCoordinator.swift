@@ -167,6 +167,8 @@ final class SessionCoordinator {
                         tabContainer.openSSHConnection(bookmark: bookmark)
                     }
                 }
+            } else if case .local(let dir) = conn {
+                restoreLocalWorkingDirectory(dir, in: tabContainer, paneID: tabContainer.splitController.focusedPaneID)
             }
 
         case .split(let direction, let children, _):
@@ -184,6 +186,8 @@ final class SessionCoordinator {
                                     pane.startSSH(bookmark: bookmark, config: config())
                                 }
                             }
+                        } else if case .local(let dir) = conn {
+                            restoreLocalWorkingDirectory(dir, in: tabContainer, paneID: paneIDs[index])
                         }
                     }
                 }
@@ -197,6 +201,14 @@ final class SessionCoordinator {
         case .split(_, let children, _):
             return children.first.map { flattenFirstPane($0) } ?? node
         }
+    }
+
+    /// Restore a restored local pane's saved working directory. The pane is created in the
+    /// default directory, so restart its shell (keeping its shell + environment) in `dir`.
+    private func restoreLocalWorkingDirectory(_ dir: String, in tabContainer: TabContainerController, paneID: PaneID) {
+        guard let pane = tabContainer.splitController.panes[paneID],
+              case .local(let shell, _) = pane.connectionType else { return }
+        pane.restartShell(shell: shell, environment: pane.shellEnvironment, workingDirectory: dir)
     }
 
     // MARK: - Workspaces
