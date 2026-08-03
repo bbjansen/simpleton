@@ -30,4 +30,19 @@ func runCommandClassifierChecks(_ t: TestRunner) {
         t.expect(!CommandClassifier.isSafe("grepx"), "'grepx' must NOT match the 'grep' prefix")
         t.expect(!CommandClassifier.isSafe(""), "empty string is not safe")
     }
+
+    t.suite("CommandClassifier.isSafe — command substitution & destructive flags are unsafe") {
+        for cmd in ["echo $(rm -rf ~)", "echo `rm -rf ~`", "echo $(whoami)",
+                    "find . -delete", "find . -exec rm {} +", "find . -exec rm {} \\;",
+                    "find / -name x -delete"] {
+            t.expect(!CommandClassifier.isSafe(cmd), "'\(cmd)' → must be unsafe")
+        }
+    }
+
+    t.suite("CommandClassifier.isSafe — read-only variants still auto-approve") {
+        for cmd in ["find . -name '*.log'", "find . -type f",
+                    "curl -s https://example.com", "grep -rn foo src"] {
+            t.expect(CommandClassifier.isSafe(cmd), "'\(cmd)' is read-only → should stay safe")
+        }
+    }
 }
