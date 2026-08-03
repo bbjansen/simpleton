@@ -357,9 +357,18 @@ final class TabContainerController: NSViewController {
 
     // MARK: - Context
 
+    /// The container that panel actions should target. Panels are cached and shared across
+    /// all tabs by PanelRegistry, so a panel created for the first tab is reused in every
+    /// tab. Resolve the ACTIVE tab (the key window's container) at call time so sidebar
+    /// actions — opening an SSH host, inserting a command — target the tab the user is on
+    /// rather than always the first tab. Falls back to this container.
+    private var activePanelContainer: TabContainerController {
+        (NSApp.keyWindow?.contentViewController as? TabContainerController) ?? self
+    }
+
     private func makeContext() -> PanelContext {
         PanelContext(
-            tabContainer: { [weak self] in self },
+            tabContainer: { [weak self] in self?.activePanelContainer },
             skillStore: skillStore,
             memoryStore: memoryStore,
             mcpConfigStore: mcpConfigStore,
@@ -370,12 +379,12 @@ final class TabContainerController: NSViewController {
             sshConfigWatcher: sshConfigWatcher,
             appConfig: config,
             currentPane: { [weak self] in
-                guard let self = self else { return nil }
-                return self.splitController.panes[self.splitController.focusedPaneID]
+                guard let tc = self?.activePanelContainer else { return nil }
+                return tc.splitController.panes[tc.splitController.focusedPaneID]
             },
             onInsertCommand: { [weak self] cmd in
-                guard let self = self,
-                      let pane = self.splitController.panes[self.splitController.focusedPaneID] else { return }
+                guard let tc = self?.activePanelContainer,
+                      let pane = tc.splitController.panes[tc.splitController.focusedPaneID] else { return }
                 let bytes = Array(cmd.utf8)
                 pane.terminalView.send(data: bytes[...])
             },
