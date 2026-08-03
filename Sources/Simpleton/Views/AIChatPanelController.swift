@@ -45,17 +45,22 @@ final class AIChatPanelController: NSViewController {
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
-        let chatView = buildChatView()
-        self.view = MenuPassthroughHostingView(rootView: chatView)
+        self.view = MenuPassthroughHostingView(rootView: rootContent())
         self.view.frame = NSRect(x: 0, y: 0, width: 320, height: 600)
     }
 
     private func rebuildHostingView() {
         guard isViewLoaded else { return }
-        let chatView = buildChatView()
-        if let hostingView = self.view as? MenuPassthroughHostingView<AIChatPanelView> {
-            hostingView.rootView = chatView
+        if let hostingView = self.view as? MenuPassthroughHostingView<AnyView> {
+            hostingView.rootView = rootContent()
         }
+    }
+
+    /// Key the chat view by the active tab's id so SwiftUI treats each tab as a distinct view
+    /// identity and gives it fresh @State — otherwise reassigning rootView on the same hosting
+    /// view preserves @State and leaks the previous tab's messages into the new tab.
+    private func rootContent() -> AnyView {
+        AnyView(buildChatView().id(conversation?.tabID))
     }
 
     private func buildChatView() -> AIChatPanelView {

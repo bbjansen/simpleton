@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 import SimpletonCore
 
-struct ChatMessage: Identifiable {
+struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
     let role: String // "user" or "assistant"
     var content: String
@@ -220,6 +220,19 @@ struct AIChatPanelView: View {
         }
         .frame(width: 320)
         .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+        // Per-tab state sync: the view is keyed by tabID in AIChatPanelController (recreated per
+        // tab), so load this tab's conversation on appear and mirror local edits back — keeping
+        // the conversation the source of truth and preventing one tab's messages from leaking
+        // into another.
+        .onAppear {
+            guard let conv = conversation else { return }
+            messages = conv.messages
+            agentBubbles = conv.agentBubbles
+            isStreaming = conv.isRunning
+        }
+        .onChange(of: messages) { _, v in conversation?.messages = v }
+        .onChange(of: agentBubbles.count) { _, _ in conversation?.agentBubbles = agentBubbles }
+        .onChange(of: isStreaming) { _, v in conversation?.isRunning = v }
         .onReceive(NotificationCenter.default.publisher(for: .simpletonActivateSkillPicker)) { _ in
             showSkillPicker = true
         }
