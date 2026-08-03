@@ -149,6 +149,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.config = newConfig
             self?.saveConfig(newConfig)
             self?.updateManager?.setCheckMode(newConfig.general.checkForUpdates)
+            self?.applyConfigToAllPanes()   // re-apply appearance (font/cursor/theme) to already-open panes
         }, onAIConfigChanged: { [weak self] newAIConfig in
             self?.aiConfig = newAIConfig
             self?.aiService?.updateConfig(newAIConfig)
@@ -523,6 +524,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
             }
         }
+    }
+
+    /// Re-apply the current appearance config (font, cursor, theme colors) to every open pane
+    /// after the user changes a setting in Preferences — otherwise changes only take effect on
+    /// newly-created panes, leaving existing terminals inconsistent until relaunch.
+    private func applyConfigToAllPanes() {
+        if let named = pluginManager?.themeDiscovery.themes.first(where: { $0.name == config.appearance.theme }) {
+            theme = named
+        }
+        applyThemeToAllPanes(theme)
     }
 
     // MARK: - New Connection
