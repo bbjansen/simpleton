@@ -48,4 +48,14 @@ final class JSPanelController: NSViewController {
         let parentDir = htmlURL.deletingLastPathComponent()
         webView.loadFileURL(htmlURL, allowingReadAccessTo: parentDir)
     }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        bridge.panelDidBecomeVisible()
+    }
+
+    override func viewDidDisappear() {
+        super.viewDidDisappear()
+        bridge.panelDidBecomeHidden()
+    }
 }

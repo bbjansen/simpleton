@@ -11,6 +11,11 @@ struct ConnectionFormView: View {
     @State private var password = ""
     @State private var validationError: String?
 
+    // Jump hosts need stable identity so adding/removing rows in a single run-loop
+    // turn can't crash an index-keyed ForEach. We keep an id-tagged mirror of
+    // bookmark.jumpHosts and sync it back on every mutation.
+    @State private var jumpHostRows: [JumpHostRow] = []
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -73,7 +78,7 @@ struct ConnectionFormView: View {
                 }
 
                 Section {
-                    ForEach(Array(bookmark.jumpHosts.enumerated()), id: \.offset) { index, host in
+                    ForEach(Array(jumpHostRows.enumerated()), id: \.element.id) { index, row in
                         HStack(spacing: 8) {
                             // Numbered circle showing chain order
                             Text("\(index + 1)")
@@ -84,17 +89,24 @@ struct ConnectionFormView: View {
                                 .clipShape(Circle())
 
                             TextField("Jump host \(index + 1)", text: Binding(
-                                get: { host },
-                                set: { bookmark.jumpHosts[index] = $0 }
+                                get: { row.value },
+                                set: { newValue in
+                                    guard let idx = jumpHostRows.firstIndex(where: { $0.id == row.id }) else { return }
+                                    jumpHostRows[idx].value = newValue
+                                    syncJumpHosts()
+                                }
                             ))
-                            Button(action: { bookmark.jumpHosts.remove(at: index) }) {
+                            Button(action: { removeJumpHost(id: row.id) }) {
                                 Image(systemName: "minus.circle.fill")
                                     .foregroundColor(.red.opacity(0.7))
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    Button(action: { bookmark.jumpHosts.append("") }) {
+                    Button(action: {
+                        jumpHostRows.append(JumpHostRow(value: ""))
+                        syncJumpHosts()
+                    }) {
                         Label("Add jump host", systemImage: "plus")
                             .foregroundColor(.accentColor)
                     }
@@ -169,6 +181,18 @@ struct ConnectionFormView: View {
         }
         .frame(width: 480, height: 600)
         .background(DT.base)
+        .onAppear {
+            jumpHostRows = bookmark.jumpHosts.map { JumpHostRow(value: $0) }
+        }
+    }
+
+    private func syncJumpHosts() {
+        bookmark.jumpHosts = jumpHostRows.map(\.value)
+    }
+
+    private func removeJumpHost(id: UUID) {
+        jumpHostRows.removeAll { $0.id == id }
+        syncJumpHosts()
     }
 
     private var authMethodTag: String {
@@ -209,6 +233,15 @@ struct ConnectionFormView: View {
         validationError = nil
         onSave(bookmark)
     }
+}
+
+// MARK: - Jump Host Row
+
+/// Stable-identity wrapper for a jump-host string so an index-keyed ForEach can't
+/// bind to an out-of-range index when rows are added/removed in one run-loop turn.
+private struct JumpHostRow: Identifiable {
+    let id = UUID()
+    var value: String
 }
 
 // MARK: - Form Section Header

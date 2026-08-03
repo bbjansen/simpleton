@@ -136,34 +136,22 @@ struct DockerPanelView: View {
         state = await loadContainers()
     }
 
-    @MainActor
     private func toggleContainer(_ container: DockerContainer) async {
         guard let dockerPath = findDocker() else { return }
         let action = container.isRunning ? "stop" : "start"
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: dockerPath)
-        process.arguments = [action, container.id]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-        try? process.run()
-        process.waitUntilExit()
+        // Run the (potentially slow) docker command + waitUntilExit off the main
+        // actor so the UI doesn't freeze during a slow stop/start.
+        _ = await runDockerCommand(dockerPath, args: [action, container.id])
         await refresh()
     }
 
-    @MainActor
     private func showLogs(for container: DockerContainer) async {
         guard let dockerPath = findDocker() else { return }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: dockerPath)
-        process.arguments = ["logs", "--tail", "100", container.id]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        try? process.run()
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        logLines = (String(data: data, encoding: .utf8) ?? "").components(separatedBy: "\n")
-        logSheetContainer = container
+        let result = await runDockerCommand(dockerPath, args: ["logs", "--tail", "100", container.id])
+        await MainActor.run {
+            logLines = result.output.components(separatedBy: "\n")
+            logSheetContainer = container
+        }
     }
 
     private func loadContainers() async -> DockerPanelState {
@@ -207,18 +195,23 @@ struct DockerPanelView: View {
     }
 
     private func runDockerCommand(_ executable: String, args: [String]) async -> (output: String, exitCode: Int32) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = args
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
+        // Detached so the blocking run()/waitUntilExit() never executes on the
+        // MainActor and can't freeze the UI.
+        await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = args
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = Pipe()
+            do {
+                try process.run()
+            } catch { return ("", 1) }
+            // Read output before waitUntilExit to avoid a pipe-buffer deadlock.
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
-        } catch { return ("", 1) }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return (String(data: data, encoding: .utf8) ?? "", process.terminationStatus)
+            return (String(data: data, encoding: .utf8) ?? "", process.terminationStatus)
+        }.value
     }
 }
 

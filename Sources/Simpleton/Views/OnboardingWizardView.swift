@@ -400,7 +400,10 @@ struct OnboardingWizardView: View {
     }
 
     private func advanceSSHStep() {
-        if step == 4 {
+        // Only generate bookmarks/groups on first entry into step 4. Re-entering
+        // (Review → Organize → Back → Next) must preserve the user's group choices
+        // instead of resetting acceptedGroups back to all-selected.
+        if step == 4 && bookmarks.isEmpty {
             bookmarks = sshEntries
                 .filter { selectedEntries.contains($0.hostAlias) }
                 .map { $0.toBookmark() }

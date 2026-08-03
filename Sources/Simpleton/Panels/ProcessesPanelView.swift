@@ -85,21 +85,26 @@ struct ProcessesPanelView: View {
     private func fetchProcesses() async -> [ProcessEntry] {
         // Use -U to filter to current user directly, avoiding per-process sysctl calls
         let currentUser = NSUserName()
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-U", currentUser, "-o", "pid,pcpu,pmem,comm"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-        } catch {
-            return []
-        }
-        // Read output BEFORE waitUntilExit to avoid pipe buffer deadlock
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard let output = String(data: data, encoding: .utf8) else { return [] }
+        // Run the process + waitUntilExit off the MainActor so a slow `ps` can't
+        // freeze the UI.
+        let output: String? = await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/ps")
+            process.arguments = ["-U", currentUser, "-o", "pid,pcpu,pmem,comm"]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = Pipe()
+            do {
+                try process.run()
+            } catch {
+                return nil
+            }
+            // Read output BEFORE waitUntilExit to avoid pipe buffer deadlock
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return String(data: data, encoding: .utf8)
+        }.value
+        guard let output else { return [] }
         return output.components(separatedBy: "\n")
             .dropFirst() // header
             .compactMap { line -> ProcessEntry? in

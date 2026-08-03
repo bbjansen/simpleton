@@ -9,8 +9,15 @@ struct NotesPanelView: View {
 
     @State private var cwd: String? = nil
     @State private var text = ""
-    @State private var savePublisher = PassthroughSubject<String, Never>()
+    // The save publisher carries the destination file captured at type time, so a
+    // debounced write always lands in the note that was current when the text changed,
+    // even if the cwd changes within the debounce window.
+    @State private var savePublisher = PassthroughSubject<(url: URL, text: String), Never>()
     @State private var saveTimer: AnyCancellable?
+
+    // Poll CWD changes with a single long-lived timer instead of recreating one on
+    // every body render.
+    private let cwdTimer = Timer.publish(every: 2.0, on: .main, in: .common).autoconnect()
 
     private var notesDir: URL { appSupportDir.appendingPathComponent("notes") }
 
@@ -43,7 +50,7 @@ struct NotesPanelView: View {
             TextEditor(text: $text)
                 .font(.system(size: 12, design: .monospaced))
                 .onChange(of: text) { newText in
-                    savePublisher.send(newText)
+                    savePublisher.send((url: noteFile, text: newText))
                 }
         }
         .onAppear {
@@ -52,7 +59,7 @@ struct NotesPanelView: View {
             loadNote()
         }
         // Poll for CWD changes every 2 seconds
-        .onReceive(Timer.publish(every: 2.0, on: .main, in: .common).autoconnect()) { _ in
+        .onReceive(cwdTimer) { _ in
             let newCwd = currentPaneProvider()?.currentDirectory
             if newCwd != cwd {
                 cwd = newCwd
@@ -73,8 +80,8 @@ struct NotesPanelView: View {
     private func setupSaveTimer() {
         saveTimer = savePublisher
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-            .sink { newText in
-                try? newText.write(to: noteFile, atomically: true, encoding: .utf8)
+            .sink { payload in
+                try? payload.text.write(to: payload.url, atomically: true, encoding: .utf8)
             }
     }
 }

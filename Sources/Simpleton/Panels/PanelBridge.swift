@@ -9,6 +9,14 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
     private let context: PanelContext
     weak var webView: WKWebView?
     private var outputObserver: NSObjectProtocol?
+    // Whether the JS side has requested terminal output (onOutput). Distinct from
+    // whether we're currently observing: a hidden panel wants output but must not
+    // keep evaluating JS in the background.
+    private var outputRequested = false
+    // Whether the owning view is currently visible. When false we never observe,
+    // so a cached-but-hidden panel stops running evaluateJavaScript on every
+    // terminal-output notification.
+    private var isVisible = false
 
     init(panelID: String, context: PanelContext) {
         self.panelID = panelID
@@ -110,9 +118,36 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
         webView?.evaluateJavaScript(js, completionHandler: nil)
     }
 
+    // MARK: - Visibility
+
+    /// Called by the owning view controller when the panel becomes visible.
+    /// Re-subscribes to terminal output if the JS side had previously requested it.
+    func panelDidBecomeVisible() {
+        isVisible = true
+        if outputRequested { startObserving() }
+    }
+
+    /// Called by the owning view controller when the panel is hidden. Stops the
+    /// NotificationCenter observer so a cached-but-hidden panel doesn't keep
+    /// running evaluateJavaScript on every terminal-output notification.
+    func panelDidBecomeHidden() {
+        isVisible = false
+        stopObserving()
+    }
+
     // MARK: - Output Subscription
 
     private func subscribeOutput() {
+        outputRequested = true
+        if isVisible { startObserving() }
+    }
+
+    private func unsubscribeOutput() {
+        outputRequested = false
+        stopObserving()
+    }
+
+    private func startObserving() {
         guard outputObserver == nil else { return }
         outputObserver = NotificationCenter.default.addObserver(
             forName: .simpletonTerminalOutput, object: nil, queue: .main
@@ -122,7 +157,7 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
         }
     }
 
-    private func unsubscribeOutput() {
+    private func stopObserving() {
         if let obs = outputObserver {
             NotificationCenter.default.removeObserver(obs)
             outputObserver = nil
