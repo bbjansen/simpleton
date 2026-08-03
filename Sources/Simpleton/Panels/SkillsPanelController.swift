@@ -51,6 +51,8 @@ final class SkillsPanelVM: ObservableObject {
                         skill: skill, currentValues: paramValues,
                         pane: pane, aiService: ai
                     ) {
+                        // Discard if the user selected a different skill while phase 2 was in flight.
+                        guard selectedSkill?.slug == skill.slug else { return }
                         for (key, value) in suggested where paramValues[key]?.isEmpty ?? true {
                             paramValues[key] = value
                         }
