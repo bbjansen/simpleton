@@ -12,6 +12,8 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     let terminalView: LocalProcessTerminalView
     private(set) var connectionType: ConnectionType
     private(set) var state: PaneState = .connecting
+    /// Last title reported by the terminal — used to re-render the status prefix on state change.
+    private var lastTerminalTitle: String = ""
 
     /// Manages the exit / disconnect / error banner overlay.
     private var bannerManager: BannerManager?
@@ -103,6 +105,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
             let row = self.terminalView.terminal.buffer.yDisp + self.terminalView.terminal.buffer.y
             if let event = ShellPromptTracker.parsePayload(payload) {
                 self.promptTracker.handleEvent(event, atRow: row)
+                self.markSSHConnected()
 
                 // Trigger active AI hint on non-zero exit code
                 if case .commandEnd(let code) = event, let exitCode = code, exitCode != 0 {
@@ -252,10 +255,14 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     }
 
     func setTerminalTitle(source: LocalProcessTerminalView, title: String) {
+        lastTerminalTitle = title
+        // The remote shell setting its title means it is interactive → mark SSH connected.
+        if case .ssh = connectionType, state == .connecting { state = .running }
         onTitleChange?(statusTitle(title))
     }
 
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
+        markSSHConnected()
         if let dir = directory {
             currentDirectory = dir
             onDirectoryChange?(dir)
@@ -322,6 +329,16 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     // MARK: - Status Title
 
     /// Prefixes a title with a status emoji reflecting the pane's current state.
+    /// Transition an SSH pane from connecting → running once the remote shell shows it is
+    /// interactive (set its title, reported its working directory, or emitted an OSC 133
+    /// prompt), so the tab's status dot turns from yellow to green.
+    private func markSSHConnected() {
+        guard case .ssh = connectionType, state == .connecting else { return }
+        state = .running
+        let title = lastTerminalTitle.isEmpty ? (sshBookmark?.name ?? "SSH") : lastTerminalTitle
+        onTitleChange?(statusTitle(title))
+    }
+
     private func statusTitle(_ title: String) -> String {
         let emoji: String
         switch state {
