@@ -18,6 +18,12 @@ final class TestRunner {
         body()
     }
 
+    /// Async variant for suites that exercise actors / async APIs.
+    func suite(_ name: String, _ body: () async -> Void) async {
+        suiteName = name
+        await body()
+    }
+
     /// Record a boolean expectation.
     func expect(_ condition: Bool, _ message: @autoclosure () -> String, line: Int = #line) {
         if condition {

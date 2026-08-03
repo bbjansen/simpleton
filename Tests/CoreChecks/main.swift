@@ -6,6 +6,25 @@ import Foundation
 
 let runner = TestRunner()
 
+// Core (synchronous)
 runCommandClassifierChecks(runner)
+runAtomicFileWriterChecks(runner)
+runFieldValidatorChecks(runner)
+runFrecencyScorerChecks(runner)
+runFuzzyMatcherChecks(runner)
+runSSHConfigParserChecks(runner)
+
+// Core (async — actor-backed stores)
+await runBookmarkStoreChecks(runner)
+await runConfigStoreChecks(runner)
+
+// Models (synchronous)
+runAppConfigChecks(runner)
+runBookmarkChecks(runner)
+runFrecencyEntryChecks(runner)
+runSessionStateChecks(runner)
+runSmartGroupChecks(runner)
+runSplitNodeChecks(runner)
+runThemeChecks(runner)
 
 exit(runner.finish())
