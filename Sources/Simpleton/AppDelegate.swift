@@ -88,9 +88,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         aiService = AIService(config: aiConfig)
-        // Migrate keychain items from old accessibility level to stop repeated password prompts
-        for provider in AIProvider.allCases {
-            AIKeychain.migrateAccessibility(for: provider)
+        // Migrate keychain items off the launch-critical path. retrieveAPIKey can trigger a
+        // Keychain access prompt; running it synchronously here would block
+        // applicationDidFinishLaunching before any window is shown. SecItem APIs are
+        // thread-safe, so migrate on a background queue.
+        DispatchQueue.global(qos: .utility).async {
+            for provider in AIProvider.allCases {
+                AIKeychain.migrateAccessibility(for: provider)
+            }
         }
         aiExplainPanel = AIExplainPanel()
         let skillStore = SkillStore(appSupportDir: simpletonDir)
