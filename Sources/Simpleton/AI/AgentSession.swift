@@ -9,31 +9,6 @@ enum AutopilotMode: String, Codable {
     case full      // approve everything (current autopilot=true)
 }
 
-struct CommandClassifier {
-    static let safePatterns: [String] = [
-        "ls", "cat", "head", "tail", "wc", "file", "which", "whoami", "hostname",
-        "pwd", "echo", "date", "uptime", "df", "du", "free", "top -l 1",
-        "git status", "git log", "git diff", "git branch", "git remote",
-        "docker ps", "docker images", "docker logs",
-        "npm list", "npm outdated", "cargo check", "swift build",
-        "env", "printenv", "id", "uname", "sw_vers",
-        "curl -s", "ping -c", "dig", "nslookup", "traceroute",
-        "find", "grep", "rg", "fd", "ag",
-    ]
-
-    static let unsafeOperators: [String] = ["|", ">", ">>", "<", "&&", "||", ";"]
-
-    static func isSafe(_ command: String) -> Bool {
-        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        for op in unsafeOperators {
-            if trimmed.contains(op) { return false }
-        }
-        return safePatterns.contains { pattern in
-            trimmed == pattern || trimmed.hasPrefix(pattern + " ") || trimmed.hasPrefix(pattern + "\t")
-        }
-    }
-}
-
 @MainActor
 final class AgentSession: ObservableObject {
 

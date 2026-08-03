@@ -27,5 +27,12 @@ let package = Package(
             name: "SimpletonCoreTests",
             dependencies: ["SimpletonCore"]
         ),
+        // No-Xcode check runner: XCTest/swift-testing are unavailable on this machine,
+        // so runnable checks live in a plain executable target (see Tests/CoreChecks).
+        .executableTarget(
+            name: "CoreChecks",
+            dependencies: ["SimpletonCore"],
+            path: "Tests/CoreChecks"
+        ),
     ]
 )
