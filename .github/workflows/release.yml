@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Run CoreChecks
+        run: swift run -c release CoreChecks
+
+      - name: Assemble app bundle (ad-hoc signed)
+        run: bash scripts/e2e/make-app-bundle.sh release
+
+      - name: Zip app bundle
+        run: |
+          cd .build
+          ditto -c -k --keepParent Simpleton.app "Simpleton-${GITHUB_REF_NAME}.zip"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: .build/Simpleton-${{ github.ref_name }}.zip

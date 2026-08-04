@@ -138,7 +138,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Fire startup event
         pluginManager?.fireEvent(.onStartup, context: [
-            "version": "1.0.0",
+            "version": "0.1.1",
             "configDir": simpletonDir.path
         ])
 
@@ -307,7 +307,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         mcpClients.removeAll()
 
-        pluginManager?.fireEvent(.onShutdown, context: ["version": "1.0.0"])
+        pluginManager?.fireEvent(.onShutdown, context: ["version": "0.1.1"])
         pluginManager?.unloadAll()
         sessionManager?.saveCurrentState()
         sessionManager?.stopAndMarkClean()
