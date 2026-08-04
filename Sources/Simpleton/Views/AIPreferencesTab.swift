@@ -300,32 +300,41 @@ struct AIPreferencesTab: View {
     }
 
     private func saveAndTestKey() {
-        guard !apiKeyText.isEmpty else { return }
-        _ = AIKeychain.storeAPIKey(apiKeyText, for: config.provider)
+        let key = apiKeyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        _ = AIKeychain.storeAPIKey(key, for: config.provider)
         hasKey = true
-        keyStatus = .testing
-        isTesting = true
-        let keyToTest = apiKeyText
         apiKeyText = ""
-        Task {
-            let result = await testAPIKey(keyToTest)
-            await MainActor.run {
-                isTesting = false
-                keyStatus = result
-                if case .valid = result { loadModels() }
-            }
-        }
+        validate(using: key)
     }
 
     private func testExistingKey() {
         guard let key = AIKeychain.retrieveAPIKey(for: config.provider) else { return }
+        validate(using: key)
+    }
+
+    /// Validate a key by listing the provider's models — a pure auth check that (unlike a chat
+    /// completion) does not depend on the project having access to a specific model. Populates the
+    /// model dropdown on success.
+    private func validate(using key: String) {
         keyStatus = .testing
         isTesting = true
+        let cfg = config
         Task {
-            let result = await testAPIKey(key)
+            let result = await ModelFetcher.fetch(config: cfg, apiKey: key)
             await MainActor.run {
                 isTesting = false
-                keyStatus = result
+                if !result.models.isEmpty {
+                    models = result.models
+                    modelError = nil
+                    keyStatus = .valid
+                } else if let error = result.error {
+                    keyStatus = error.localizedCaseInsensitiveContains("unauthorized")
+                        ? .invalid("Invalid API key — check and try again")
+                        : .invalid(error)
+                } else {
+                    keyStatus = .valid
+                }
             }
         }
     }
@@ -340,56 +349,5 @@ struct AIPreferencesTab: View {
     private func refreshKeyStatus() {
         hasKey = AIKeychain.hasAPIKey(for: config.provider)
         keyStatus = .unknown
-    }
-
-    private func testAPIKey(_ key: String) async -> KeyStatus {
-        do {
-            guard let (url, headers, body) = buildTestRequest(key: key) else {
-                return .invalid("Invalid endpoint URL")
-            }
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 10
-            for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
-            request.httpBody = body
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return .invalid("No response from server")
-            }
-            if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
-                return .valid
-            } else if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                return .invalid("Invalid API key — check and try again")
-            } else {
-                let body = String(data: data, encoding: .utf8) ?? ""
-                return .invalid("Error \(httpResponse.statusCode): \(body.prefix(100))")
-            }
-        } catch {
-            return .invalid("Connection failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func buildTestRequest(key: String) -> (URL, [(String, String)], Data?)? {
-        let messageBody = try? JSONSerialization.data(withJSONObject: [
-            "model": config.model,
-            "max_tokens": 1,
-            "messages": [["role": "user", "content": "hi"]],
-        ])
-        switch preset.transport {
-        case .anthropicNative:
-            let url = URL(string: "https://api.anthropic.com/v1/messages")!
-            let headers = [
-                ("Content-Type", "application/json"),
-                ("x-api-key", key),
-                ("anthropic-version", "2023-06-01"),
-            ]
-            return (url, headers, messageBody)
-        case .openAICompatible:
-            guard let url = URL(string: preset.chatBaseURL(config: config) + "/chat/completions") else { return nil }
-            var headers = [("Content-Type", "application/json")]
-            if !key.isEmpty { headers.append(("Authorization", "Bearer \(key)")) }
-            return (url, headers, messageBody)
-        }
     }
 }
