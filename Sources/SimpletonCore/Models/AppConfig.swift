@@ -38,6 +38,8 @@ public struct GeneralConfig: Codable, Equatable {
     public var confirmBeforeClosing: Bool
     public var checkForUpdates: UpdateCheckMode
     public var termVariable: String
+    /// Opt-in: inject OSC 133 shell integration (currently zsh) for exit-status feedback.
+    public var shellIntegration: Bool
 
     public init(
         shell: String = "$SHELL",
@@ -47,7 +49,8 @@ public struct GeneralConfig: Codable, Equatable {
         restorePreviousSession: Bool = true,
         confirmBeforeClosing: Bool = true,
         checkForUpdates: UpdateCheckMode = .automatic,
-        termVariable: String = "xterm-256color"
+        termVariable: String = "xterm-256color",
+        shellIntegration: Bool = false
     ) {
         self.shell = shell
         self.shellDetection = shellDetection
@@ -57,6 +60,25 @@ public struct GeneralConfig: Codable, Equatable {
         self.confirmBeforeClosing = confirmBeforeClosing
         self.checkForUpdates = checkForUpdates
         self.termVariable = termVariable
+        self.shellIntegration = shellIntegration
+    }
+
+    /// Tolerant decoding: any key missing from an older config.json falls back to its default,
+    /// so adding fields (like shellIntegration) never drops a user's existing settings.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = GeneralConfig()
+        shell = try c.decodeIfPresent(String.self, forKey: .shell) ?? d.shell
+        shellDetection = try c.decodeIfPresent(ShellDetection.self, forKey: .shellDetection) ?? d.shellDetection
+        workingDirectory =
+            try c.decodeIfPresent(WorkingDirectoryMode.self, forKey: .workingDirectory) ?? d.workingDirectory
+        customWorkingDirectory = try c.decodeIfPresent(String.self, forKey: .customWorkingDirectory)
+        restorePreviousSession =
+            try c.decodeIfPresent(Bool.self, forKey: .restorePreviousSession) ?? d.restorePreviousSession
+        confirmBeforeClosing = try c.decodeIfPresent(Bool.self, forKey: .confirmBeforeClosing) ?? d.confirmBeforeClosing
+        checkForUpdates = try c.decodeIfPresent(UpdateCheckMode.self, forKey: .checkForUpdates) ?? d.checkForUpdates
+        termVariable = try c.decodeIfPresent(String.self, forKey: .termVariable) ?? d.termVariable
+        shellIntegration = try c.decodeIfPresent(Bool.self, forKey: .shellIntegration) ?? d.shellIntegration
     }
 }
 

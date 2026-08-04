@@ -453,6 +453,12 @@ final class TabContainerController: NSViewController {
         var env = ProcessInfo.processInfo.environment
         env["TERM"] = config.general.termVariable
         env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
+        // Opt-in OSC 133 shell integration (zsh): point ZDOTDIR at our integration dir, which
+        // restores the user's real ZDOTDIR first so their startup files still load untouched.
+        if config.general.shellIntegration, ShellIntegration.isZsh(ShellDetector.detectShell(config: config)) {
+            if let userZDotDir = env["ZDOTDIR"] { env["SIMPLETON_USER_ZDOTDIR"] = userZDotDir }
+            env["ZDOTDIR"] = AppPaths.shellIntegrationDir.path
+        }
         return env.map { "\($0.key)=\($0.value)" }
     }
 

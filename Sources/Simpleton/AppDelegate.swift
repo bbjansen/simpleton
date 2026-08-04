@@ -42,6 +42,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let simpletonDir = AppPaths.appSupport
         try? FileManager.default.createDirectory(at: simpletonDir, withIntermediateDirectories: true)
 
+        // Write the opt-in shell-integration script (only used when a shell's ZDOTDIR points here).
+        let integrationDir = AppPaths.shellIntegrationDir
+        try? FileManager.default.createDirectory(at: integrationDir, withIntermediateDirectories: true)
+        try? ShellIntegration.zshZshenv.write(
+            to: integrationDir.appendingPathComponent(".zshenv"), atomically: true, encoding: .utf8)
+
         // 1. Load config
         loadConfig()
 
