@@ -26,4 +26,32 @@ func runShellIntegrationChecks(_ t: TestRunner) {
         t.expect(s.contains("source \"${ZDOTDIR:-$HOME}/.zshenv\""), "sources the user's real .zshenv")
         t.expect(s.contains("[[ -o interactive ]]"), "guards hooks to interactive shells only")
     }
+
+    t.suite("ShellIntegration.isBash") {
+        t.expect(ShellIntegration.isBash("/bin/bash"), "/bin/bash is bash")
+        t.expect(ShellIntegration.isBash("/opt/homebrew/bin/bash"), "homebrew bash")
+        t.expect(!ShellIntegration.isBash("/bin/zsh"), "zsh is not bash")
+    }
+
+    t.suite("ShellIntegration.bashRcfile") {
+        let s = ShellIntegration.bashRcfile
+        t.expect(s.contains("]133;C"), "DEBUG trap emits command-start")
+        t.expect(s.contains("]133;D;"), "PROMPT_COMMAND emits command-end with exit code")
+        t.expect(s.contains("trap '__simpleton_preexec' DEBUG"), "installs DEBUG trap")
+        t.expect(s.contains("PROMPT_COMMAND="), "chains PROMPT_COMMAND")
+        t.expect(s.contains(".bash_profile"), "sources the user's login profile (no double-source)")
+        t.expect(s.contains("*__simpleton_precmd*)"), "guards against re-adding to PROMPT_COMMAND")
+    }
+
+    t.suite("ShellIntegration.launchArgs") {
+        t.expectEqual(
+            ShellIntegration.launchArgs(shellPath: "/bin/bash", integrationEnabled: true, bashRcfilePath: "/x/rc"),
+            ["--rcfile", "/x/rc"], "bash + integration → --rcfile")
+        t.expectEqual(
+            ShellIntegration.launchArgs(shellPath: "/bin/zsh", integrationEnabled: true, bashRcfilePath: "/x/rc"),
+            ["-l"], "zsh keeps login shell (env-based injection)")
+        t.expectEqual(
+            ShellIntegration.launchArgs(shellPath: "/bin/bash", integrationEnabled: false, bashRcfilePath: "/x/rc"),
+            ["-l"], "integration off → login shell")
+    }
 }

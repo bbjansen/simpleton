@@ -162,7 +162,8 @@ final class TabContainerController: NSViewController {
         }
 
         let env = buildEnvironment()
-        initialPane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
+        initialPane.startLocalShell(
+            shell: shell, args: shellLaunchArgs(for: shell), environment: env, workingDirectory: workingDir)
 
         // Wire split tree changes to pane label rebuilds
         splitController.onTreeChange = { [weak self] in
@@ -438,7 +439,8 @@ final class TabContainerController: NSViewController {
         pane.paneLabel = tabConversation?.paneLabels[id] ?? "Pane"
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
         let env = buildEnvironment()
-        pane.startLocalShell(shell: shell, environment: env, workingDirectory: workingDir)
+        pane.startLocalShell(
+            shell: shell, args: shellLaunchArgs(for: shell), environment: env, workingDirectory: workingDir)
         pane.onTitleChange = { [weak self] title in
             self?.view.window?.tab.title = title
             pane.paneLabel = self?.tabConversation?.paneLabels[pane.id] ?? title
@@ -460,6 +462,15 @@ final class TabContainerController: NSViewController {
             env["ZDOTDIR"] = AppPaths.shellIntegrationDir.path
         }
         return env.map { "\($0.key)=\($0.value)" }
+    }
+
+    /// Shell launch args, accounting for opt-in bash integration (which needs --rcfile).
+    private func shellLaunchArgs(for shell: String) -> [String] {
+        ShellIntegration.launchArgs(
+            shellPath: shell,
+            integrationEnabled: config.general.shellIntegration,
+            bashRcfilePath: AppPaths.shellIntegrationDir.appendingPathComponent("bash-rcfile").path
+        )
     }
 
     // MARK: - SSH Connections
