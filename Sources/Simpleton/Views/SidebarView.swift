@@ -40,12 +40,11 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(DT.elevated)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: DT.radiusCard, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: DT.radiusCard)
-                    .stroke(DT.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: DT.radiusCard, style: .continuous)
+                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
             )
-            .cornerRadius(DT.radiusCard)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
 
@@ -89,13 +88,7 @@ struct SidebarView: View {
             .padding(.vertical, 10)
         }
         .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
-        .background(
-            LinearGradient(
-                colors: [DT.base, DT.surface],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background(Color.clear)  // reveal the window's vibrancy backdrop
         .onAppear { refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .simpletonBookmarksChanged)) { _ in refresh() }
     }

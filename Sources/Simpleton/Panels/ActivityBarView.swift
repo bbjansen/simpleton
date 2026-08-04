@@ -40,7 +40,7 @@ struct ActivityBarView: View {
         }
         .padding(.vertical, 8)
         .frame(width: 40)
-        .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
+        .background(Color.clear)  // reveal the window's vibrancy backdrop
         .onDrop(of: [UTType.plainText], isTargeted: nil) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: NSString.self) { item, _ in
