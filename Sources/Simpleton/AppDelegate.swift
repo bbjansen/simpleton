@@ -564,8 +564,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             isNew: true,
             onSave: { [weak self] bookmark in
                 window.endSheet(window.sheets.last ?? window)
+                guard let store = self?.bookmarkStore else { return }
                 Task {
-                    try? await self?.bookmarkStore?.add(bookmark)
+                    try? await store.add(bookmark)
                 }
             },
             onCancel: {
