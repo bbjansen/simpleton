@@ -41,16 +41,19 @@ final class PreferencesWindowController {
         })
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 550),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 640),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Preferences"
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
+        window.contentMinSize = NSSize(width: 720, height: 460)
         window.contentView = NSHostingView(rootView: prefsView)
         window.center()
+        // Remember the size/position the user drags to, across opens and app launches.
+        window.setFrameAutosaveName("SimpletonPreferencesWindow")
         window.makeKeyAndOrderFront(nil)
         self.window = window
         closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
@@ -129,7 +132,7 @@ struct PreferencesView: View {
                 Spacer()
             }
             .padding(12)
-            .frame(width: 180)
+            .frame(minWidth: 160, idealWidth: 190, maxWidth: 240)
             .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
 
             // Content — Skills and Profiles tabs manage their own scroll/split layout so
@@ -166,7 +169,7 @@ struct PreferencesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(width: 700, height: 500)
+        .frame(minWidth: 720, maxWidth: .infinity, minHeight: 460, maxHeight: .infinity)
     }
 }
 
@@ -195,9 +198,9 @@ struct GeneralTab: View {
             }
 
             Section {
-                Toggle("Restore previous session", isOn: $config.general.restorePreviousSession)
-                    .onChange(of: config.general.restorePreviousSession) { onChanged(config) }
-                Text("Re-open tabs and connections from your last session")
+                Toggle("Restore previous session", isOn: .constant(false))
+                    .disabled(true)
+                Text("Temporarily disabled while session restore is being reworked")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Toggle("Confirm before closing", isOn: $config.general.confirmBeforeClosing)
