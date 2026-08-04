@@ -138,6 +138,7 @@ struct PreferencesView: View {
                         .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings-tab-\(tab.label.lowercased())")
                 }
                 Spacer()
             }
