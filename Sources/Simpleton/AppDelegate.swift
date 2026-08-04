@@ -53,8 +53,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         bookmarkStore = store
 
-        // 3. Start SSH config watcher
-        sshConfigWatcher = SSHConfigWatcher()
+        // 3. Start SSH config watcher (SIMPLETON_SSH_CONFIG overrides the path for demos/tests)
+        let sshConfigPath = ProcessInfo.processInfo.environment["SIMPLETON_SSH_CONFIG"] ?? "~/.ssh/config"
+        sshConfigWatcher = SSHConfigWatcher(configPath: sshConfigPath)
         sshConfigWatcher?.onConfigChanged = { _ in }
         sshConfigWatcher?.start()
 
