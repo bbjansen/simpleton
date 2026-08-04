@@ -8,6 +8,7 @@ let runner = TestRunner()
 
 // Core (synchronous)
 runCommandClassifierChecks(runner)
+runAIModelListChecks(runner)
 runAtomicFileWriterChecks(runner)
 runFieldValidatorChecks(runner)
 runFrecencyScorerChecks(runner)

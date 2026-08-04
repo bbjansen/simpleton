@@ -69,12 +69,7 @@ final class AIService {
         return provider.stream(system: system, user: user, model: config.model, options: options)
     }
 
-    var supportsToolUse: Bool {
-        switch config.provider {
-        case .anthropic, .openai: return true
-        case .ollama, .custom: return false
-        }
-    }
+    var supportsToolUse: Bool { config.provider.preset.supportsTools }
 
     func agentTurn(
         system: String,
@@ -120,18 +115,13 @@ final class AIService {
     }
 
     private func resolveProvider() -> AIProviderProtocol {
-        switch config.provider {
-        case .anthropic:
-            let key = AIKeychain.retrieveAPIKey(for: .anthropic) ?? ""
+        let preset = config.provider.preset
+        let key = AIKeychain.retrieveAPIKey(for: config.provider) ?? ""
+        switch preset.transport {
+        case .anthropicNative:
             return AnthropicProvider(apiKey: key)
-        case .openai:
-            let key = AIKeychain.retrieveAPIKey(for: .openai) ?? ""
-            return OpenAIProvider(apiKey: key, baseURL: "https://api.openai.com/v1")
-        case .ollama:
-            return OpenAIProvider(apiKey: "", baseURL: config.localOllamaURL + "/v1")
-        case .custom:
-            let key = AIKeychain.retrieveAPIKey(for: .custom) ?? ""
-            return OpenAIProvider(apiKey: key, baseURL: config.baseURL ?? "http://localhost:8080/v1")
+        case .openAICompatible:
+            return OpenAIProvider(apiKey: key, baseURL: preset.chatBaseURL(config: config))
         }
     }
 }
