@@ -44,12 +44,21 @@ final class AIService {
     private var config: AIConfig
     private var currentTasks: [Task<Void, Never>] = []
 
+    /// The API key, cached after the first Keychain read. Without this, `resolveProvider()` hit the
+    /// Keychain on EVERY request — and with a self-signed (untrusted) code-signing cert macOS won't
+    /// let "Always Allow" stick, so each read re-prompted for the login password. Cached here, a
+    /// session prompts at most once. Invalidated whenever the config (possibly the key) changes.
+    private var cachedKey: String?
+    private var cachedKeyProvider: AIProvider?
+
     init(config: AIConfig) {
         self.config = config
     }
 
     func updateConfig(_ config: AIConfig) {
         self.config = config
+        cachedKey = nil
+        cachedKeyProvider = nil
     }
 
     var isEnabled: Bool { config.enabled }
@@ -120,7 +129,18 @@ final class AIService {
 
     private func resolveProvider() -> AIProviderProtocol {
         let preset = config.provider.preset
-        let key = AIKeychain.retrieveAPIKey(for: config.provider) ?? ""
+        let key: String
+        if let cached = cachedKey, cachedKeyProvider == config.provider {
+            key = cached
+        } else {
+            key = AIKeychain.retrieveAPIKey(for: config.provider) ?? ""
+            // Only cache a successful read — a dismissed/failed prompt returns "" and must not get
+            // stuck for the whole session.
+            if !key.isEmpty {
+                cachedKey = key
+                cachedKeyProvider = config.provider
+            }
+        }
         switch preset.transport {
         case .anthropicNative:
             return AnthropicProvider(apiKey: key)

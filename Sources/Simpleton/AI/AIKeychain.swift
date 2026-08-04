@@ -11,21 +11,28 @@ enum AIKeychain {
         let account = "apiKey.\(provider.rawValue)"
         guard let data = key.data(using: .utf8) else { return false }
 
-        let deleteQuery: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(deleteQuery as CFDictionary)
 
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-        ]
-        return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+        // Upsert: SecItemUpdate the value in place if the item exists, otherwise SecItemAdd. This
+        // deliberately avoids the old delete+add: on the file-based (login) keychain, SecItemDelete
+        // is gated by an owner check tied to the creating binary's code signature, so a delete of an
+        // item created by an *earlier build* fails with errSecInvalidOwnerEdit (-25244) and the
+        // re-add then hits errSecDuplicateItem — silently dropping the new key. SecItemUpdate is not
+        // subject to that owner check, so overwrites succeed reliably. (See TN3137.)
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if updateStatus == errSecSuccess { return true }
+        if updateStatus == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+        }
+        return false
     }
 
     static func retrieveAPIKey(for provider: AIProvider) -> String? {

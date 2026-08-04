@@ -11,26 +11,26 @@ enum KeychainManager {
         let account = bookmarkID.uuidString
         guard let data = password.data(using: .utf8) else { return false }
 
-        // Delete existing entry first
-        let deleteQuery: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(deleteQuery as CFDictionary)
 
-        // Add new entry
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-            kSecAttrLabel as String: "Simpleton SSH: \(account)",
-        ]
-
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
-        return status == errSecSuccess
+        // Upsert: update in place if present, else add. Avoids the delete+add path, whose
+        // SecItemDelete fails with errSecInvalidOwnerEdit (-25244) for items created by an earlier
+        // build's code signature on the file-based keychain — which silently drops the new value.
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if updateStatus == errSecSuccess { return true }
+        if updateStatus == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            addQuery[kSecAttrLabel as String] = "Simpleton SSH: \(account)"
+            return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+        }
+        return false
     }
 
     /// Retrieve a password from the Keychain for a given bookmark ID.

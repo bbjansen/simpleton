@@ -43,5 +43,13 @@ openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -name "$NAME" \
 # -A: allow codesign to use the key without a per-use prompt.
 security import "$TMP/dev.p12" -k "$HOME/Library/Keychains/login.keychain-db" -P "$P12PASS" -A
 
+# Modern macOS (10.12+) gates private-key access behind a PARTITION LIST that is separate from the
+# ACL — so `-A` alone is NOT enough; codesign still prompts for the login password on every build.
+# Add codesign (and apple tools) to the partition list so signing is silent from here on. This
+# prompts ONCE for your login password.
+echo "Adding codesign to the key partition list (enter your macOS login password if asked)…"
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+  "$HOME/Library/Keychains/login.keychain-db" >/dev/null
+
 echo "created code-signing identity '$NAME':"
 security find-identity -p codesigning | grep "$NAME" || true
