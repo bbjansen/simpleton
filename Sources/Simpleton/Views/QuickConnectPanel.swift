@@ -171,12 +171,7 @@ struct QuickConnectContentView: View {
             .padding(.horizontal, 14)
         }
         .frame(width: 520, height: 420)
-        .background(VisualEffect(material: .hudWindow, blendingMode: .behindWindow))
-        .clipShape(.rect(cornerRadius: DT.radiusPanel, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DT.radiusPanel, style: .continuous)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-        )
+        .frostedPanel(cornerRadius: DT.radiusPanel)
         .opacity(isAppeared ? 1 : 0)
         .scaleEffect(isAppeared ? 1 : 0.97)
         .onAppear {
