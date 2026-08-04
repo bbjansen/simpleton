@@ -4,6 +4,11 @@ import Foundation
 enum AIProvider: String, Codable, CaseIterable {
     case anthropic
     case openai
+    case openrouter
+    case groq
+    case together
+    case mistral
+    case deepseek
     case ollama
     case custom
 }
