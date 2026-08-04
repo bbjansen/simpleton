@@ -205,6 +205,16 @@ struct GeneralTab: View {
                 Text("How to detect the default shell when the path above is empty")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
+
+                Toggle("Shell integration (zsh)", isOn: $config.general.shellIntegration)
+                    .onChange(of: config.general.shellIntegration) { onChanged(config) }
+                Text(
+                    "Injects OSC 133 markers so Simpleton knows when commands start, end, and fail "
+                        + "(enables exit-status feedback). Your existing zsh config is preserved. "
+                        + "Restart shells to apply."
+                )
+                .font(.system(size: 11))
+                .foregroundColor(DT.textHelp)
             } header: {
                 PrefsSectionHeader(title: "Shell")
             }

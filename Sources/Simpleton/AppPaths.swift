@@ -13,4 +13,9 @@ enum AppPaths {
         }
         return dir.appendingPathComponent("Simpleton")
     }()
+
+    /// Simpleton-owned ZDOTDIR used for opt-in shell integration.
+    static var shellIntegrationDir: URL {
+        appSupport.appendingPathComponent("shell-integration")
+    }
 }
