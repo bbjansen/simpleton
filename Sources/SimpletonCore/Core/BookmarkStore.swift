@@ -1,6 +1,11 @@
 // Sources/SimpletonCore/Core/BookmarkStore.swift
 import Foundation
 
+public extension Notification.Name {
+    /// Posted on the main queue after bookmarks or their frecency change, so UI can refresh.
+    static let simpletonBookmarksChanged = Notification.Name("simpletonBookmarksChanged")
+}
+
 public actor BookmarkStore {
 
     private let directory: URL
@@ -10,6 +15,12 @@ public actor BookmarkStore {
 
     public init(directory: URL) {
         self.directory = directory
+    }
+
+    nonisolated private func postBookmarksChanged() {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .simpletonBookmarksChanged, object: nil)
+        }
     }
 
     public func load() throws {
@@ -36,6 +47,7 @@ public actor BookmarkStore {
         try ensureLoaded()
         bookmarks[bookmark.id] = bookmark
         try saveBookmarks()
+        postBookmarksChanged()
     }
 
     public func update(_ bookmark: Bookmark) throws {
@@ -45,6 +57,7 @@ public actor BookmarkStore {
         updated.updatedAt = Date()
         bookmarks[bookmark.id] = updated
         try saveBookmarks()
+        postBookmarksChanged()
     }
 
     public func delete(id: UUID) throws {
@@ -53,6 +66,7 @@ public actor BookmarkStore {
         frecency.removeValue(forKey: id)
         try saveBookmarks()
         try saveFrecency()
+        postBookmarksChanged()
     }
 
     public func allBookmarks() -> [Bookmark] {
@@ -74,6 +88,7 @@ public actor BookmarkStore {
         let entry = frecency[bookmarkId] ?? FrecencyEntry()
         frecency[bookmarkId] = FrecencyScorer.recordUse(entry: entry)
         try? saveFrecency()
+        postBookmarksChanged()
     }
 
     public func frecencyEntry(for id: UUID) -> FrecencyEntry? {

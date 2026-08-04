@@ -97,6 +97,7 @@ struct SidebarView: View {
             )
         )
         .onAppear { refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .simpletonBookmarksChanged)) { _ in refresh() }
     }
 
     private var allBookmarks: [Bookmark] {
