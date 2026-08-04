@@ -207,17 +207,15 @@ final class SplitController: NSObject, NSSplitViewDelegate {
             onFocusChange?(paneID)
         }
 
-        // Highlight the focused pane with a blue border when there are 2+ panes
-        let showBorder = panes.count >= 2
+        // With 2+ panes, mark the focused pane with a system-accent border and gently dim the
+        // rest, so the active pane is unmistakable (follows the macOS accent color).
+        let multiPane = panes.count >= 2
         for (id, pane) in panes {
+            let isFocused = id == paneID
             pane.terminalView.wantsLayer = true
-            if showBorder && id == paneID {
-                pane.terminalView.layer?.borderWidth = 2
-                pane.terminalView.layer?.borderColor = NSColor.systemBlue.cgColor
-            } else {
-                pane.terminalView.layer?.borderWidth = 0
-                pane.terminalView.layer?.borderColor = nil
-            }
+            pane.terminalView.layer?.borderWidth = (multiPane && isFocused) ? 2 : 0
+            pane.terminalView.layer?.borderColor = (multiPane && isFocused) ? NSColor.controlAccentColor.cgColor : nil
+            pane.terminalView.alphaValue = (multiPane && !isFocused) ? 0.82 : 1.0
         }
     }
 
