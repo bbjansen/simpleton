@@ -24,9 +24,11 @@ final class AIExplainPanel {
             newPanel.level = .floating
             newPanel.titleVisibility = .hidden
             newPanel.titlebarAppearsTransparent = true
-            newPanel.backgroundColor = NSColor(white: 0.1, alpha: 0.98)
+            newPanel.backgroundColor = NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                    ? NSColor(white: 0.1, alpha: 0.98) : NSColor(white: 0.97, alpha: 0.98)
+            }
             newPanel.hasShadow = true
-            newPanel.appearance = NSAppearance(named: .darkAqua)
             self.panel = newPanel
         }
 

@@ -9,6 +9,8 @@ struct OnboardingWizardView: View {
     let onComplete: (PanelProfile, AIConfig?, [Bookmark], [SmartGroup]) -> Void
     let onSkip: () -> Void
 
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     // Navigation
     @State private var step = 0
 
@@ -87,7 +89,7 @@ struct OnboardingWizardView: View {
             let total = doneStep + 1
             ForEach(0..<total, id: \.self) { i in
                 Circle()
-                    .fill(i == step ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .fill(i == step ? themeSettings.accent : Color.secondary.opacity(0.3))
                     .frame(width: 8, height: 8)
             }
         }
@@ -101,7 +103,7 @@ struct OnboardingWizardView: View {
             Spacer()
             Image(systemName: "terminal.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(themeSettings.accent)
             Text("Welcome to Simpleton")
                 .font(.largeTitle)
                 .fontWeight(.bold)
@@ -146,7 +148,7 @@ struct OnboardingWizardView: View {
                         HStack(spacing: 10) {
                             Image(systemName: panel.icon)
                                 .frame(width: 20)
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(themeSettings.accent)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(panel.name)
                                 Text(panel.description)

@@ -102,6 +102,7 @@ struct SkillsPanelView: View {
     let currentPaneProvider: () -> PaneController?
 
     @StateObject private var vm: SkillsPanelVM
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     init(skillStore: SkillStore?, aiService: AIService?, currentPaneProvider: @escaping () -> PaneController?) {
         self.skillStore = skillStore
@@ -212,7 +213,7 @@ struct SkillsPanelView: View {
                 Spacer()
             }
             .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(vm.selectedSkill?.id == skill.id ? Color.accentColor.opacity(0.2) : Color.clear)
+            .background(vm.selectedSkill?.id == skill.id ? themeSettings.accent.opacity(0.2) : Color.clear)
             .cornerRadius(5)
         }
         .buttonStyle(.plain)
@@ -278,6 +279,6 @@ struct SkillsPanelView: View {
             .padding(8)
         }
         .frame(maxHeight: 180)
-        .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+        .background(DT.base)
     }
 }

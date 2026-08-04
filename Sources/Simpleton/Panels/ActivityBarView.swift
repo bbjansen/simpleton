@@ -73,16 +73,18 @@ struct ActivityBarButton: View {
     let isActive: Bool
     let action: () -> Void
 
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 16))
                 .symbolRenderingMode(.hierarchical)
                 .symbolEffect(.bounce, value: isActive)
-                .foregroundColor(isActive ? .accentColor : .secondary)
+                .foregroundColor(isActive ? themeSettings.accent : .secondary)
                 .frame(width: 32, height: 32)
                 .background(
-                    isActive ? Color.accentColor.opacity(0.15) : Color.clear,
+                    isActive ? themeSettings.accent.opacity(0.15) : Color.clear,
                     in: .rect(cornerRadius: 6, style: .continuous)
                 )
         }

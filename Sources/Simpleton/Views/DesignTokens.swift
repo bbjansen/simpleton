@@ -5,39 +5,65 @@ import SwiftUI
 /// Centralized design tokens for the Simpleton premium dark theme.
 enum DT {
 
-    // MARK: - Base Colors
+    // MARK: - Base Colors (dynamic — adapt to Light / Dark / Auto appearance)
 
-    /// Deep dark base background (#0D0D14)
-    static let base = Color(red: 0.051, green: 0.051, blue: 0.078)
-    /// Slightly lighter surface (#111118)
-    static let surface = Color(red: 0.067, green: 0.067, blue: 0.094)
-    /// Elevated surface (#15151F)
-    static let elevated = Color(red: 0.082, green: 0.082, blue: 0.122)
-    /// Hover / active fill (#1A1A2E)
-    static let hover = Color(red: 0.102, green: 0.102, blue: 0.180)
-    /// Thin border color (#2A2A3A)
-    static let border = Color(red: 0.165, green: 0.165, blue: 0.227)
-    /// Subtle border for panels (#1A1A2A)
-    static let panelBorder = Color(red: 0.102, green: 0.102, blue: 0.165)
+    /// A color that resolves to `light` or `dark` based on the view's macOS appearance, so the
+    /// whole SwiftUI chrome follows Dark / Light / Auto without per-view branching.
+    private static func dyn(
+        _ lr: Double, _ lg: Double, _ lb: Double, _ dr: Double, _ dg: Double, _ db: Double
+    ) -> Color {
+        Color(
+            nsColor: NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                return isDark
+                    ? NSColor(srgbRed: dr, green: dg, blue: db, alpha: 1)
+                    : NSColor(srgbRed: lr, green: lg, blue: lb, alpha: 1)
+            })
+    }
+
+    /// Deep neutral base background — window/chrome. Dark #0E0E11 / Light #F2F2F4
+    static let base = dyn(0.949, 0.949, 0.957, 0.055, 0.055, 0.067)
+    /// Chrome surface — sidebar / tab bar. Dark #131316 / Light #F7F7F9
+    static let surface = dyn(0.969, 0.969, 0.976, 0.075, 0.075, 0.086)
+    /// Elevated surface — popovers / cards. Dark #191A1E / Light #FFFFFF
+    static let elevated = dyn(1.0, 1.0, 1.0, 0.098, 0.102, 0.118)
+    /// Hover fill. Dark #1D1E22 / Light #ECECEF
+    static let hover = dyn(0.925, 0.925, 0.937, 0.114, 0.118, 0.133)
+    /// Selected-row fill — one step past hover. Dark #232429 / Light #E1E1E7
+    static let selected = dyn(0.882, 0.882, 0.906, 0.137, 0.141, 0.161)
+    /// Thin hairline border. Dark #26262B / Light #D6D6DC
+    static let border = dyn(0.839, 0.839, 0.863, 0.149, 0.149, 0.169)
+    /// Subtle border for panels. Dark #1E1E22 / Light #E5E5EA
+    static let panelBorder = dyn(0.898, 0.898, 0.918, 0.118, 0.118, 0.133)
 
     // MARK: - Text Colors
 
-    /// Primary text (bright white)
-    static let textPrimary = Color.white
-    /// Secondary text
-    static let textSecondary = Color.white.opacity(0.7)
-    /// Tertiary text / captions
-    static let textTertiary = Color(red: 0.353, green: 0.353, blue: 0.416)  // #5A5A6A
-    /// Muted text / section headers
-    static let textMuted = Color(red: 0.290, green: 0.290, blue: 0.353)  // #4A4A5A
-    /// Very muted text / footers
-    static let textFaint = Color(red: 0.227, green: 0.227, blue: 0.290)  // #3A3A4A
-    /// Help text in preferences
-    static let textHelp = Color(red: 0.416, green: 0.416, blue: 0.478)  // #6A6A7A
+    /// Primary text — off-white on dark, near-black on light. Dark #F5F6F6 / Light #1D1D1F
+    static let textPrimary = dyn(0.114, 0.114, 0.122, 0.961, 0.965, 0.965)
+    /// Secondary text. Dark #C7CBD1 / Light #3C3C43
+    static let textSecondary = dyn(0.235, 0.235, 0.263, 0.780, 0.796, 0.820)
+    /// Tertiary text / captions. Dark #8A8F98 / Light #6E6E76
+    static let textTertiary = dyn(0.431, 0.431, 0.463, 0.541, 0.561, 0.596)
+    /// Muted text / section headers. Dark #62666D / Light #8A8A92
+    static let textMuted = dyn(0.541, 0.541, 0.573, 0.384, 0.400, 0.427)
+    /// Very muted text / footers. Dark #4A4D54 / Light #AEAEB6
+    static let textFaint = dyn(0.682, 0.682, 0.714, 0.290, 0.302, 0.329)
+    /// Help text in preferences. Dark #6A6E76 / Light #6E6E76
+    static let textHelp = dyn(0.431, 0.431, 0.463, 0.416, 0.431, 0.463)
 
-    // MARK: - Accent Colors (muted, pop against dark)
+    // MARK: - Accent (single signature — focus, selection, cursor)
 
-    static let accentIndigo = Color(red: 0.380, green: 0.400, blue: 0.950)
+    /// The one signature accent: Linear indigo (#5E6AD2). Used ONLY for focus rings,
+    /// selection, and the cursor — everything else stays grayscale or semantic.
+    static let accent = Color(red: 0.369, green: 0.416, blue: 0.824)
+    /// Brighter accent for hover / pressed states (#828FFF).
+    static let accentHover = Color(red: 0.510, green: 0.561, blue: 1.000)
+    /// AppKit variant of the signature accent (layer borders, carets).
+    static let accentNSColor = NSColor(red: 0.369, green: 0.416, blue: 0.824, alpha: 1)
+
+    // MARK: - Semantic status + legacy accents
+
+    static let accentIndigo = accent
     static let accentGreen = Color(red: 0.300, green: 0.800, blue: 0.500)
     static let accentAmber = Color(red: 0.950, green: 0.700, blue: 0.200)
     static let accentRed = Color(red: 0.950, green: 0.350, blue: 0.350)
@@ -65,6 +91,11 @@ enum DT {
     static let radiusPanel: CGFloat = 12
     static let radiusBanner: CGFloat = 10
     static let radiusPill: CGFloat = 10
+
+    // MARK: - Terminal
+
+    /// Breathing room between the terminal content and its pane edge (Warp/Ghostty do ~2–16).
+    static let terminalPadding: CGFloat = 12
 
     // MARK: - Animation
 

@@ -8,7 +8,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var windowControllers: [WindowController] = []
     private var config: AppConfig = AppConfig()
-    private var theme: Theme = Theme(name: "default-dark")
+
+    /// The active terminal palette, derived from the appearance mode (Dark/Light/Auto) instead of
+    /// a named theme file. Auto resolves against the current system appearance.
+    private var theme: Theme {
+        let light: Bool
+        switch config.appearance.appearanceMode.lowercased() {
+        case "light": light = true
+        case "auto": light = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
+        default: light = false
+        }
+        return Theme(name: light ? "Light" : "Dark", colors: light ? .light : .dark)
+    }
     private var sshConfigWatcher: SSHConfigWatcher?
     private var bookmarkStore: BookmarkStore?
     private var quickConnectPanel: QuickConnectPanel?
@@ -52,6 +63,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 1. Load config
         loadConfig()
+
+        // Follow the system appearance live when in Auto mode: the SwiftUI chrome already adapts via
+        // dynamic colors, but the terminal palette must be repainted explicitly.
+        DistributedNotificationCenter.default().addObserver(
+            self, selector: #selector(systemAppearanceChanged),
+            name: NSNotification.Name("AppleInterfaceThemeChangedNotification"), object: nil)
 
         // 2. Load bookmarks
         let store = BookmarkStore(directory: simpletonDir)
@@ -397,6 +414,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             self.config = AppConfig()
         }
+        AppTheme.update(from: config)
     }
 
     private func saveConfig(_ config: AppConfig) {
@@ -503,8 +521,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PaletteAction(title: "Reset Font Size", shortcut: "⌘0", category: "View") { [weak self] in
                 self?.resetFontSize()
             },
-            PaletteAction(title: "Change Theme", shortcut: nil, category: "App") { [weak self] in
-                self?.showThemePicker()
+            PaletteAction(title: "Appearance Settings", shortcut: nil, category: "App") { [weak self] in
+                self?.showPreferences()
             },
             PaletteAction(title: "AI: Chat", shortcut: "\u{2318}\u{21e7}A", category: "AI") { [weak self] in
                 self?.toggleAIChat()
@@ -543,28 +561,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         preferencesController?.show()
     }
 
-    // MARK: - Theme Picker
-
-    @objc private func showThemePicker() {
-        guard let window = NSApp.keyWindow,
-            let themes = pluginManager?.themeDiscovery.themes
-        else { return }
-        let alert = NSAlert()
-        alert.messageText = "Choose Theme"
-        for theme in themes {
-            alert.addButton(withTitle: theme.name)
-        }
-        alert.addButton(withTitle: "Cancel")
-
-        alert.beginSheetModal(for: window) { [weak self] response in
-            let index = Int(response.rawValue) - Int(NSApplication.ModalResponse.alertFirstButtonReturn.rawValue)
-            guard let self = self, index >= 0, index < themes.count else { return }
-            let selectedTheme = themes[index]
-            self.theme = selectedTheme
-            self.applyThemeToAllPanes(selectedTheme)
-        }
-    }
-
     private func applyThemeToAllPanes(_ theme: Theme) {
         for wc in windowControllers {
             guard let tabContainer = wc.window?.contentViewController as? TabContainerController else { continue }
@@ -577,10 +573,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Re-apply the current appearance config (font, cursor, theme colors) to every open pane
     /// after the user changes a setting in Preferences — otherwise changes only take effect on
     /// newly-created panes, leaving existing terminals inconsistent until relaunch.
+    @objc private func systemAppearanceChanged() {
+        // Only Auto follows the system; Dark/Light are pinned. Defer a tick so effectiveAppearance
+        // has flipped before we repaint.
+        guard config.appearance.appearanceMode.lowercased() == "auto" else { return }
+        DispatchQueue.main.async { [weak self] in self?.applyConfigToAllPanes() }
+    }
+
     private func applyConfigToAllPanes() {
-        if let named = pluginManager?.themeDiscovery.themes.first(where: { $0.name == config.appearance.theme }) {
-            theme = named
-        }
+        AppTheme.update(from: config)
         applyThemeToAllPanes(theme)
         // Panels are cached globally by PanelRegistry and read their config lazily via the
         // container's `appConfig()` closure. Push the just-stored config into every tab's
@@ -588,6 +589,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for wc in windowControllers {
             let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
             for window in windows {
+                window.appearance = AppTheme.nsAppearance(for: config.appearance.appearanceMode)
                 (window.contentViewController as? TabContainerController)?.updateConfig(config)
                 window.alphaValue = config.appearance.windowOpacity
             }

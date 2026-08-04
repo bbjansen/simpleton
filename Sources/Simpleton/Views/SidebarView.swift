@@ -14,6 +14,7 @@ struct SidebarView: View {
     @State private var sshConfigEntries: [SSHConfigEntry] = []
     @State private var smartGroups: [SmartGroup] = []
     @State private var searchQuery = ""
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     private var hasNoConnections: Bool {
         pinned.isEmpty && recent.isEmpty && sshConfigEntries.isEmpty
@@ -170,6 +171,8 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
+        .tint(themeSettings.accent)
+        .environment(\.defaultMinListRowHeight, 34)
     }
 
     private var searchResults: some View {
@@ -190,6 +193,8 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
+        .tint(themeSettings.accent)
+        .environment(\.defaultMinListRowHeight, 34)
     }
 
     private func connectSSHConfigEntry(_ entry: SSHConfigEntry) {
@@ -272,12 +277,13 @@ struct SidebarRow: View {
                 }
                 Spacer()
             }
-            .padding(.vertical, 5)
-            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
             .background(
-                RoundedRectangle(cornerRadius: DT.radiusButton)
+                RoundedRectangle(cornerRadius: DT.radiusButton, style: .continuous)
                     .fill(isHovered ? DT.hover : Color.clear)
             )
+            .padding(.horizontal, 4)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -328,12 +334,13 @@ struct SSHConfigRow: View {
                     .background(DT.textFaint.opacity(0.15))
                     .cornerRadius(DT.radiusPill)
             }
-            .padding(.vertical, 5)
-            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
             .background(
-                RoundedRectangle(cornerRadius: DT.radiusButton)
+                RoundedRectangle(cornerRadius: DT.radiusButton, style: .continuous)
                     .fill(isHovered ? DT.hover : Color.clear)
             )
+            .padding(.horizontal, 4)
         }
         .buttonStyle(.plain)
         .onHover { hovering in

@@ -8,6 +8,8 @@ struct ConnectionFormView: View {
     let onSave: (Bookmark) -> Void
     let onCancel: () -> Void
 
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     @State private var password = ""
     @State private var validationError: String?
 
@@ -22,7 +24,7 @@ struct ConnectionFormView: View {
             HStack(spacing: 10) {
                 Image(systemName: isNew ? "plus.circle.fill" : "pencil.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(themeSettings.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isNew ? "New Connection" : "Edit Connection")
                         .font(.system(size: 16, weight: .semibold))
@@ -119,7 +121,7 @@ struct ConnectionFormView: View {
                         syncJumpHosts()
                     }) {
                         Label("Add jump host", systemImage: "plus")
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(themeSettings.accent)
                     }
                 } header: {
                     FormSectionHeader(title: "Jump Hosts")

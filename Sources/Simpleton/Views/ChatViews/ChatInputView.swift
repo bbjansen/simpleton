@@ -52,6 +52,6 @@ struct ChatInputView: View {
             }
         }
         .padding(12)
-        .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
+        .background(DT.surface)
     }
 }

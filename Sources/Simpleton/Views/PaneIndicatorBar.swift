@@ -4,6 +4,7 @@ import SwiftUI
 
 struct PaneIndicatorBar: View {
     @ObservedObject var conversation: TabConversation
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -24,7 +25,7 @@ struct PaneIndicatorBar: View {
                         .padding(.vertical, 3)
                         .background(
                             conversation.targetPaneID == paneID
-                                ? Color.accentColor.opacity(0.2) : Color(nsColor: NSColor(white: 0.12, alpha: 1))
+                                ? themeSettings.accent.opacity(0.2) : DT.hover
                         )
                         .cornerRadius(4)
                     }
@@ -34,6 +35,6 @@ struct PaneIndicatorBar: View {
             .padding(.horizontal, 8)
         }
         .padding(.vertical, 4)
-        .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+        .background(DT.base)
     }
 }

@@ -7,6 +7,8 @@ struct ImportWizardView: View {
     let onComplete: ([Bookmark], [SmartGroup]) -> Void
     let onSkip: () -> Void
 
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     @State private var step = 0
     @State private var selectedEntries: Set<String> = []
     @State private var suggestedGroups: [SmartGroup] = []
@@ -21,7 +23,7 @@ struct ImportWizardView: View {
                 ForEach(0..<4) { i in
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(i <= step ? Color.accentColor : Color.gray.opacity(0.3))
+                            .fill(i <= step ? themeSettings.accent : Color.gray.opacity(0.3))
                             .frame(width: 8, height: 8)
                         Text(stepTitle(i))
                             .font(.system(size: 12, weight: i == step ? .semibold : .regular))
@@ -341,6 +343,8 @@ struct ImportSourceRow: View {
     let subtitle: String
     let isSelected: Bool
 
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     var body: some View {
         HStack {
             Image(systemName: icon)
@@ -353,12 +357,12 @@ struct ImportSourceRow: View {
             Spacer()
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(themeSettings.accent)
             }
         }
         .padding(12)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : Color.white.opacity(0.04))
+        .background(isSelected ? themeSettings.accent.opacity(0.1) : Color.white.opacity(0.04))
         .cornerRadius(8)
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(isSelected ? Color.accentColor.opacity(0.3) : Color.clear))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(isSelected ? themeSettings.accent.opacity(0.3) : Color.clear))
     }
 }

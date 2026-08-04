@@ -20,7 +20,6 @@ final class PluginManager {
     private let runner = ScriptPluginRunner()
     private let actionHandler = ScriptActionHandler()
 
-    private(set) var themeDiscovery: ThemeDiscovery
     private(set) var scriptPlugins: [ScriptPlugin] = []
 
     /// Combined commands from all script plugins (for Command Palette).
@@ -40,22 +39,16 @@ final class PluginManager {
 
     init(baseDirectory: URL) {
         self.baseDirectory = baseDirectory
-        let themesDir = baseDirectory.appendingPathComponent("themes")
-        self.themeDiscovery = ThemeDiscovery(directory: themesDir)
     }
 
-    /// Discover and load all plugins. Call once at startup.
+    /// Discover and load all plugins. Call once at startup. (Themes are no longer plugins — they
+    /// live in Settings → Appearance as native appearance + accent options.)
     func loadAll() {
-        // Tier 1: themes
-        themeDiscovery.start()
-
-        // Tier 2: scripts
         loadScriptPlugins()
     }
 
     /// Unload all plugins. Call at shutdown.
     func unloadAll() {
-        themeDiscovery.stop()
         scriptPlugins.removeAll()
     }
 

@@ -90,7 +90,7 @@ struct SkillParameterForm: View {
             }
             .padding(10)
         }
-        .background(Color(nsColor: NSColor(white: 0.09, alpha: 1)))
+        .background(DT.surface)
         .cornerRadius(10)
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.purple.opacity(0.4), lineWidth: 1))
     }
@@ -116,7 +116,7 @@ struct SkillParameterForm: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 11, design: param.type == .filePath ? .monospaced : .default))
                         .padding(6)
-                        .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+                        .background(DT.base)
                         .cornerRadius(5)
                     if param.type == .filePath {
                         Button(action: { onFilePickerRequested?(param.name) }) {
@@ -130,7 +130,7 @@ struct SkillParameterForm: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 11))
                     .padding(6)
-                    .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+                    .background(DT.base)
                     .cornerRadius(5)
             case .picker:
                 Picker("", selection: binding(for: param.name)) {

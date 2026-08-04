@@ -13,6 +13,8 @@ struct FileBrowserPanelView: View {
     let onInsert: (String) -> Void
     let currentPaneProvider: () -> PaneController?
 
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     @State private var currentURL: URL = FileManager.default.homeDirectoryForCurrentUser
     @State private var entries: [FileBrowserEntry] = []
 
@@ -37,7 +39,7 @@ struct FileBrowserPanelView: View {
                         }
                         .buttonStyle(.plain)
                         .font(.caption)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(themeSettings.accent)
                         if url.path != breadcrumbs.last?.path {
                             Text(">")
                                 .font(.caption2)
@@ -59,7 +61,7 @@ struct FileBrowserPanelView: View {
                 List(entries) { entry in
                     HStack(spacing: 6) {
                         Image(systemName: entry.isDirectory ? "folder.fill" : "doc")
-                            .foregroundStyle(entry.isDirectory ? Color.accentColor : Color.secondary)
+                            .foregroundStyle(entry.isDirectory ? themeSettings.accent : Color.secondary)
                         Text(entry.name)
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(entry.isDirectory ? .semibold : .regular)

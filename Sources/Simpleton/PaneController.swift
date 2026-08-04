@@ -10,6 +10,10 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
     let id: PaneID
     let terminalView: LocalProcessTerminalView
+    /// Background-matched container that insets `terminalView` by `DT.terminalPadding` so the
+    /// terminal content breathes away from the pane edge. This — not `terminalView` — is what
+    /// the SplitController mounts, dims, and draws the focus border on.
+    let paneView: NSView
     private(set) var connectionType: ConnectionType
     private(set) var state: PaneState = .connecting
     /// Last title reported by the terminal — used to re-render the status prefix on state change.
@@ -84,9 +88,20 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         self.id = id
         self.connectionType = connectionType
         self.terminalView = LocalProcessTerminalView(frame: frame)
+        // Container that gives the terminal breathing room. terminalView keeps a fixed inset on
+        // all sides (autoresize margins stay constant), so it tracks resizes cleanly.
+        let container = NSView(frame: frame)
+        container.wantsLayer = true
+        // Seed the padding color with the terminal well so there's no flash before the theme
+        // applies; ThemeApplier keeps it in sync with the live background afterwards.
+        container.layer?.backgroundColor = (NSColor(hex: "#0B0B0E") ?? .black).cgColor
+        container.autoresizingMask = [.width, .height]
+        self.paneView = container
         super.init()
         self.terminalView.processDelegate = self
+        self.terminalView.frame = container.bounds.insetBy(dx: DT.terminalPadding, dy: DT.terminalPadding)
         self.terminalView.autoresizingMask = [.width, .height]
+        container.addSubview(terminalView)
 
         // Add drag-and-drop overlay for file paths
         let dropTarget = TerminalDropTarget(terminal: terminalView)

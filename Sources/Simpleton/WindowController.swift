@@ -53,7 +53,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         window.minSize = NSSize(width: 400, height: 300)
         window.tabbingMode = .preferred
         window.tabbingIdentifier = "com.simpleton.terminal"
-        window.appearance = NSAppearance(named: .darkAqua)
+        WindowController.dissolveTitleBar(window, mode: config.appearance.appearanceMode)
 
         self.tabContainer = TabContainerController(config: config, theme: theme)
 
@@ -78,6 +78,25 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    // MARK: - Chrome
+
+    /// Dissolve the stock title bar into the app chrome (Ghostty/Warp look): apply the appearance
+    /// mode, hide the title text, and make the titlebar strip transparent so it takes the window's
+    /// background color. Only the traffic lights float above a continuous chrome-colored strip — no
+    /// fullSize content, so the sidebar/terminal never slide under the traffic lights.
+    static func dissolveTitleBar(_ window: NSWindow, mode: String) {
+        window.appearance = AppTheme.nsAppearance(for: mode)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        // Chrome-colored titlebar strip that follows light/dark. Dark #131316 / Light #F2F2F4;
+        // frames the terminal well below it (chrome lighter/darker than content, per Zed).
+        window.backgroundColor = NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? NSColor(srgbRed: 0.075, green: 0.075, blue: 0.086, alpha: 1)
+                : NSColor(srgbRed: 0.949, green: 0.949, blue: 0.957, alpha: 1)
+        }
+    }
 
     // MARK: - Public API
 
@@ -108,7 +127,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         newWindow.title = "Simpleton"
         newWindow.tabbingMode = .preferred
         newWindow.tabbingIdentifier = "com.simpleton.terminal"
-        newWindow.appearance = NSAppearance(named: .darkAqua)
+        WindowController.dissolveTitleBar(newWindow, mode: config.appearance.appearanceMode)
         newWindow.contentViewController = newTabContainer
         newWindow.alphaValue = config.appearance.windowOpacity
 

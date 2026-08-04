@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct SkillsPreferencesTab: View {
     @ObservedObject var skillStore: SkillStore
+    @ObservedObject private var themeSettings = ThemeSettings.shared
     @State private var selectedSkillID: UUID?
     @State private var editingSkill: Skill?
 
@@ -130,14 +131,15 @@ struct SkillsPreferencesTab: View {
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
-                        .background(Color(nsColor: NSColor(white: 0.2, alpha: 1)))
+                        .background(DT.selected)
                         .cornerRadius(3)
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(selectedSkillID == skill.id ? Color.accentColor.opacity(0.3) : Color.clear)
+            .background(selectedSkillID == skill.id ? themeSettings.accent.opacity(0.25) : Color.clear)
             .cornerRadius(6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -184,7 +186,7 @@ struct SkillEditor: View {
                             .font(.system(size: 11))
                     }
                     .padding(10)
-                    .background(Color(nsColor: NSColor(white: 0.1, alpha: 1)))
+                    .background(DT.surface)
                     .cornerRadius(8)
                 }
 
@@ -275,7 +277,7 @@ struct SkillEditor: View {
                     Text(param.type.rawValue)
                         .font(.system(size: 9))
                         .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(Color(nsColor: NSColor(white: 0.18, alpha: 1)))
+                        .background(DT.selected)
                         .cornerRadius(3)
                     if param.required {
                         Text("required").font(.system(size: 9)).foregroundColor(.red)
@@ -292,7 +294,7 @@ struct SkillEditor: View {
             Spacer()
         }
         .padding(8)
-        .background(Color(nsColor: NSColor(white: 0.1, alpha: 1)))
+        .background(DT.surface)
         .cornerRadius(6)
     }
 

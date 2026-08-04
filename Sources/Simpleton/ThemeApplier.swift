@@ -20,16 +20,25 @@ enum ThemeApplier {
         // Core colors
         if let bg = NSColor(hex: colors.background) {
             terminalView.nativeBackgroundColor = bg
+            // Keep the pane container's padding in the same color so the inset is seamless.
+            terminalView.superview?.wantsLayer = true
+            terminalView.superview?.layer?.backgroundColor = bg.cgColor
         }
         if let fg = NSColor(hex: colors.foreground) {
             terminalView.nativeForegroundColor = fg
         }
-        if let cursor = NSColor(hex: colors.cursor) {
-            terminalView.caretColor = cursor
-        }
-        if let selection = NSColor(hex: colors.selection) {
-            terminalView.selectedTextBackgroundColor = selection
-        }
+        // Caret + selection follow the signature accent (overriding the palette's own cursor/
+        // selection) so the terminal matches the focus border and sidebar highlight.
+        let accent = AccentPalette.nsColor(config.appearance.accentColor)
+        terminalView.caretColor = accent
+        let isLight: Bool = {
+            switch config.appearance.appearanceMode.lowercased() {
+            case "light": return true
+            case "auto": return NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
+            default: return false
+            }
+        }()
+        terminalView.selectedTextBackgroundColor = accent.withAlphaComponent(isLight ? 0.22 : 0.32)
 
         // ANSI colors (0-15) — build full 16-color palette and install at once
         let ansiHexes = [

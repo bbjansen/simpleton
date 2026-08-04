@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ProfilesPreferencesTab: View {
     @ObservedObject var registry: PanelRegistry
+    @ObservedObject private var themeSettings = ThemeSettings.shared
     @State private var selectedProfileID: UUID?
     @State private var editingProfile: PanelProfile?
     @State private var showingTemplatePicker = false
@@ -80,12 +81,13 @@ struct ProfilesPreferencesTab: View {
                 if registry.activeProfile.id == profile.id {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10))
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(themeSettings.accent)
                 }
             }
             .padding(.horizontal, 8).padding(.vertical, 6)
-            .background(selectedProfileID == profile.id ? Color.accentColor.opacity(0.3) : Color.clear)
+            .background(selectedProfileID == profile.id ? themeSettings.accent.opacity(0.25) : Color.clear)
             .cornerRadius(6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -131,7 +133,7 @@ struct ProfileEditor: View {
                     Text("Built-in profile — read only")
                         .font(.system(size: 11)).foregroundColor(.secondary)
                         .padding(8)
-                        .background(Color(nsColor: NSColor(white: 0.1, alpha: 1)))
+                        .background(DT.surface)
                         .cornerRadius(6)
                 }
 
@@ -208,7 +210,7 @@ struct ProfileEditor: View {
                     }
                 }
                 .padding(6)
-                .background(Color(nsColor: NSColor(white: 0.1, alpha: 1)))
+                .background(DT.surface)
                 .cornerRadius(4)
             }
             if !isDefault {

@@ -81,7 +81,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         // throwaway shells must not be left running (`newPanes` uses fresh IDs, so nothing overlaps).
         let carriedOver = Set(newPanes.keys)
         for (id, pane) in panes where !carriedOver.contains(id) {
-            pane.terminalView.removeFromSuperview()
+            pane.paneView.removeFromSuperview()
             pane.terminalView.terminate()
         }
 
@@ -158,7 +158,7 @@ final class SplitController: NSObject, NSSplitViewDelegate {
 
         // Remove all panes except the focused one
         for (id, pane) in panes where id != focusedPaneID {
-            pane.terminalView.removeFromSuperview()
+            pane.paneView.removeFromSuperview()
         }
         guard let keptPane = panes[focusedPaneID] else { return }
         panes = [focusedPaneID: keptPane]
@@ -207,15 +207,15 @@ final class SplitController: NSObject, NSSplitViewDelegate {
             onFocusChange?(paneID)
         }
 
-        // With 2+ panes, mark the focused pane with a system-accent border and gently dim the
-        // rest, so the active pane is unmistakable (follows the macOS accent color).
+        // With 2+ panes, mark the focused pane with the signature indigo border and gently dim
+        // the rest, so the active pane is unmistakable.
         let multiPane = panes.count >= 2
         for (id, pane) in panes {
             let isFocused = id == paneID
-            pane.terminalView.wantsLayer = true
-            pane.terminalView.layer?.borderWidth = (multiPane && isFocused) ? 2 : 0
-            pane.terminalView.layer?.borderColor = (multiPane && isFocused) ? NSColor.controlAccentColor.cgColor : nil
-            pane.terminalView.alphaValue = (multiPane && !isFocused) ? 0.82 : 1.0
+            pane.paneView.wantsLayer = true
+            pane.paneView.layer?.borderWidth = (multiPane && isFocused) ? 2 : 0
+            pane.paneView.layer?.borderColor = (multiPane && isFocused) ? AppTheme.accentNSColor.cgColor : nil
+            pane.paneView.alphaValue = (multiPane && !isFocused) ? 0.82 : 1.0
         }
     }
 
@@ -259,8 +259,8 @@ final class SplitController: NSObject, NSSplitViewDelegate {
                 placeholder.layer?.backgroundColor = NSColor.red.cgColor
                 return placeholder
             }
-            pane.terminalView.frame = frame
-            return pane.terminalView
+            pane.paneView.frame = frame
+            return pane.paneView
 
         case .split(let direction, let children, let ratios):
             let splitView = NSSplitView(frame: frame)

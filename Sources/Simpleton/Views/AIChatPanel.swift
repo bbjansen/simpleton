@@ -228,7 +228,7 @@ struct AIChatPanelView: View {
             )
         }
         .frame(width: 320)
-        .background(Color(nsColor: NSColor(white: 0.06, alpha: 1)))
+        .background(DT.base)
         // Per-tab state sync: the view is keyed by tabID in AIChatPanelController (recreated per
         // tab), so load this tab's conversation on appear and mirror local edits back — keeping
         // the conversation the source of truth and preventing one tab's messages from leaking

@@ -56,7 +56,8 @@ final class PreferencesWindowController {
         )
         window.title = "Preferences"
         window.isReleasedWhenClosed = false
-        window.appearance = NSAppearance(named: .darkAqua)
+        // No hardcoded appearance — follow the app-wide appearance (NSApp.appearance) so Settings
+        // matches Dark / Light / Auto like every other window.
         window.contentMinSize = NSSize(width: 720, height: 460)
         window.contentView = NSHostingView(rootView: prefsView)
         window.center()
@@ -96,6 +97,7 @@ struct PreferencesView: View {
     let onAIConfigChanged: (AIConfig) -> Void
 
     @State private var selectedTab = 0
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     private var tabs: [(id: Int, label: String, icon: String)] {
         var t: [(Int, String, String)] = [
@@ -134,7 +136,7 @@ struct PreferencesView: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(selectedTab == tab.id ? Color.accentColor.opacity(0.8) : Color.clear)
+                        .background(selectedTab == tab.id ? themeSettings.accent.opacity(0.85) : Color.clear)
                         .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
@@ -144,7 +146,7 @@ struct PreferencesView: View {
             }
             .padding(12)
             .frame(minWidth: 160, idealWidth: 190, maxWidth: 240)
-            .background(Color(nsColor: NSColor(white: 0.08, alpha: 1)))
+            .background(DT.surface)
 
             // Content — Skills and Profiles tabs manage their own scroll/split layout so
             // they must live outside the outer ScrollView.
@@ -183,6 +185,7 @@ struct PreferencesView: View {
             }
         }
         .frame(minWidth: 720, maxWidth: .infinity, minHeight: 460, maxHeight: .infinity)
+        .tint(themeSettings.accent)
     }
 }
 
@@ -266,6 +269,30 @@ struct AppearanceTab: View {
 
     var body: some View {
         Form {
+            Section {
+                Picker("Appearance", selection: $config.appearance.appearanceMode) {
+                    Text("Dark").tag("dark")
+                    Text("Light").tag("light")
+                    Text("Auto").tag("auto")
+                }
+                .onChange(of: config.appearance.appearanceMode) { onChanged(config) }
+                Picker("Accent color", selection: $config.appearance.accentColor) {
+                    ForEach(AccentPalette.options, id: \.id) { opt in
+                        // A single concatenated Text (colored dot + label) — a menu Picker renders
+                        // this correctly in the collapsed button, unlike an HStack of subviews.
+                        (Text(Image(systemName: "circle.fill")).foregroundColor(AccentPalette.color(opt.id))
+                            + Text("  " + opt.label))
+                            .tag(opt.id)
+                    }
+                }
+                .onChange(of: config.appearance.accentColor) { onChanged(config) }
+                Text("Focus ring, selection, and cursor use this color. “Match System” follows your macOS accent.")
+                    .font(.system(size: 11))
+                    .foregroundColor(DT.textHelp)
+            } header: {
+                PrefsSectionHeader(title: "Theme")
+            }
+
             Section {
                 TextField("Font family", text: $config.appearance.fontFamily)
                     .onChange(of: config.appearance.fontFamily) { onChanged(config) }

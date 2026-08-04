@@ -27,9 +27,9 @@ public struct ThemeColors: Codable, Equatable {
     public var tabBar: String
 
     public init(
-        background: String = "#1a1a2e", foreground: String = "#e2e8f0",
-        cursor: String = "#818cf8", selection: String = "#334155",
-        black: String = "#1a1a2e", red: String = "#ef4444",
+        background: String = "#0B0B0E", foreground: String = "#EDEDED",
+        cursor: String = "#5E6AD2", selection: String = "#2A3350",
+        black: String = "#15151A", red: String = "#ef4444",
         green: String = "#22c55e", yellow: String = "#eab308",
         blue: String = "#3b82f6", magenta: String = "#a855f7",
         cyan: String = "#06b6d4", white: String = "#e2e8f0",
@@ -37,8 +37,8 @@ public struct ThemeColors: Codable, Equatable {
         brightGreen: String = "#86efac", brightYellow: String = "#fde68a",
         brightBlue: String = "#93c5fd", brightMagenta: String = "#d8b4fe",
         brightCyan: String = "#67e8f9", brightWhite: String = "#f8fafc",
-        splitBorder: String = "#333333", sidebar: String = "#0f0f1a",
-        tabBar: String = "#16162a"
+        splitBorder: String = "#26262B", sidebar: String = "#131316",
+        tabBar: String = "#131316"
     ) {
         self.background = background; self.foreground = foreground
         self.cursor = cursor; self.selection = selection
@@ -50,6 +50,28 @@ public struct ThemeColors: Codable, Equatable {
         self.brightCyan = brightCyan; self.brightWhite = brightWhite
         self.splitBorder = splitBorder; self.sidebar = sidebar; self.tabBar = tabBar
     }
+}
+
+extension ThemeColors {
+    /// Premium neutral-dark terminal palette (the default).
+    public static let dark = ThemeColors()
+
+    /// macOS-native light terminal palette — Terminal "Basic"-style ANSI, tuned to stay readable
+    /// on a white background. The caret/selection are overridden at apply time by the accent.
+    public static let light = ThemeColors(
+        background: "#FFFFFF", foreground: "#1D1D1F",
+        cursor: "#5E6AD2", selection: "#B4D5FF",
+        black: "#000000", red: "#990000",
+        green: "#00A600", yellow: "#7A6300",
+        blue: "#0000B2", magenta: "#B200B2",
+        cyan: "#00A6B2", white: "#BFBFBF",
+        brightBlack: "#5A5A5A", brightRed: "#E50000",
+        brightGreen: "#00A600", brightYellow: "#8A8A00",
+        brightBlue: "#0000FF", brightMagenta: "#E500E5",
+        brightCyan: "#00A6B2", brightWhite: "#E5E5E5",
+        splitBorder: "#D6D6DC", sidebar: "#F7F7F9",
+        tabBar: "#F2F2F4"
+    )
 }
 
 public struct Theme: Codable, Equatable {

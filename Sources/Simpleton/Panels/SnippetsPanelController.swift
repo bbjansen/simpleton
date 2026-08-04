@@ -8,6 +8,7 @@ struct SnippetsPanelView: View {
     let onInsert: (String) -> Void
 
     @StateObject private var store: SnippetStore
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     @State private var query = ""
     @State private var selectedID: UUID?
@@ -64,7 +65,7 @@ struct SnippetsPanelView: View {
                     }
                 }
                 .padding(8)
-                .background(Color(nsColor: NSColor(white: 0.1, alpha: 1)))
+                .background(DT.surface)
                 Divider()
             }
 
@@ -131,7 +132,7 @@ struct SnippetsPanelView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(selectedID == snippet.id ? Color.accentColor.opacity(0.2) : Color.clear)
+            .background(selectedID == snippet.id ? themeSettings.accent.opacity(0.2) : Color.clear)
             .cornerRadius(5)
         }
         .buttonStyle(.plain)

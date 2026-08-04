@@ -4,20 +4,19 @@ import SwiftUI
 
 struct PluginsPreferencesTab: View {
     let pluginManager: PluginManager
-    @State private var themes: [Theme] = []
     @State private var scripts: [ScriptPlugin] = []
 
     var body: some View {
         Form {
             Section {
-                if themes.isEmpty && scripts.isEmpty {
+                if scripts.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "puzzlepiece.extension")
                             .font(.system(size: 24))
                             .foregroundColor(.secondary)
                         Text("No plugins installed")
                             .foregroundColor(.secondary)
-                        Text("Drop theme JSON files in the themes folder, or script folders in the scripts folder.")
+                        Text("Drop script folders in the scripts folder to add plugins.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -26,65 +25,39 @@ struct PluginsPreferencesTab: View {
                     .padding(.vertical, 20)
                 }
 
-                if !themes.isEmpty {
-                    ForEach(themes, id: \.name) { theme in
-                        HStack {
-                            Image(systemName: "paintbrush")
-                                .foregroundColor(.purple)
-                                .frame(width: 20)
-                            VStack(alignment: .leading) {
-                                Text(theme.name)
-                                    .font(.system(size: 13))
-                                Text("Theme")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Text("Theme")
-                                .font(.system(size: 9))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.purple.opacity(0.15))
-                                .cornerRadius(4)
-                        }
-                    }
-                }
-
-                if !scripts.isEmpty {
-                    ForEach(scripts, id: \.name) { plugin in
-                        HStack {
-                            Image(systemName: "terminal")
-                                .foregroundColor(.green)
-                                .frame(width: 20)
-                            VStack(alignment: .leading) {
-                                Text(plugin.name)
-                                    .font(.system(size: 13))
-                                HStack(spacing: 4) {
-                                    Text("v\(plugin.version)")
-                                    if let desc = plugin.manifest.description {
-                                        Text("—")
-                                        Text(desc)
-                                    }
+                ForEach(scripts, id: \.name) { plugin in
+                    HStack {
+                        Image(systemName: "terminal")
+                            .foregroundColor(.green)
+                            .frame(width: 20)
+                        VStack(alignment: .leading) {
+                            Text(plugin.name)
+                                .font(.system(size: 13))
+                            HStack(spacing: 4) {
+                                Text("v\(plugin.version)")
+                                if let desc = plugin.manifest.description {
+                                    Text("—")
+                                    Text(desc)
                                 }
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
                             }
-                            Spacer()
-                            Text("Script")
-                                .font(.system(size: 9))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.green.opacity(0.15))
-                                .cornerRadius(4)
-                            Toggle(
-                                "",
-                                isOn: Binding(
-                                    get: { plugin.isEnabled },
-                                    set: { pluginManager.setEnabled($0, for: plugin) }
-                                )
-                            )
-                            .labelsHidden()
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
                         }
+                        Spacer()
+                        Text("Script")
+                            .font(.system(size: 9))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.15))
+                            .cornerRadius(4)
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { plugin.isEnabled },
+                                set: { pluginManager.setEnabled($0, for: plugin) }
+                            )
+                        )
+                        .labelsHidden()
                     }
                 }
             } header: {
@@ -96,9 +69,6 @@ struct PluginsPreferencesTab: View {
 
             Section {
                 HStack {
-                    Button("Open Themes Folder") {
-                        NSWorkspace.shared.open(AppPaths.appSupport.appendingPathComponent("themes"))
-                    }
                     Button("Open Scripts Folder") {
                         NSWorkspace.shared.open(AppPaths.appSupport.appendingPathComponent("scripts"))
                     }
@@ -115,7 +85,6 @@ struct PluginsPreferencesTab: View {
     }
 
     private func refresh() {
-        themes = pluginManager.themeDiscovery.themes
         scripts = pluginManager.scriptPlugins
     }
 }

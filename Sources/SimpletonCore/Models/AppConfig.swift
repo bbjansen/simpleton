@@ -83,7 +83,11 @@ public struct GeneralConfig: Codable, Equatable {
 }
 
 public struct AppearanceConfig: Codable, Equatable {
-    public var theme: String
+    /// "dark" | "light" | "auto" (auto follows the macOS system appearance).
+    public var appearanceMode: String
+    /// Signature accent: "indigo" (default) | "system" (live macOS accent) | a macOS accent
+    /// name (blue/purple/pink/red/orange/yellow/green/graphite).
+    public var accentColor: String
     public var fontFamily: String
     public var fontSize: Int
     public var cursorStyle: CursorStyle
@@ -92,7 +96,8 @@ public struct AppearanceConfig: Codable, Equatable {
     public var thinStrokes: Bool
 
     public init(
-        theme: String = "default-dark",
+        appearanceMode: String = "dark",
+        accentColor: String = "indigo",
         fontFamily: String = "SF Mono",
         fontSize: Int = 13,
         cursorStyle: CursorStyle = .block,
@@ -100,13 +105,34 @@ public struct AppearanceConfig: Codable, Equatable {
         windowOpacity: Double = 1.0,
         thinStrokes: Bool = false
     ) {
-        self.theme = theme
+        self.appearanceMode = appearanceMode
+        self.accentColor = accentColor
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.cursorStyle = cursorStyle
         self.cursorBlink = cursorBlink
         self.windowOpacity = windowOpacity
         self.thinStrokes = thinStrokes
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case appearanceMode, accentColor, fontFamily, fontSize, cursorStyle, cursorBlink, windowOpacity,
+            thinStrokes
+    }
+
+    /// Tolerant decoding: missing keys (older config.json, or the retired `theme` key) fall back
+    /// to defaults so upgrades never drop a user's existing appearance settings.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = AppearanceConfig()
+        appearanceMode = try c.decodeIfPresent(String.self, forKey: .appearanceMode) ?? d.appearanceMode
+        accentColor = try c.decodeIfPresent(String.self, forKey: .accentColor) ?? d.accentColor
+        fontFamily = try c.decodeIfPresent(String.self, forKey: .fontFamily) ?? d.fontFamily
+        fontSize = try c.decodeIfPresent(Int.self, forKey: .fontSize) ?? d.fontSize
+        cursorStyle = try c.decodeIfPresent(CursorStyle.self, forKey: .cursorStyle) ?? d.cursorStyle
+        cursorBlink = try c.decodeIfPresent(Bool.self, forKey: .cursorBlink) ?? d.cursorBlink
+        windowOpacity = try c.decodeIfPresent(Double.self, forKey: .windowOpacity) ?? d.windowOpacity
+        thinStrokes = try c.decodeIfPresent(Bool.self, forKey: .thinStrokes) ?? d.thinStrokes
     }
 }
 
