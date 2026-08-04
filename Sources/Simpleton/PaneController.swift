@@ -272,7 +272,10 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
         markSSHConnected()
-        if let dir = directory {
+        if let directory {
+            // OSC 7 reports the CWD as file://<hostname>/<path> — parse to a plain path so the
+            // file browser, AI context, and restore don't get a malformed URL-in-a-path.
+            let dir = TerminalURI.directoryPath(fromOSC7: directory)
             currentDirectory = dir
             onDirectoryChange?(dir)
 
