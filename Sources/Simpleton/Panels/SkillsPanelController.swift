@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Panels/SkillsPanelController.swift
 import SwiftUI
-import SimpletonCore
 
 @MainActor
 final class SkillsPanelVM: ObservableObject {
@@ -107,11 +107,12 @@ struct SkillsPanelView: View {
         self.skillStore = skillStore
         self.aiService = aiService
         self.currentPaneProvider = currentPaneProvider
-        _vm = StateObject(wrappedValue: SkillsPanelVM(
-            skillStore: skillStore,
-            aiService: aiService,
-            currentPaneProvider: currentPaneProvider
-        ))
+        _vm = StateObject(
+            wrappedValue: SkillsPanelVM(
+                skillStore: skillStore,
+                aiService: aiService,
+                currentPaneProvider: currentPaneProvider
+            ))
     }
 
     var body: some View {
@@ -227,10 +228,13 @@ struct SkillsPanelView: View {
             ForEach(skill.parameters) { param in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(param.label).font(.system(size: 10)).foregroundColor(.secondary)
-                    TextField(param.placeholder ?? param.name, text: Binding(
-                        get: { vm.paramValues[param.name] ?? "" },
-                        set: { vm.paramValues[param.name] = $0 }
-                    ))
+                    TextField(
+                        param.placeholder ?? param.name,
+                        text: Binding(
+                            get: { vm.paramValues[param.name] ?? "" },
+                            set: { vm.paramValues[param.name] = $0 }
+                        )
+                    )
                     .font(.system(size: 11))
                 }
             }

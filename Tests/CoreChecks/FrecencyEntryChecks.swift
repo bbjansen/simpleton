@@ -24,7 +24,9 @@ func runFrecencyEntryChecks(_ t: TestRunner) {
     t.suite("FrecencyEntry.testFrecencyFileRoundTrip") {
         do {
             let id = UUID()
-            let file = FrecencyFile(entries: [id: FrecencyEntry(score: 100, lastUsed: Date(), useCount: 5, recentTimestamps: [])])
+            let file = FrecencyFile(entries: [
+                id: FrecencyEntry(score: 100, lastUsed: Date(), useCount: 5, recentTimestamps: [])
+            ])
             let data = try JSONEncoder().encode(file)
             let decoded = try JSONDecoder().decode(FrecencyFile.self, from: data)
             t.expectEqual(decoded.version, 1, "version")

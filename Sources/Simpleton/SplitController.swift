@@ -1,7 +1,7 @@
 // Sources/Simpleton/SplitController.swift
 import AppKit
-import SwiftTerm
 import SimpletonCore
+import SwiftTerm
 
 /// Owns the split tree for one tab. Reconciles the logical SplitNode tree to an
 /// NSSplitView hierarchy. Creates/destroys PaneControllers as panes are added/removed.
@@ -99,7 +99,8 @@ final class SplitController: NSObject, NSSplitViewDelegate {
     func closePane(_ paneID: PaneID) {
         // Confirm before closing a pane with a running process
         if let pane = panes[paneID], pane.state == .running,
-           let window = pane.terminalView.window {
+            let window = pane.terminalView.window
+        {
             let alert = NSAlert()
             alert.messageText = "Close this pane?"
             alert.informativeText = "A process is still running in this pane. Are you sure you want to close it?"
@@ -271,7 +272,8 @@ final class SplitController: NSObject, NSSplitViewDelegate {
             splitView.delegate = self
 
             for (index, child) in children.enumerated() {
-                let ratio = index < ratios.count ? ratios[index] : (children.isEmpty ? 1.0 : 1.0 / CGFloat(children.count))
+                let ratio =
+                    index < ratios.count ? ratios[index] : (children.isEmpty ? 1.0 : 1.0 / CGFloat(children.count))
                 let childFrame: NSRect
                 if direction == .vertical {
                     let width = frame.width * ratio
@@ -291,11 +293,15 @@ final class SplitController: NSObject, NSSplitViewDelegate {
 
     // MARK: - NSSplitViewDelegate
 
-    func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        return max(proposedMinimumPosition, 100) // 100pt minimum pane size
+    func splitView(
+        _ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int
+    ) -> CGFloat {
+        return max(proposedMinimumPosition, 100)  // 100pt minimum pane size
     }
 
-    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
+    func splitView(
+        _ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int
+    ) -> CGFloat {
         let totalSize = splitView.isVertical ? splitView.bounds.width : splitView.bounds.height
         return min(proposedMaximumPosition, totalSize - 100)
     }

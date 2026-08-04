@@ -1,6 +1,6 @@
+import Combine
 // Sources/Simpleton/AI/TabConversation.swift
 import Foundation
-import Combine
 import SimpletonCore
 
 @MainActor

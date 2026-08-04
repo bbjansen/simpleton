@@ -19,7 +19,8 @@ struct NetworkTools: ToolHandler {
 
     private func handleHttpRequest(_ args: [String: Any]) async -> String {
         guard let urlStr = args["url"] as? String,
-              let url = URL(string: urlStr) else {
+            let url = URL(string: urlStr)
+        else {
             return "Missing or invalid 'url' parameter"
         }
         let method = (args["method"] as? String ?? "GET").uppercased()

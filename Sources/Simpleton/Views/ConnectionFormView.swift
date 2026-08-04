@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/ConnectionFormView.swift
 import SwiftUI
-import SimpletonCore
 
 struct ConnectionFormView: View {
     @State var bookmark: Bookmark
@@ -44,19 +44,24 @@ struct ConnectionFormView: View {
                     TextField("Name", text: $bookmark.name)
                     TextField("Host", text: $bookmark.host)
                     Stepper("Port: \(bookmark.port)", value: $bookmark.port, in: 1...65535)
-                    TextField("User", text: Binding(
-                        get: { bookmark.user ?? "" },
-                        set: { bookmark.user = $0.isEmpty ? nil : $0 }
-                    ))
+                    TextField(
+                        "User",
+                        text: Binding(
+                            get: { bookmark.user ?? "" },
+                            set: { bookmark.user = $0.isEmpty ? nil : $0 }
+                        ))
                 } header: {
                     FormSectionHeader(title: "Connection")
                 }
 
                 Section {
-                    Picker("Method", selection: Binding(
-                        get: { authMethodTag },
-                        set: { setAuthMethod($0) }
-                    )) {
+                    Picker(
+                        "Method",
+                        selection: Binding(
+                            get: { authMethodTag },
+                            set: { setAuthMethod($0) }
+                        )
+                    ) {
                         Text("SSH Agent").tag("agent")
                         Text("Key File").tag("key")
                         Text("Password").tag("password")
@@ -64,10 +69,12 @@ struct ConnectionFormView: View {
                     }
 
                     if case .key(let file) = bookmark.auth {
-                        TextField("Identity file", text: Binding(
-                            get: { file },
-                            set: { bookmark.auth = .key(identityFile: $0) }
-                        ))
+                        TextField(
+                            "Identity file",
+                            text: Binding(
+                                get: { file },
+                                set: { bookmark.auth = .key(identityFile: $0) }
+                            ))
                     }
 
                     if case .password = bookmark.auth {
@@ -88,14 +95,18 @@ struct ConnectionFormView: View {
                                 .background(DT.elevated)
                                 .clipShape(Circle())
 
-                            TextField("Jump host \(index + 1)", text: Binding(
-                                get: { row.value },
-                                set: { newValue in
-                                    guard let idx = jumpHostRows.firstIndex(where: { $0.id == row.id }) else { return }
-                                    jumpHostRows[idx].value = newValue
-                                    syncJumpHosts()
-                                }
-                            ))
+                            TextField(
+                                "Jump host \(index + 1)",
+                                text: Binding(
+                                    get: { row.value },
+                                    set: { newValue in
+                                        guard let idx = jumpHostRows.firstIndex(where: { $0.id == row.id }) else {
+                                            return
+                                        }
+                                        jumpHostRows[idx].value = newValue
+                                        syncJumpHosts()
+                                    }
+                                ))
                             Button(action: { removeJumpHost(id: row.id) }) {
                                 Image(systemName: "minus.circle.fill")
                                     .foregroundColor(.red.opacity(0.7))
@@ -137,10 +148,14 @@ struct ConnectionFormView: View {
                 }
 
                 Section {
-                    TextField("Tags (comma-separated)", text: Binding(
-                        get: { bookmark.tags.joined(separator: ", ") },
-                        set: { bookmark.tags = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } }
-                    ))
+                    TextField(
+                        "Tags (comma-separated)",
+                        text: Binding(
+                            get: { bookmark.tags.joined(separator: ", ") },
+                            set: {
+                                bookmark.tags = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                            }
+                        ))
                     Toggle("Pinned", isOn: $bookmark.pinned)
                     TextField("Notes", text: $bookmark.notes, axis: .vertical)
                         .lineLimit(3)

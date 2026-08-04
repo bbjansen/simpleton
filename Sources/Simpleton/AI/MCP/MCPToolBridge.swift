@@ -44,9 +44,11 @@ struct MCPToolBridge: ToolHandler {
         let toolName = String(name[name.index(after: dotIndex)...])
 
         // Find the client that owns this tool
-        guard let client = clients.first(where: {
-            $0.isConnected && Self.prefix(for: $0.config) == prefix
-        }) else {
+        guard
+            let client = clients.first(where: {
+                $0.isConnected && Self.prefix(for: $0.config) == prefix
+            })
+        else {
             return "Error: MCP server '\(prefix)' is not connected"
         }
 

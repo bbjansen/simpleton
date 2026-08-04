@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Panels/ProcessesPanelView.swift
 import SwiftUI
-import AppKit
 
 struct ProcessEntry: Identifiable {
     let id: Int32
@@ -45,9 +45,11 @@ struct ProcessesPanelView: View {
                             Text(proc.command)
                                 .font(.system(.caption, design: .monospaced))
                                 .lineLimit(1)
-                            Text("PID \(proc.pid)  CPU \(String(format: "%.1f", proc.cpu))%  MEM \(String(format: "%.1f", proc.mem))%")
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(.secondary)
+                            Text(
+                                "PID \(proc.pid)  CPU \(String(format: "%.1f", proc.cpu))%  MEM \(String(format: "%.1f", proc.mem))%"
+                            )
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button {
@@ -74,7 +76,9 @@ struct ProcessesPanelView: View {
                 Task { @MainActor in await self.load() }
             }
         }
-        .onDisappear { timer?.invalidate(); timer = nil }
+        .onDisappear {
+            timer?.invalidate(); timer = nil
+        }
     }
 
     @MainActor
@@ -106,15 +110,16 @@ struct ProcessesPanelView: View {
         }.value
         guard let output else { return [] }
         return output.components(separatedBy: "\n")
-            .dropFirst() // header
+            .dropFirst()  // header
             .compactMap { line -> ProcessEntry? in
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 guard !trimmed.isEmpty else { return nil }
                 let parts = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
                 guard parts.count >= 4,
-                      let pid = Int32(parts[0]),
-                      let cpu = Double(parts[1]),
-                      let mem = Double(parts[2]) else { return nil }
+                    let pid = Int32(parts[0]),
+                    let cpu = Double(parts[1]),
+                    let mem = Double(parts[2])
+                else { return nil }
                 // comm may contain spaces — rejoin everything from index 3 onward
                 let fullPath = parts[3...].joined(separator: " ")
                 let command = URL(fileURLWithPath: fullPath).lastPathComponent

@@ -8,13 +8,15 @@ struct ActivityBarView: View {
     var onOpenSettings: (() -> Void)?
 
     private var panelIDs: [String] {
-        side == .left ? registry.activeProfile.leftPanelIDs
-                      : registry.activeProfile.rightPanelIDs
+        side == .left
+            ? registry.activeProfile.leftPanelIDs
+            : registry.activeProfile.rightPanelIDs
     }
 
     private var activePanelID: String? {
-        side == .left ? registry.activeProfile.leftActivePanelID
-                      : registry.activeProfile.rightActivePanelID
+        side == .left
+            ? registry.activeProfile.leftActivePanelID
+            : registry.activeProfile.rightActivePanelID
     }
 
     var body: some View {

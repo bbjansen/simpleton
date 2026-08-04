@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/AI/Tools/SystemTools.swift
 import Foundation
-import AppKit
 
 @MainActor
 struct SystemTools: ToolHandler {
@@ -24,15 +24,15 @@ struct SystemTools: ToolHandler {
     private func handleGetSystemInfo(processRunner: ProcessRunner) -> String {
         let info = ProcessInfo.processInfo
         return """
-        OS: macOS \(info.operatingSystemVersionString)
-        Host: \(Host.current().localizedName ?? "unknown")
-        CPU cores: \(info.processorCount)
-        Memory: \(info.physicalMemory / (1024 * 1024 * 1024)) GB
-        Uptime: \(processRunner.formatUptime(info.systemUptime))
-        User: \(NSUserName())
-        Home: \(NSHomeDirectory())
-        Shell: \(ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-        """
+            OS: macOS \(info.operatingSystemVersionString)
+            Host: \(Host.current().localizedName ?? "unknown")
+            CPU cores: \(info.processorCount)
+            Memory: \(info.physicalMemory / (1024 * 1024 * 1024)) GB
+            Uptime: \(processRunner.formatUptime(info.systemUptime))
+            User: \(NSUserName())
+            Home: \(NSHomeDirectory())
+            Shell: \(ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+            """
     }
 
     private func handleGetEnv(_ args: [String: Any]) -> String {

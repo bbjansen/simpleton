@@ -12,10 +12,12 @@ final class ScriptPluginRunner {
 
     /// Run a script plugin with the given event context.
     /// Returns parsed actions from stdout, or empty if script produces no output.
-    func run(plugin: ScriptPlugin, event: String, context: [String: Any], completion: @escaping (ScriptResult) -> Void) {
+    func run(plugin: ScriptPlugin, event: String, context: [String: Any], completion: @escaping (ScriptResult) -> Void)
+    {
         // Check plugin is enabled and subscribes to this event
         guard plugin.isEnabled,
-              plugin.subscribedEvents.contains(event) || event == "command" else {
+            plugin.subscribedEvents.contains(event) || event == "command"
+        else {
             completion(ScriptResult(actions: [], exitCode: 0, timedOut: false))
             return
         }
@@ -50,7 +52,8 @@ final class ScriptPluginRunner {
         var contextDict = context
         contextDict["event"] = event
         if let jsonData = try? JSONSerialization.data(withJSONObject: contextDict),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
+            let jsonString = String(data: jsonData, encoding: .utf8)
+        {
             stdinPipe.fileHandleForWriting.write(Data((jsonString + "\n").utf8))
         }
         stdinPipe.fileHandleForWriting.closeFile()
@@ -81,23 +84,26 @@ final class ScriptPluginRunner {
 
             // Parse stdout as line-delimited JSON
             let output = String(data: outputData, encoding: .utf8) ?? ""
-            let actions = output
+            let actions =
+                output
                 .split(separator: "\n")
                 .compactMap { line -> ScriptAction? in
                     guard let data = line.data(using: .utf8),
-                          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          let actionType = json["action"] as? String else {
+                        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                        let actionType = json["action"] as? String
+                    else {
                         return nil
                     }
                     return ScriptAction(type: actionType, payload: json)
                 }
 
             DispatchQueue.main.async {
-                completion(ScriptResult(
-                    actions: actions,
-                    exitCode: process.terminationStatus,
-                    timedOut: timedOut
-                ))
+                completion(
+                    ScriptResult(
+                        actions: actions,
+                        exitCode: process.terminationStatus,
+                        timedOut: timedOut
+                    ))
             }
         }
     }
@@ -105,6 +111,6 @@ final class ScriptPluginRunner {
 
 /// A parsed action from script stdout.
 struct ScriptAction {
-    let type: String       // "notify", "paste", "run-command", "set-env"
+    let type: String  // "notify", "paste", "run-command", "set-env"
     let payload: [String: Any]
 }

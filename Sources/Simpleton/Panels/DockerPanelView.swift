@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Panels/DockerPanelView.swift
 import SwiftUI
-import AppKit
 
 struct DockerContainer: Identifiable {
     let id: String
@@ -32,7 +32,9 @@ struct DockerPanelView: View {
                     .tracking(1.5)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button { Task { await refresh() } } label: {
+                Button {
+                    Task { await refresh() }
+                } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
@@ -73,7 +75,9 @@ struct DockerPanelView: View {
                 Task { @MainActor in await self.refresh() }
             }
         }
-        .onDisappear { timer?.invalidate(); timer = nil }
+        .onDisappear {
+            timer?.invalidate(); timer = nil
+        }
     }
 
     @ViewBuilder
@@ -158,12 +162,16 @@ struct DockerPanelView: View {
         guard let dockerPath = findDocker() else { return .notInstalled }
         let pingResult = await runDockerCommand(dockerPath, args: ["info", "--format", "{{.ServerVersion}}"])
         guard pingResult.exitCode == 0 else { return .notRunning }
-        let runningResult = await runDockerCommand(dockerPath, args: [
-            "ps", "--format", "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}"
-        ])
-        let allResult = await runDockerCommand(dockerPath, args: [
-            "ps", "-a", "--format", "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}"
-        ])
+        let runningResult = await runDockerCommand(
+            dockerPath,
+            args: [
+                "ps", "--format", "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}",
+            ])
+        let allResult = await runDockerCommand(
+            dockerPath,
+            args: [
+                "ps", "-a", "--format", "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}",
+            ])
         let runningIDs = Set(
             runningResult.output.components(separatedBy: "\n")
                 .filter { !$0.isEmpty }

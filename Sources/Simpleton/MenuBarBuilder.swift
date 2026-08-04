@@ -2,14 +2,19 @@
 import AppKit
 
 struct MenuBarBuilder {
-    static func build(target: AnyObject, workspacesMenuDelegate: NSMenuDelegate) -> (menu: NSMenu, workspacesMenu: NSMenu) {
+    static func build(
+        target: AnyObject, workspacesMenuDelegate: NSMenuDelegate
+    ) -> (menu: NSMenu, workspacesMenu: NSMenu) {
         let mainMenu = NSMenu()
 
         // App menu
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Simpleton", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
-        appMenu.addItem(withTitle: "Check for Updates...", action: #selector(AppDelegate.checkForUpdates), keyEquivalent: "")
+        appMenu.addItem(
+            withTitle: "About Simpleton", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: "")
+        appMenu.addItem(
+            withTitle: "Check for Updates...", action: #selector(AppDelegate.checkForUpdates), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Preferences...", action: #selector(AppDelegate.showPreferences), keyEquivalent: ",")
         appMenu.addItem(.separator())
@@ -23,7 +28,8 @@ struct MenuBarBuilder {
         fileMenu.addItem(withTitle: "New Window", action: #selector(AppDelegate.createNewWindow), keyEquivalent: "n")
         fileMenu.addItem(withTitle: "New Tab", action: #selector(AppDelegate.newTab), keyEquivalent: "t")
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "New Connection...", action: #selector(AppDelegate.showNewConnection), keyEquivalent: "")
+        fileMenu.addItem(
+            withTitle: "New Connection...", action: #selector(AppDelegate.showNewConnection), keyEquivalent: "")
         fileMenu.addItem(.separator())
         fileMenu.addItem(withTitle: "Close Pane", action: #selector(AppDelegate.closePane), keyEquivalent: "w")
 
@@ -45,21 +51,26 @@ struct MenuBarBuilder {
         editMenu.addItem(.separator())
         editMenu.addItem(withTitle: "Find...", action: #selector(AppDelegate.showScrollbackSearch), keyEquivalent: "f")
         editMenu.addItem(.separator())
-        let prevPromptItem = NSMenuItem(title: "Previous Prompt", action: #selector(AppDelegate.previousPrompt), keyEquivalent: "\u{F700}")
+        let prevPromptItem = NSMenuItem(
+            title: "Previous Prompt", action: #selector(AppDelegate.previousPrompt), keyEquivalent: "\u{F700}")
         prevPromptItem.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(prevPromptItem)
-        let nextPromptItem = NSMenuItem(title: "Next Prompt", action: #selector(AppDelegate.nextPrompt), keyEquivalent: "\u{F701}")
+        let nextPromptItem = NSMenuItem(
+            title: "Next Prompt", action: #selector(AppDelegate.nextPrompt), keyEquivalent: "\u{F701}")
         nextPromptItem.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(nextPromptItem)
-        editMenu.addItem(withTitle: "Copy Command Output", action: #selector(AppDelegate.selectCommandOutput), keyEquivalent: "")
+        editMenu.addItem(
+            withTitle: "Copy Command Output", action: #selector(AppDelegate.selectCommandOutput), keyEquivalent: "")
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
         // View menu
         let viewMenuItem = NSMenuItem()
         let viewMenu = NSMenu(title: "View")
-        viewMenu.addItem(withTitle: "Increase Font Size", action: #selector(AppDelegate.increaseFontSize), keyEquivalent: "=")
-        viewMenu.addItem(withTitle: "Decrease Font Size", action: #selector(AppDelegate.decreaseFontSize), keyEquivalent: "-")
+        viewMenu.addItem(
+            withTitle: "Increase Font Size", action: #selector(AppDelegate.increaseFontSize), keyEquivalent: "=")
+        viewMenu.addItem(
+            withTitle: "Decrease Font Size", action: #selector(AppDelegate.decreaseFontSize), keyEquivalent: "-")
         viewMenu.addItem(withTitle: "Reset Font Size", action: #selector(AppDelegate.resetFontSize), keyEquivalent: "0")
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
@@ -69,38 +80,49 @@ struct MenuBarBuilder {
         let splitMenu = NSMenu(title: "Split")
         splitMenu.addItem(withTitle: "Split Right", action: #selector(AppDelegate.splitRight), keyEquivalent: "d")
 
-        let splitDownItem = NSMenuItem(title: "Split Down", action: #selector(AppDelegate.splitDown), keyEquivalent: "D")
+        let splitDownItem = NSMenuItem(
+            title: "Split Down", action: #selector(AppDelegate.splitDown), keyEquivalent: "D")
         splitDownItem.keyEquivalentModifierMask = [.command, .shift]
         splitMenu.addItem(splitDownItem)
 
         splitMenu.addItem(.separator())
 
-        let layoutItem = NSMenuItem(title: "Pick Layout\u{2026}", action: #selector(AppDelegate.pickLayout), keyEquivalent: "L")
+        let layoutItem = NSMenuItem(
+            title: "Pick Layout\u{2026}", action: #selector(AppDelegate.pickLayout), keyEquivalent: "L")
         layoutItem.keyEquivalentModifierMask = [.command, .shift]
         splitMenu.addItem(layoutItem)
 
         splitMenu.addItem(.separator())
 
-        let zoomItem = NSMenuItem(title: "Toggle Fullscreen Pane", action: #selector(AppDelegate.togglePaneZoom), keyEquivalent: "\r")
+        let zoomItem = NSMenuItem(
+            title: "Toggle Fullscreen Pane", action: #selector(AppDelegate.togglePaneZoom), keyEquivalent: "\r")
         zoomItem.keyEquivalentModifierMask = [.command, .shift]
         splitMenu.addItem(zoomItem)
 
         splitMenu.addItem(.separator())
 
         // Focus navigation
-        let focusLeftItem = NSMenuItem(title: "Focus Left", action: #selector(AppDelegate.focusLeft), keyEquivalent: String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!)))
+        let focusLeftItem = NSMenuItem(
+            title: "Focus Left", action: #selector(AppDelegate.focusLeft),
+            keyEquivalent: String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!)))
         focusLeftItem.keyEquivalentModifierMask = [.command, .option]
         splitMenu.addItem(focusLeftItem)
 
-        let focusRightItem = NSMenuItem(title: "Focus Right", action: #selector(AppDelegate.focusRight), keyEquivalent: String(Character(UnicodeScalar(NSRightArrowFunctionKey)!)))
+        let focusRightItem = NSMenuItem(
+            title: "Focus Right", action: #selector(AppDelegate.focusRight),
+            keyEquivalent: String(Character(UnicodeScalar(NSRightArrowFunctionKey)!)))
         focusRightItem.keyEquivalentModifierMask = [.command, .option]
         splitMenu.addItem(focusRightItem)
 
-        let focusUpItem = NSMenuItem(title: "Focus Up", action: #selector(AppDelegate.focusUp), keyEquivalent: String(Character(UnicodeScalar(NSUpArrowFunctionKey)!)))
+        let focusUpItem = NSMenuItem(
+            title: "Focus Up", action: #selector(AppDelegate.focusUp),
+            keyEquivalent: String(Character(UnicodeScalar(NSUpArrowFunctionKey)!)))
         focusUpItem.keyEquivalentModifierMask = [.command, .option]
         splitMenu.addItem(focusUpItem)
 
-        let focusDownItem = NSMenuItem(title: "Focus Down", action: #selector(AppDelegate.focusDown), keyEquivalent: String(Character(UnicodeScalar(NSDownArrowFunctionKey)!)))
+        let focusDownItem = NSMenuItem(
+            title: "Focus Down", action: #selector(AppDelegate.focusDown),
+            keyEquivalent: String(Character(UnicodeScalar(NSDownArrowFunctionKey)!)))
         focusDownItem.keyEquivalentModifierMask = [.command, .option]
         splitMenu.addItem(focusDownItem)
 
@@ -111,12 +133,15 @@ struct MenuBarBuilder {
         let sshMenuItem = NSMenuItem()
         let sshMenu = NSMenu(title: "SSH")
 
-        let quickConnectItem = NSMenuItem(title: "Quick Connect...", action: #selector(AppDelegate.showQuickConnect), keyEquivalent: "k")
+        let quickConnectItem = NSMenuItem(
+            title: "Quick Connect...", action: #selector(AppDelegate.showQuickConnect), keyEquivalent: "k")
         sshMenu.addItem(quickConnectItem)
 
-        sshMenu.addItem(withTitle: "New Connection...", action: #selector(AppDelegate.showNewConnection), keyEquivalent: "")
+        sshMenu.addItem(
+            withTitle: "New Connection...", action: #selector(AppDelegate.showNewConnection), keyEquivalent: "")
 
-        let toggleSidebarItem = NSMenuItem(title: "Toggle Sidebar", action: #selector(AppDelegate.toggleSidebar), keyEquivalent: "S")
+        let toggleSidebarItem = NSMenuItem(
+            title: "Toggle Sidebar", action: #selector(AppDelegate.toggleSidebar), keyEquivalent: "S")
         toggleSidebarItem.keyEquivalentModifierMask = [.command, .shift]
         sshMenu.addItem(toggleSidebarItem)
 
@@ -129,11 +154,14 @@ struct MenuBarBuilder {
         let chatItem = NSMenuItem(title: "AI Chat", action: #selector(AppDelegate.toggleAIChat), keyEquivalent: "A")
         chatItem.keyEquivalentModifierMask = [.command, .shift]
         aiMenu.addItem(chatItem)
-        let skillItem = NSMenuItem(title: "Run Skill\u{2026}", action: #selector(AppDelegate.showSkillPicker), keyEquivalent: "K")
+        let skillItem = NSMenuItem(
+            title: "Run Skill\u{2026}", action: #selector(AppDelegate.showSkillPicker), keyEquivalent: "K")
         skillItem.keyEquivalentModifierMask = [.command, .shift]
         aiMenu.addItem(skillItem)
-        aiMenu.addItem(withTitle: "AI: Explain Selection", action: #selector(AppDelegate.explainSelection), keyEquivalent: "")
-        aiMenu.addItem(withTitle: "AI: Explain Error", action: #selector(AppDelegate.explainLastError), keyEquivalent: "")
+        aiMenu.addItem(
+            withTitle: "AI: Explain Selection", action: #selector(AppDelegate.explainSelection), keyEquivalent: "")
+        aiMenu.addItem(
+            withTitle: "AI: Explain Error", action: #selector(AppDelegate.explainLastError), keyEquivalent: "")
         aiMenuItem.submenu = aiMenu
         mainMenu.addItem(aiMenuItem)
 
@@ -151,7 +179,8 @@ struct MenuBarBuilder {
         windowMenu.addItem(prevTabItem)
 
         windowMenu.addItem(.separator())
-        let saveWorkspaceItem = NSMenuItem(title: "Save Workspace...", action: #selector(AppDelegate.saveWorkspace), keyEquivalent: "S")
+        let saveWorkspaceItem = NSMenuItem(
+            title: "Save Workspace...", action: #selector(AppDelegate.saveWorkspace), keyEquivalent: "S")
         saveWorkspaceItem.keyEquivalentModifierMask = [.command, .option]
         windowMenu.addItem(saveWorkspaceItem)
 
@@ -164,7 +193,8 @@ struct MenuBarBuilder {
 
         windowMenu.addItem(.separator())
         for i in 1...9 {
-            let tabItem = NSMenuItem(title: "Tab \(i)", action: #selector(AppDelegate.switchToTabN(_:)), keyEquivalent: String(i))
+            let tabItem = NSMenuItem(
+                title: "Tab \(i)", action: #selector(AppDelegate.switchToTabN(_:)), keyEquivalent: String(i))
             tabItem.tag = i
             windowMenu.addItem(tabItem)
         }
@@ -175,7 +205,8 @@ struct MenuBarBuilder {
         // Help menu
         let helpMenuItem = NSMenuItem()
         let helpMenu = NSMenu(title: "Help")
-        let paletteItem = NSMenuItem(title: "Command Palette...", action: #selector(AppDelegate.showCommandPalette), keyEquivalent: "P")
+        let paletteItem = NSMenuItem(
+            title: "Command Palette...", action: #selector(AppDelegate.showCommandPalette), keyEquivalent: "P")
         paletteItem.keyEquivalentModifierMask = [.command, .shift]
         helpMenu.addItem(paletteItem)
         helpMenuItem.submenu = helpMenu

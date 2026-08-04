@@ -1,7 +1,7 @@
+import CryptoKit
 // Sources/Simpleton/AI/MemoryStore.swift
 import Foundation
 import NaturalLanguage
-import CryptoKit
 
 @MainActor
 final class MemoryStore {
@@ -108,8 +108,9 @@ final class MemoryStore {
         var updatedIDs: Set<UUID> = []
         for entry in entries {
             if entry.embedding.isEmpty {
-                let textMatch = entry.content.localizedCaseInsensitiveContains(text) ||
-                    entry.tags.contains(where: { $0.localizedCaseInsensitiveContains(text) })
+                let textMatch =
+                    entry.content.localizedCaseInsensitiveContains(text)
+                    || entry.tags.contains(where: { $0.localizedCaseInsensitiveContains(text) })
                 if textMatch {
                     scored.append((entry, 0.31))
                     updatedIDs.insert(entry.id)

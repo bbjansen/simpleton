@@ -1,7 +1,7 @@
 // Sources/Simpleton/Views/SidebarView.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 struct SidebarView: View {
     let bookmarkStore: BookmarkStore

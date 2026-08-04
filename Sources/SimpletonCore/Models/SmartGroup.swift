@@ -63,7 +63,7 @@ public struct SmartGroupRule: Codable, Equatable {
         case .matches:
             return (try? NSRegularExpression(pattern: value))
                 .map { $0.firstMatch(in: input, range: NSRange(input.startIndex..., in: input)) != nil } ?? false
-        case .cidr: return false // CIDR matching implemented in a later task
+        case .cidr: return false  // CIDR matching implemented in a later task
         }
     }
 }

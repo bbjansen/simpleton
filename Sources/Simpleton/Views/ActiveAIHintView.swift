@@ -51,7 +51,8 @@ final class ActiveAIHintView: NSVisualEffectView {
         autoresizingMask = [.width, .maxYMargin]
 
         // Icon
-        let iconImage = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "AI hint")
+        let iconImage =
+            NSImage(systemSymbolName: "sparkles", accessibilityDescription: "AI hint")
             ?? NSImage(systemSymbolName: "star", accessibilityDescription: "AI hint")
         let icon = NSImageView(image: iconImage ?? NSImage())
         icon.contentTintColor = DT.Banner.infoTint
@@ -116,13 +117,15 @@ final class ActiveAIHintView: NSVisualEffectView {
         autoDismissTimer?.invalidate()
         autoDismissTimer = nil
 
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.25
-            self.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            self?.onDismiss?()
-            self?.removeFromSuperview()
-        })
+        NSAnimationContext.runAnimationGroup(
+            { ctx in
+                ctx.duration = 0.25
+                self.animator().alphaValue = 0
+            },
+            completionHandler: { [weak self] in
+                self?.onDismiss?()
+                self?.removeFromSuperview()
+            })
     }
 }
 

@@ -34,9 +34,11 @@ func runSmartGroupChecks(_ t: TestRunner) {
     t.suite("SmartGroup.testSmartGroupFileRoundTrip") {
         do {
             let file = SmartGroupFile(groups: [
-                SmartGroup(name: "Staging", color: "#eab308", combinator: .and, rules: [
-                    SmartGroupRule(field: .hostname, operator: .contains, value: "staging")
-                ])
+                SmartGroup(
+                    name: "Staging", color: "#eab308", combinator: .and,
+                    rules: [
+                        SmartGroupRule(field: .hostname, operator: .contains, value: "staging")
+                    ])
             ])
             let data = try JSONEncoder().encode(file)
             let decoded = try JSONDecoder().decode(SmartGroupFile.self, from: data)
@@ -86,13 +88,19 @@ func runSmartGroupChecks(_ t: TestRunner) {
 
     t.suite("SmartGroup.testRuleOperators") {
         let bookmark = Bookmark(name: "web-prod", host: "10.0.1.5", user: "deploy", tags: ["prod"])
-        t.expect(SmartGroupRule(field: .hostname, operator: .equals, value: "10.0.1.5").matches(bookmark), "hostname equals")
-        t.expect(SmartGroupRule(field: .hostname, operator: .startsWith, value: "10.0").matches(bookmark), "hostname startsWith")
-        t.expect(SmartGroupRule(field: .hostname, operator: .endsWith, value: ".1.5").matches(bookmark), "hostname endsWith")
-        t.expect(SmartGroupRule(field: .hostname, operator: .contains, value: "0.1").matches(bookmark), "hostname contains")
+        t.expect(
+            SmartGroupRule(field: .hostname, operator: .equals, value: "10.0.1.5").matches(bookmark), "hostname equals")
+        t.expect(
+            SmartGroupRule(field: .hostname, operator: .startsWith, value: "10.0").matches(bookmark),
+            "hostname startsWith")
+        t.expect(
+            SmartGroupRule(field: .hostname, operator: .endsWith, value: ".1.5").matches(bookmark), "hostname endsWith")
+        t.expect(
+            SmartGroupRule(field: .hostname, operator: .contains, value: "0.1").matches(bookmark), "hostname contains")
         t.expect(SmartGroupRule(field: .name, operator: .contains, value: "prod").matches(bookmark), "name contains")
         t.expect(SmartGroupRule(field: .user, operator: .equals, value: "deploy").matches(bookmark), "user equals")
         t.expect(SmartGroupRule(field: .tag, operator: .equals, value: "prod").matches(bookmark), "tag equals")
-        t.expect(!SmartGroupRule(field: .tag, operator: .equals, value: "staging").matches(bookmark), "tag not matching")
+        t.expect(
+            !SmartGroupRule(field: .tag, operator: .equals, value: "staging").matches(bookmark), "tag not matching")
     }
 }

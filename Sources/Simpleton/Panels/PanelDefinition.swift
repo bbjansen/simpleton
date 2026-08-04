@@ -15,7 +15,7 @@ enum PanelSide: String, Codable {
 struct PanelDefinition {
     let id: String
     let name: String
-    let icon: String          // SF Symbol name
+    let icon: String  // SF Symbol name
     let description: String
     let defaultSide: PanelSide
     let isBuiltIn: Bool

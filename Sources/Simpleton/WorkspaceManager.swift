@@ -16,10 +16,12 @@ final class WorkspaceManager {
 
     /// List all saved workspace names.
     func listWorkspaces() -> [String] {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        else {
             return []
         }
-        return files
+        return
+            files
             .filter { $0.pathExtension == "json" }
             .compactMap { url -> String? in
                 guard let file = try? AtomicFileWriter.readJSON(WorkspaceFile.self, from: url) else { return nil }
@@ -55,7 +57,7 @@ final class WorkspaceManager {
     /// Lock a workspace to a window. Returns false if already locked by another window.
     func lock(name: String, windowID: UUID) -> Bool {
         if let existing = lockedWorkspaces[name], existing != windowID {
-            return false // Already locked by different window
+            return false  // Already locked by different window
         }
         lockedWorkspaces[name] = windowID
         return true
@@ -80,7 +82,8 @@ final class WorkspaceManager {
 
     private func sanitizeFilename(_ name: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        return name
+        return
+            name
             .components(separatedBy: allowed.inverted)
             .joined(separator: "-")
             .lowercased()

@@ -9,8 +9,10 @@ struct MCPServerConfig: Codable, Identifiable {
     var env: [String: String]
     var enabled: Bool
 
-    init(id: UUID = UUID(), name: String, command: String, args: [String] = [],
-         env: [String: String] = [:], enabled: Bool = true) {
+    init(
+        id: UUID = UUID(), name: String, command: String, args: [String] = [],
+        env: [String: String] = [:], enabled: Bool = true
+    ) {
         self.id = id
         self.name = name
         self.command = command

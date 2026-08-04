@@ -29,9 +29,11 @@ struct SkillTools: ToolHandler {
 
         let filtered: [Skill]
         if let category = category {
-            filtered = skills.filter { $0.name.localizedCaseInsensitiveContains(category) ||
-                $0.description.localizedCaseInsensitiveContains(category) ||
-                $0.slug.localizedCaseInsensitiveContains(category) }
+            filtered = skills.filter {
+                $0.name.localizedCaseInsensitiveContains(category)
+                    || $0.description.localizedCaseInsensitiveContains(category)
+                    || $0.slug.localizedCaseInsensitiveContains(category)
+            }
         } else {
             filtered = skills
         }
@@ -95,15 +97,16 @@ struct SkillTools: ToolHandler {
             taskPrompt = taskPrompt.replacingOccurrences(of: "{\(key)}", with: value)
         }
 
-        let paramSummary = params.isEmpty ? "" : "\nParameters: \(params.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))"
+        let paramSummary =
+            params.isEmpty ? "" : "\nParameters: \(params.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))"
 
         return """
-        [Skill: \(skill.name) (/\(skill.slug))]\(paramSummary)
+            [Skill: \(skill.name) (/\(skill.slug))]\(paramSummary)
 
-        Execute the following task:
-        \(taskPrompt)
+            Execute the following task:
+            \(taskPrompt)
 
-        Use run_command and other tools to complete this task step by step.
-        """
+            Use run_command and other tools to complete this task step by step.
+            """
     }
 }

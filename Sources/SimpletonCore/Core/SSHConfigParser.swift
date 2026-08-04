@@ -59,7 +59,8 @@ public struct SSHConfigEntry: Equatable {
             auth: auth,
             jumpHosts: proxyJump,
             portForwards: localForwards.map {
-                PortForward(direction: .local, localPort: $0.localPort, remoteHost: $0.remoteHost, remotePort: $0.remotePort)
+                PortForward(
+                    direction: .local, localPort: $0.localPort, remoteHost: $0.remoteHost, remotePort: $0.remotePort)
             },
             sshConfigHost: hostAlias
         )
@@ -132,11 +133,13 @@ public enum SSHConfigParser {
         // Format: localPort remoteHost:remotePort
         let parts = value.split(separator: " ", maxSplits: 1).map(String.init)
         guard parts.count == 2,
-              let localPort = Int(parts[0]) else { return nil }
+            let localPort = Int(parts[0])
+        else { return nil }
 
         let remote = parts[1].split(separator: ":", maxSplits: 1).map(String.init)
         guard remote.count == 2,
-              let remotePort = Int(remote[1]) else { return nil }
+            let remotePort = Int(remote[1])
+        else { return nil }
 
         return SSHForward(localPort: localPort, remoteHost: remote[0], remotePort: remotePort)
     }

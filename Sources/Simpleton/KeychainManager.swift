@@ -49,8 +49,9 @@ enum KeychainManager {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         guard status == errSecSuccess,
-              let data = result as? Data,
-              let password = String(data: data, encoding: .utf8) else {
+            let data = result as? Data,
+            let password = String(data: data, encoding: .utf8)
+        else {
             return nil
         }
         return password

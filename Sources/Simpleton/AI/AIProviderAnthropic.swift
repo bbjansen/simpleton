@@ -19,7 +19,7 @@ struct AnthropicProvider: AIProviderProtocol {
             "max_tokens": options.maxTokens,
             "temperature": options.temperature,
             "system": system,
-            "messages": [["role": "user", "content": user]]
+            "messages": [["role": "user", "content": user]],
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -32,9 +32,10 @@ struct AnthropicProvider: AIProviderProtocol {
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = json["content"] as? [[String: Any]],
-              let first = content.first,
-              let text = first["text"] as? String else {
+            let content = json["content"] as? [[String: Any]],
+            let first = content.first,
+            let text = first["text"] as? String
+        else {
             throw AIError.invalidResponse
         }
         return text
@@ -57,7 +58,7 @@ struct AnthropicProvider: AIProviderProtocol {
                         "temperature": options.temperature,
                         "system": system,
                         "stream": true,
-                        "messages": [["role": "user", "content": user]]
+                        "messages": [["role": "user", "content": user]],
                     ]
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -72,11 +73,13 @@ struct AnthropicProvider: AIProviderProtocol {
                         guard line.hasPrefix("data: ") else { continue }
                         let jsonStr = String(line.dropFirst(6))
                         guard jsonStr != "[DONE]",
-                              let data = jsonStr.data(using: .utf8),
-                              let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+                            let data = jsonStr.data(using: .utf8),
+                            let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                        else { continue }
 
                         if let delta = event["delta"] as? [String: Any],
-                           let text = delta["text"] as? String {
+                            let text = delta["text"] as? String
+                        {
                             continuation.yield(text)
                         }
                     }
@@ -108,7 +111,7 @@ struct AnthropicProvider: AIProviderProtocol {
             case .toolResult(let toolCallID, let output):
                 messages.append([
                     "role": "user",
-                    "content": [["type": "tool_result", "tool_use_id": toolCallID, "content": output]]
+                    "content": [["type": "tool_result", "tool_use_id": toolCallID, "content": output]],
                 ])
             }
         }
@@ -116,71 +119,83 @@ struct AnthropicProvider: AIProviderProtocol {
         let tools: [[String: Any]] = [
             [
                 "name": "run_command",
-                "description": "Execute a shell command in a terminal pane and return its output. Use the 'pane' parameter to target a specific pane by number (1-based). Omit 'pane' to run on the focused pane.",
+                "description":
+                    "Execute a shell command in a terminal pane and return its output. Use the 'pane' parameter to target a specific pane by number (1-based). Omit 'pane' to run on the focused pane.",
                 "input_schema": [
                     "type": "object",
                     "properties": [
                         "cmd": ["type": "string", "description": "Shell command to execute"],
                         "explanation": ["type": "string", "description": "Brief reason this command is needed"],
-                        "pane": ["type": "integer", "description": "Target pane number (1-based). Omit for focused pane."]
+                        "pane": [
+                            "type": "integer", "description": "Target pane number (1-based). Omit for focused pane.",
+                        ],
                     ] as [String: Any],
-                    "required": ["cmd", "explanation"]
-                ] as [String: Any]
+                    "required": ["cmd", "explanation"],
+                ] as [String: Any],
             ],
             [
                 "name": "read_pane_output",
-                "description": "Read the recent terminal output from a pane without running any command. Use this to check what happened, see error messages, or monitor a running process.",
+                "description":
+                    "Read the recent terminal output from a pane without running any command. Use this to check what happened, see error messages, or monitor a running process.",
                 "input_schema": [
                     "type": "object",
                     "properties": [
                         "pane": ["type": "integer", "description": "Pane number (1-based). Omit for focused pane."],
-                        "lines": ["type": "integer", "description": "Number of recent lines to read (default 50, max 200)"]
+                        "lines": [
+                            "type": "integer", "description": "Number of recent lines to read (default 50, max 200)",
+                        ],
                     ] as [String: Any],
-                    "required": [] as [String]
-                ] as [String: Any]
+                    "required": [] as [String],
+                ] as [String: Any],
             ],
             [
                 "name": "list_panes",
-                "description": "List all terminal panes in the current tab with their working directory, shell, and running state. Use this to understand the workspace before acting.",
+                "description":
+                    "List all terminal panes in the current tab with their working directory, shell, and running state. Use this to understand the workspace before acting.",
                 "input_schema": [
                     "type": "object",
                     "properties": [:] as [String: Any],
-                    "required": [] as [String]
-                ] as [String: Any]
+                    "required": [] as [String],
+                ] as [String: Any],
             ],
             [
                 "name": "get_pane_state",
-                "description": "Get detailed state of a specific pane: working directory, shell, connection type, and recent output.",
+                "description":
+                    "Get detailed state of a specific pane: working directory, shell, connection type, and recent output.",
                 "input_schema": [
                     "type": "object",
                     "properties": [
                         "pane": ["type": "integer", "description": "Pane number (1-based)"]
                     ] as [String: Any],
-                    "required": ["pane"]
-                ] as [String: Any]
+                    "required": ["pane"],
+                ] as [String: Any],
             ],
             [
                 "name": "read_file",
-                "description": "Read the contents of a file. Returns up to 10,000 characters. Use this instead of cat to avoid shell quoting issues.",
+                "description":
+                    "Read the contents of a file. Returns up to 10,000 characters. Use this instead of cat to avoid shell quoting issues.",
                 "input_schema": [
                     "type": "object",
                     "properties": [
-                        "path": ["type": "string", "description": "Absolute or relative file path (~ expansion supported)"]
+                        "path": [
+                            "type": "string", "description": "Absolute or relative file path (~ expansion supported)",
+                        ]
                     ] as [String: Any],
-                    "required": ["path"]
-                ] as [String: Any]
+                    "required": ["path"],
+                ] as [String: Any],
             ],
             [
                 "name": "write_file",
-                "description": "Write content to a file. Creates parent directories if needed. Use this instead of echo/heredoc to avoid shell escaping issues.",
+                "description":
+                    "Write content to a file. Creates parent directories if needed. Use this instead of echo/heredoc to avoid shell escaping issues.",
                 "input_schema": [
                     "type": "object",
                     "properties": [
                         "path": ["type": "string", "description": "Absolute or relative file path"],
-                        "content": ["type": "string", "description": "The full file content to write"]
+                        "content": ["type": "string", "description": "The full file content to write"],
                     ] as [String: Any],
-                    "required": ["path", "content"]
-                ] as [String: Any]
+                    "required": ["path", "content"],
+                ] as [String: Any],
             ],
             [
                 "name": "list_directory",
@@ -188,45 +203,58 @@ struct AnthropicProvider: AIProviderProtocol {
                 "input_schema": [
                     "type": "object",
                     "properties": [
-                        "path": ["type": "string", "description": "Directory path (default: current directory). ~ expansion supported."]
+                        "path": [
+                            "type": "string",
+                            "description": "Directory path (default: current directory). ~ expansion supported.",
+                        ]
                     ] as [String: Any],
-                    "required": [] as [String]
-                ] as [String: Any]
+                    "required": [] as [String],
+                ] as [String: Any],
             ],
             [
                 "name": "search_files",
-                "description": "Search for a text pattern across files in a directory (recursive grep). Returns matching file paths.",
+                "description":
+                    "Search for a text pattern across files in a directory (recursive grep). Returns matching file paths.",
                 "input_schema": [
                     "type": "object",
                     "properties": [
                         "pattern": ["type": "string", "description": "Text or regex pattern to search for"],
-                        "directory": ["type": "string", "description": "Directory to search in (default: current directory)"]
+                        "directory": [
+                            "type": "string", "description": "Directory to search in (default: current directory)",
+                        ],
                     ] as [String: Any],
-                    "required": ["pattern"]
-                ] as [String: Any]
+                    "required": ["pattern"],
+                ] as [String: Any],
             ],
             [
                 "name": "get_system_info",
-                "description": "Get system information: OS version, hostname, CPU cores, memory, uptime, current user, shell.",
+                "description":
+                    "Get system information: OS version, hostname, CPU cores, memory, uptime, current user, shell.",
                 "input_schema": [
                     "type": "object",
                     "properties": [:] as [String: Any],
-                    "required": [] as [String]
-                ] as [String: Any]
+                    "required": [] as [String],
+                ] as [String: Any],
             ],
             [
                 "name": "edit_file",
-                "description": "Edit a file by replacing specific text. Safer than write_file for targeted changes — preserves the rest of the file.",
+                "description":
+                    "Edit a file by replacing specific text. Safer than write_file for targeted changes — preserves the rest of the file.",
                 "input_schema": [
                     "type": "object",
                     "properties": [
                         "path": ["type": "string", "description": "File path"],
-                        "old_text": ["type": "string", "description": "Exact text to find (must match including whitespace)"],
+                        "old_text": [
+                            "type": "string", "description": "Exact text to find (must match including whitespace)",
+                        ],
                         "new_text": ["type": "string", "description": "Replacement text"],
-                        "replace_all": ["type": "boolean", "description": "Replace all occurrences (default: false, fails if multiple matches)"]
+                        "replace_all": [
+                            "type": "boolean",
+                            "description": "Replace all occurrences (default: false, fails if multiple matches)",
+                        ],
                     ] as [String: Any],
-                    "required": ["path", "old_text", "new_text"]
-                ] as [String: Any]
+                    "required": ["path", "old_text", "new_text"],
+                ] as [String: Any],
             ],
             [
                 "name": "get_git_status",
@@ -236,8 +264,8 @@ struct AnthropicProvider: AIProviderProtocol {
                     "properties": [
                         "directory": ["type": "string", "description": "Repository path (default: pane CWD)"]
                     ] as [String: Any],
-                    "required": [] as [String]
-                ] as [String: Any]
+                    "required": [] as [String],
+                ] as [String: Any],
             ],
             [
                 "name": "get_git_diff",
@@ -246,10 +274,10 @@ struct AnthropicProvider: AIProviderProtocol {
                     "type": "object",
                     "properties": [
                         "directory": ["type": "string", "description": "Repository path"],
-                        "staged": ["type": "boolean", "description": "Show staged changes (default: false)"]
+                        "staged": ["type": "boolean", "description": "Show staged changes (default: false)"],
                     ] as [String: Any],
-                    "required": [] as [String]
-                ] as [String: Any]
+                    "required": [] as [String],
+                ] as [String: Any],
             ],
             [
                 "name": "get_git_log",
@@ -258,10 +286,10 @@ struct AnthropicProvider: AIProviderProtocol {
                     "type": "object",
                     "properties": [
                         "directory": ["type": "string", "description": "Repository path"],
-                        "count": ["type": "integer", "description": "Number of commits (default 10, max 50)"]
+                        "count": ["type": "integer", "description": "Number of commits (default 10, max 50)"],
                     ] as [String: Any],
-                    "required": [] as [String]
-                ] as [String: Any]
+                    "required": [] as [String],
+                ] as [String: Any],
             ],
             [
                 "name": "clipboard_copy",
@@ -271,20 +299,27 @@ struct AnthropicProvider: AIProviderProtocol {
                     "properties": [
                         "text": ["type": "string", "description": "Text to copy"]
                     ] as [String: Any],
-                    "required": ["text"]
-                ] as [String: Any]
+                    "required": ["text"],
+                ] as [String: Any],
             ],
             [
                 "name": "send_keys",
-                "description": "Send keystrokes or control sequences to a terminal pane. Use for interactive input (Ctrl+C to stop a process, Enter to confirm, arrow keys, etc.).",
+                "description":
+                    "Send keystrokes or control sequences to a terminal pane. Use for interactive input (Ctrl+C to stop a process, Enter to confirm, arrow keys, etc.).",
                 "input_schema": [
                     "type": "object",
                     "properties": [
-                        "keys": ["type": "string", "description": "Keys to send: 'ctrl+c', 'ctrl+d', 'ctrl+z', 'enter', 'tab', 'escape', 'up', 'down', 'left', 'right', or raw text"],
-                        "pane": ["type": "integer", "description": "Target pane number (1-based). Omit for focused pane."]
+                        "keys": [
+                            "type": "string",
+                            "description":
+                                "Keys to send: 'ctrl+c', 'ctrl+d', 'ctrl+z', 'enter', 'tab', 'escape', 'up', 'down', 'left', 'right', or raw text",
+                        ],
+                        "pane": [
+                            "type": "integer", "description": "Target pane number (1-based). Omit for focused pane.",
+                        ],
                     ] as [String: Any],
-                    "required": ["keys"]
-                ] as [String: Any]
+                    "required": ["keys"],
+                ] as [String: Any],
             ],
             [
                 "name": "get_env",
@@ -294,8 +329,8 @@ struct AnthropicProvider: AIProviderProtocol {
                     "properties": [
                         "name": ["type": "string", "description": "Variable name (e.g. PATH). Omit for all variables."]
                     ] as [String: Any],
-                    "required": [] as [String]
-                ] as [String: Any]
+                    "required": [] as [String],
+                ] as [String: Any],
             ],
             [
                 "name": "http_request",
@@ -306,10 +341,10 @@ struct AnthropicProvider: AIProviderProtocol {
                         "url": ["type": "string", "description": "Full URL"],
                         "method": ["type": "string", "description": "HTTP method (default GET)"],
                         "headers": ["type": "object", "description": "Request headers as key-value pairs"],
-                        "body": ["type": "string", "description": "Request body (for POST/PUT)"]
+                        "body": ["type": "string", "description": "Request body (for POST/PUT)"],
                     ] as [String: Any],
-                    "required": ["url"]
-                ] as [String: Any]
+                    "required": ["url"],
+                ] as [String: Any],
             ],
             [
                 "name": "check_port",
@@ -318,10 +353,10 @@ struct AnthropicProvider: AIProviderProtocol {
                     "type": "object",
                     "properties": [
                         "port": ["type": "integer", "description": "Port number to check"],
-                        "host": ["type": "string", "description": "Host (default: localhost)"]
+                        "host": ["type": "string", "description": "Host (default: localhost)"],
                     ] as [String: Any],
-                    "required": ["port"]
-                ] as [String: Any]
+                    "required": ["port"],
+                ] as [String: Any],
             ],
             [
                 "name": "find_process",
@@ -331,8 +366,8 @@ struct AnthropicProvider: AIProviderProtocol {
                     "properties": [
                         "name": ["type": "string", "description": "Process name or pattern to search for"]
                     ] as [String: Any],
-                    "required": ["name"]
-                ] as [String: Any]
+                    "required": ["name"],
+                ] as [String: Any],
             ],
             [
                 "name": "kill_process",
@@ -341,17 +376,17 @@ struct AnthropicProvider: AIProviderProtocol {
                     "type": "object",
                     "properties": [
                         "pid": ["type": "integer", "description": "Process ID"],
-                        "signal": ["type": "string", "description": "Signal name: TERM (default), KILL, INT, HUP"]
+                        "signal": ["type": "string", "description": "Signal name: TERM (default), KILL, INT, HUP"],
                     ] as [String: Any],
-                    "required": ["pid"]
-                ] as [String: Any]
-            ]
+                    "required": ["pid"],
+                ] as [String: Any],
+            ],
         ]
 
         let body: [String: Any] = [
             "model": model, "max_tokens": options.maxTokens,
             "temperature": options.temperature,
-            "system": system, "messages": messages, "tools": tools
+            "system": system, "messages": messages, "tools": tools,
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -361,14 +396,16 @@ struct AnthropicProvider: AIProviderProtocol {
             throw AIError.providerError("Anthropic tool use error: \(msg)")
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = json["content"] as? [[String: Any]] else {
+            let content = json["content"] as? [[String: Any]]
+        else {
             throw AIError.invalidResponse
         }
 
         if let block = content.first(where: { $0["type"] as? String == "tool_use" }),
-           let toolID = block["id"] as? String,
-           let toolName = block["name"] as? String,
-           let input = block["input"] as? [String: Any] {
+            let toolID = block["id"] as? String,
+            let toolName = block["name"] as? String,
+            let input = block["input"] as? [String: Any]
+        {
             return .toolCall(id: toolID, name: toolName, arguments: input)
         }
 

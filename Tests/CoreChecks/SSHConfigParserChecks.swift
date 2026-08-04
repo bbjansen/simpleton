@@ -5,12 +5,12 @@ import SimpletonCore
 func runSSHConfigParserChecks(_ t: TestRunner) {
     t.suite("SSHConfigParser.testParseBasicHost") {
         let config = """
-        Host myserver
-            HostName 10.0.1.5
-            User deploy
-            Port 2222
-            IdentityFile ~/.ssh/id_ed25519
-        """
+            Host myserver
+                HostName 10.0.1.5
+                User deploy
+                Port 2222
+                IdentityFile ~/.ssh/id_ed25519
+            """
         let entries = SSHConfigParser.parse(content: config)
         t.expectEqual(entries.count, 1, "one entry parsed")
         if let e = entries.first {
@@ -25,13 +25,13 @@ func runSSHConfigParserChecks(_ t: TestRunner) {
 
     t.suite("SSHConfigParser.testParseMultipleHosts") {
         let config = """
-        Host server1
-            HostName 10.0.1.1
+            Host server1
+                HostName 10.0.1.1
 
-        Host server2
-            HostName 10.0.1.2
-            User admin
-        """
+            Host server2
+                HostName 10.0.1.2
+                User admin
+            """
         let entries = SSHConfigParser.parse(content: config)
         t.expectEqual(entries.count, 2, "two entries parsed")
         if entries.count == 2 {
@@ -43,22 +43,22 @@ func runSSHConfigParserChecks(_ t: TestRunner) {
 
     t.suite("SSHConfigParser.testParseProxyJump") {
         let config = """
-        Host target
-            HostName 10.0.2.5
-            ProxyJump bastion1,bastion2
-        """
+            Host target
+                HostName 10.0.2.5
+                ProxyJump bastion1,bastion2
+            """
         let entries = SSHConfigParser.parse(content: config)
         t.expectEqual(entries.first?.proxyJump ?? [], ["bastion1", "bastion2"], "proxyJump list")
     }
 
     t.suite("SSHConfigParser.testWildcardHostIsNotConcrete") {
         let config = """
-        Host *.example.com
-            User deploy
+            Host *.example.com
+                User deploy
 
-        Host 10.0.*
-            User admin
-        """
+            Host 10.0.*
+                User admin
+            """
         let entries = SSHConfigParser.parse(content: config)
         t.expectEqual(entries.count, 2, "two entries parsed")
         if entries.count == 2 {
@@ -69,20 +69,20 @@ func runSSHConfigParserChecks(_ t: TestRunner) {
 
     t.suite("SSHConfigParser.testParseDefaultPort") {
         let config = """
-        Host myhost
-            HostName example.com
-        """
+            Host myhost
+                HostName example.com
+            """
         let entries = SSHConfigParser.parse(content: config)
         t.expectEqual(entries.first?.port, 22, "default port is 22")
     }
 
     t.suite("SSHConfigParser.testParseLocalForward") {
         let config = """
-        Host myhost
-            HostName example.com
-            LocalForward 8080 localhost:80
-            LocalForward 3000 127.0.0.1:3000
-        """
+            Host myhost
+                HostName example.com
+                LocalForward 8080 localhost:80
+                LocalForward 3000 127.0.0.1:3000
+            """
         let entries = SSHConfigParser.parse(content: config)
         t.expectEqual(entries.first?.localForwards.count, 2, "two local forwards")
         if let f = entries.first?.localForwards.first {
@@ -94,12 +94,12 @@ func runSSHConfigParserChecks(_ t: TestRunner) {
 
     t.suite("SSHConfigParser.testSkipGlobalWildcard") {
         let config = """
-        Host *
-            ServerAliveInterval 60
+            Host *
+                ServerAliveInterval 60
 
-        Host myhost
-            HostName example.com
-        """
+            Host myhost
+                HostName example.com
+            """
         let entries = SSHConfigParser.parse(content: config)
         let concrete = entries.filter(\.isConcrete)
         t.expectEqual(concrete.count, 1, "one concrete entry")
@@ -137,11 +137,11 @@ func runSSHConfigParserChecks(_ t: TestRunner) {
 
     t.suite("SSHConfigParser.testCommentsIgnored") {
         let config = """
-        # This is a comment
-        Host myhost
-            # Another comment
-            HostName example.com
-        """
+            # This is a comment
+            Host myhost
+                # Another comment
+                HostName example.com
+            """
         let entries = SSHConfigParser.parse(content: config)
         t.expectEqual(entries.count, 1, "comments ignored, one entry")
     }

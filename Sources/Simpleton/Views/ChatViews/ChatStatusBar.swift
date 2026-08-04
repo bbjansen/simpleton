@@ -23,7 +23,9 @@ struct ChatStatusBar: View {
                 .foregroundColor(unlimitedTurns ? .orange : .secondary)
             }
             .buttonStyle(.plain)
-            .help(unlimitedTurns ? "Turn limit disabled — agent can run indefinitely" : "Agent limited to 25 tool calls per message")
+            .help(
+                unlimitedTurns
+                    ? "Turn limit disabled — agent can run indefinitely" : "Agent limited to 25 tool calls per message")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)

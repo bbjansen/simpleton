@@ -41,8 +41,9 @@ enum SSHManager {
         // Port forwards
         for pf in bookmark.portForwards {
             guard FieldValidator.isValidPort(pf.localPort),
-                  FieldValidator.isValidPort(pf.remotePort),
-                  FieldValidator.isValidHostname(pf.remoteHost) else { continue }
+                FieldValidator.isValidPort(pf.remotePort),
+                FieldValidator.isValidHostname(pf.remoteHost)
+            else { continue }
 
             let spec = "\(pf.localPort):\(pf.remoteHost):\(pf.remotePort)"
             switch pf.direction {

@@ -1,7 +1,7 @@
 // Sources/Simpleton/Views/AIChatPanelController.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 /// NSHostingView subclass that lets Cmd+key shortcuts pass through to the menu bar
 /// instead of being eaten by SwiftUI TextFields.

@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/ChatViews/ChatInputView.swift
 import SwiftUI
-import SimpletonCore
 
 struct ChatInputView: View {
     @Binding var input: String
@@ -22,9 +22,11 @@ struct ChatInputView: View {
             .buttonStyle(.plain)
             .popover(isPresented: $showSkillPicker, arrowEdge: .top) {
                 if let store = skillStore {
-                    SkillPickerSheet(skillStore: store, onSelect: { skill in
-                        onSkillSelected(skill)
-                    }, onDismiss: { showSkillPicker = false })
+                    SkillPickerSheet(
+                        skillStore: store,
+                        onSelect: { skill in
+                            onSkillSelected(skill)
+                        }, onDismiss: { showSkillPicker = false })
                 }
             }
 

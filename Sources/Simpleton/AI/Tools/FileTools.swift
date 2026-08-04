@@ -33,7 +33,8 @@ struct FileTools: ToolHandler {
             let maxChars = 10_000
             let truncated = content.count > maxChars
             return truncated
-                ? String(content.prefix(maxChars)) + "\n\n[... truncated at \(maxChars) chars, file is \(content.count) chars total]"
+                ? String(content.prefix(maxChars))
+                    + "\n\n[... truncated at \(maxChars) chars, file is \(content.count) chars total]"
                 : content
         } catch {
             return "Error reading \(path): \(error.localizedDescription)"
@@ -42,7 +43,8 @@ struct FileTools: ToolHandler {
 
     private func handleWriteFile(_ args: [String: Any]) -> String {
         guard let path = args["path"] as? String,
-              let content = args["content"] as? String else {
+            let content = args["content"] as? String
+        else {
             return "Missing 'path' or 'content' parameter"
         }
         let expandedPath = NSString(string: path).expandingTildeInPath
@@ -58,8 +60,9 @@ struct FileTools: ToolHandler {
 
     private func handleEditFile(_ args: [String: Any]) -> String {
         guard let path = args["path"] as? String,
-              let oldText = args["old_text"] as? String,
-              let newText = args["new_text"] as? String else {
+            let oldText = args["old_text"] as? String,
+            let newText = args["new_text"] as? String
+        else {
             return "Missing 'path', 'old_text', or 'new_text' parameter"
         }
         let trimWhitespace = args["trim_whitespace"] as? Bool ?? false
@@ -82,17 +85,20 @@ struct FileTools: ToolHandler {
             }
             let occurrences = searchContent.components(separatedBy: searchText).count - 1
             if occurrences == 0 {
-                return "Error: old_text not found in \(path). Make sure it matches exactly (including whitespace). Tip: set trim_whitespace=true to ignore whitespace differences."
+                return
+                    "Error: old_text not found in \(path). Make sure it matches exactly (including whitespace). Tip: set trim_whitespace=true to ignore whitespace differences."
             } else if occurrences > 1 && !(args["replace_all"] as? Bool ?? false) {
-                return "Error: old_text found \(occurrences) times in \(path). Set replace_all=true or provide more context to make the match unique."
+                return
+                    "Error: old_text found \(occurrences) times in \(path). Set replace_all=true or provide more context to make the match unique."
             } else {
                 if trimWhitespace {
                     // Split old_text on whitespace, rejoin with \s+ pattern for flexible matching
                     let words = oldText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
                     let pattern = words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "\\s+")
                     if let regex = try? NSRegularExpression(pattern: pattern),
-                       let match = regex.firstMatch(in: content, range: NSRange(content.startIndex..., in: content)),
-                       let range = Range(match.range, in: content) {
+                        let match = regex.firstMatch(in: content, range: NSRange(content.startIndex..., in: content)),
+                        let range = Range(match.range, in: content)
+                    {
                         content.replaceSubrange(range, with: newText)
                     }
                 } else if args["replace_all"] as? Bool ?? false {
@@ -154,7 +160,8 @@ struct FileTools: ToolHandler {
             } else {
                 let maxFiles = 50
                 let truncated = lines.count > maxFiles
-                return lines.prefix(maxFiles).joined(separator: "\n") + (truncated ? "\n\n[... and \(lines.count - maxFiles) more files]" : "")
+                return lines.prefix(maxFiles).joined(separator: "\n")
+                    + (truncated ? "\n\n[... and \(lines.count - maxFiles) more files]" : "")
             }
         } catch {
             return "Error searching: \(error.localizedDescription)"

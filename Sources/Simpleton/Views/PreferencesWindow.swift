@@ -1,7 +1,7 @@
 // Sources/Simpleton/Views/PreferencesWindow.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 /// Manages the preferences window (Cmd+,).
 final class PreferencesWindowController {
@@ -16,7 +16,11 @@ final class PreferencesWindowController {
     private var skillStore: SkillStore?
     private var panelRegistry: PanelRegistry?
 
-    init(config: AppConfig, pluginManager: PluginManager? = nil, aiConfig: AIConfig = AIConfig(), skillStore: SkillStore? = nil, panelRegistry: PanelRegistry? = nil, onConfigChanged: @escaping (AppConfig) -> Void, onAIConfigChanged: ((AIConfig) -> Void)? = nil) {
+    init(
+        config: AppConfig, pluginManager: PluginManager? = nil, aiConfig: AIConfig = AIConfig(),
+        skillStore: SkillStore? = nil, panelRegistry: PanelRegistry? = nil,
+        onConfigChanged: @escaping (AppConfig) -> Void, onAIConfigChanged: ((AIConfig) -> Void)? = nil
+    ) {
         self.config = config
         self.pluginManager = pluginManager
         self.aiConfig = aiConfig
@@ -32,13 +36,17 @@ final class PreferencesWindowController {
             return
         }
 
-        let prefsView = PreferencesView(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, panelRegistry: panelRegistry, onChanged: { [weak self] newConfig in
-            self?.config = newConfig
-            self?.onConfigChanged?(newConfig)
-        }, onAIConfigChanged: { [weak self] newAIConfig in
-            self?.aiConfig = newAIConfig
-            self?.onAIConfigChanged?(newAIConfig)
-        })
+        let prefsView = PreferencesView(
+            config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore,
+            panelRegistry: panelRegistry,
+            onChanged: { [weak self] newConfig in
+                self?.config = newConfig
+                self?.onConfigChanged?(newConfig)
+            },
+            onAIConfigChanged: { [weak self] newAIConfig in
+                self?.aiConfig = newAIConfig
+                self?.onAIConfigChanged?(newAIConfig)
+            })
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 920, height: 640),
@@ -56,7 +64,9 @@ final class PreferencesWindowController {
         window.setFrameAutosaveName("SimpletonPreferencesWindow")
         window.makeKeyAndOrderFront(nil)
         self.window = window
-        closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [weak self] _ in
             // Remove the observer immediately so it cannot fire again during the
             // delayed teardown, preventing a retain-cycle crash.
             if let obs = self?.closeObserver {
@@ -157,10 +167,12 @@ struct PreferencesView: View {
                                 PluginsPreferencesTab(pluginManager: pm)
                             }
                         case 6:
-                            AIPreferencesTab(config: aiConfig, onChanged: { newAIConfig in
-                                aiConfig = newAIConfig
-                                onAIConfigChanged(newAIConfig)
-                            })
+                            AIPreferencesTab(
+                                config: aiConfig,
+                                onChanged: { newAIConfig in
+                                    aiConfig = newAIConfig
+                                    onAIConfigChanged(newAIConfig)
+                                })
                         default: EmptyView()
                         }
                     }
@@ -293,8 +305,11 @@ struct TerminalTab: View {
     var body: some View {
         Form {
             Section {
-                Stepper("Lines: \(config.terminal.scrollbackLines)", value: $config.terminal.scrollbackLines, in: 1000...100000, step: 1000)
-                    .onChange(of: config.terminal.scrollbackLines) { onChanged(config) }
+                Stepper(
+                    "Lines: \(config.terminal.scrollbackLines)", value: $config.terminal.scrollbackLines,
+                    in: 1000...100000, step: 1000
+                )
+                .onChange(of: config.terminal.scrollbackLines) { onChanged(config) }
                 Text("Number of lines to keep in the scrollback buffer")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
@@ -346,10 +361,13 @@ struct SSHPrefsTab: View {
     var body: some View {
         Form {
             Section {
-                TextField("Default user", text: Binding(
-                    get: { config.ssh.defaultUser ?? "" },
-                    set: { config.ssh.defaultUser = $0.isEmpty ? nil : $0 }
-                ))
+                TextField(
+                    "Default user",
+                    text: Binding(
+                        get: { config.ssh.defaultUser ?? "" },
+                        set: { config.ssh.defaultUser = $0.isEmpty ? nil : $0 }
+                    )
+                )
                 .onChange(of: config.ssh.defaultUser) { onChanged(config) }
                 Text("Username to use when none is specified in the connection")
                     .font(.system(size: 11))
@@ -359,15 +377,21 @@ struct SSHPrefsTab: View {
             }
 
             Section {
-                Stepper("Keepalive: \(config.ssh.keepaliveInterval)s", value: $config.ssh.keepaliveInterval, in: 0...300, step: 10)
-                    .onChange(of: config.ssh.keepaliveInterval) { onChanged(config) }
+                Stepper(
+                    "Keepalive: \(config.ssh.keepaliveInterval)s", value: $config.ssh.keepaliveInterval, in: 0...300,
+                    step: 10
+                )
+                .onChange(of: config.ssh.keepaliveInterval) { onChanged(config) }
                 Text("Interval in seconds between keepalive packets (0 to disable)")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
                 Toggle("Auto-reconnect", isOn: $config.ssh.autoReconnect)
                     .onChange(of: config.ssh.autoReconnect) { onChanged(config) }
-                Stepper("Max reconnect attempts: \(config.ssh.maxReconnectAttempts)", value: $config.ssh.maxReconnectAttempts, in: 1...50)
-                    .onChange(of: config.ssh.maxReconnectAttempts) { onChanged(config) }
+                Stepper(
+                    "Max reconnect attempts: \(config.ssh.maxReconnectAttempts)",
+                    value: $config.ssh.maxReconnectAttempts, in: 1...50
+                )
+                .onChange(of: config.ssh.maxReconnectAttempts) { onChanged(config) }
             } header: {
                 PrefsSectionHeader(title: "Connection")
             }

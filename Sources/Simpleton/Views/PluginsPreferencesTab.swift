@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/PluginsPreferencesTab.swift
 import SwiftUI
-import SimpletonCore
 
 struct PluginsPreferencesTab: View {
     let pluginManager: PluginManager
@@ -76,10 +76,13 @@ struct PluginsPreferencesTab: View {
                                 .padding(.vertical, 2)
                                 .background(Color.green.opacity(0.15))
                                 .cornerRadius(4)
-                            Toggle("", isOn: Binding(
-                                get: { plugin.isEnabled },
-                                set: { pluginManager.setEnabled($0, for: plugin) }
-                            ))
+                            Toggle(
+                                "",
+                                isOn: Binding(
+                                    get: { plugin.isEnabled },
+                                    set: { pluginManager.setEnabled($0, for: plugin) }
+                                )
+                            )
                             .labelsHidden()
                         }
                     }

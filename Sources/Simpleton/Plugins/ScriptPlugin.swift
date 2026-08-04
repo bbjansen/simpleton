@@ -12,7 +12,7 @@ struct ScriptPluginPanelManifest: Codable {
     let name: String
     let icon: String
     let defaultSide: PanelSide
-    let entrypoint: String   // relative path to the HTML file within the plugin directory
+    let entrypoint: String  // relative path to the HTML file within the plugin directory
 }
 
 struct ScriptPluginManifest: Codable {
@@ -50,7 +50,8 @@ final class ScriptPlugin {
     static func load(from directory: URL) -> ScriptPlugin? {
         let manifestURL = directory.appendingPathComponent("plugin.json")
         guard let data = try? Data(contentsOf: manifestURL),
-              let manifest = try? JSONDecoder().decode(ScriptPluginManifest.self, from: data) else {
+            let manifest = try? JSONDecoder().decode(ScriptPluginManifest.self, from: data)
+        else {
             return nil
         }
         // Verify entrypoint exists and is executable

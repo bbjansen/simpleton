@@ -63,7 +63,8 @@ enum SplitTreeOperations {
         for i in stride(from: path.count - 1, through: 0, by: -1) {
             let (node, childIndex) = path[i]
             if case .split(let splitDir, let children, _) = node {
-                let matchesAxis = (direction == .left || direction == .right) && splitDir == .vertical
+                let matchesAxis =
+                    (direction == .left || direction == .right) && splitDir == .vertical
                     || (direction == .up || direction == .down) && splitDir == .horizontal
 
                 if matchesAxis {
@@ -132,7 +133,9 @@ enum SplitTreeOperations {
 
     // MARK: - Helpers
 
-    private static func replacingPane(in tree: SplitNode, target: PaneID, replacement: (PaneID) -> SplitNode) -> SplitNode {
+    private static func replacingPane(
+        in tree: SplitNode, target: PaneID, replacement: (PaneID) -> SplitNode
+    ) -> SplitNode {
         switch tree {
         case .pane(let id):
             return id == target ? replacement(id) : tree

@@ -44,29 +44,35 @@ enum PredefinedLayouts {
 
     static let grid2x2 = PredefinedLayout(
         name: "Grid 2x2",
-        rootNode: .split(direction: .horizontal, children: [
-            .split(direction: .vertical, children: [.pane, .pane], ratios: [0.5, 0.5]),
-            .split(direction: .vertical, children: [.pane, .pane], ratios: [0.5, 0.5]),
-        ], ratios: [0.5, 0.5])
+        rootNode: .split(
+            direction: .horizontal,
+            children: [
+                .split(direction: .vertical, children: [.pane, .pane], ratios: [0.5, 0.5]),
+                .split(direction: .vertical, children: [.pane, .pane], ratios: [0.5, 0.5]),
+            ], ratios: [0.5, 0.5])
     )
 
     static let mainPlusSidebar = PredefinedLayout(
         name: "Main + Sidebar",
-        rootNode: .split(direction: .vertical, children: [
-            .pane,
-            .split(direction: .horizontal, children: [.pane, .pane], ratios: [0.5, 0.5]),
-        ], ratios: [0.67, 0.33])
+        rootNode: .split(
+            direction: .vertical,
+            children: [
+                .pane,
+                .split(direction: .horizontal, children: [.pane, .pane], ratios: [0.5, 0.5]),
+            ], ratios: [0.67, 0.33])
     )
 
     static let mainPlusBottom = PredefinedLayout(
         name: "Main + Bottom",
-        rootNode: .split(direction: .horizontal, children: [
-            .pane,
-            .split(direction: .vertical, children: [.pane, .pane], ratios: [0.5, 0.5]),
-        ], ratios: [0.67, 0.33])
+        rootNode: .split(
+            direction: .horizontal,
+            children: [
+                .pane,
+                .split(direction: .vertical, children: [.pane, .pane], ratios: [0.5, 0.5]),
+            ], ratios: [0.67, 0.33])
     )
 
     static let all: [PredefinedLayout] = [
-        single, sideBySide, stacked, threeColumn, grid2x2, mainPlusSidebar, mainPlusBottom
+        single, sideBySide, stacked, threeColumn, grid2x2, mainPlusSidebar, mainPlusBottom,
     ]
 }

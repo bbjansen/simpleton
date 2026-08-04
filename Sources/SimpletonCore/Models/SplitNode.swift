@@ -4,8 +4,8 @@ import Foundation
 public typealias PaneID = UUID
 
 public enum SplitDirection: String, Codable, Equatable {
-    case horizontal // ── divider, top/bottom panes
-    case vertical   // │ divider, left/right panes
+    case horizontal  // ── divider, top/bottom panes
+    case vertical  // │ divider, left/right panes
 }
 
 public indirect enum SplitNode: Codable, Equatable {
@@ -34,7 +34,8 @@ public indirect enum SplitNode: Codable, Equatable {
             }
             self = .split(direction: direction, children: children, ratios: ratios)
         default:
-            throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Unknown type: \(type)")
+            throw DecodingError.dataCorruptedError(
+                forKey: .type, in: container, debugDescription: "Unknown type: \(type)")
         }
     }
 

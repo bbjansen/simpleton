@@ -24,14 +24,16 @@ struct WebTools: ToolHandler {
         let count = min(args["count"] as? Int ?? 5, 10)
 
         guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://html.duckduckgo.com/html/?q=\(encoded)") else {
+            let url = URL(string: "https://html.duckduckgo.com/html/?q=\(encoded)")
+        else {
             return "Failed to encode search query"
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 15
-        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", forHTTPHeaderField: "User-Agent")
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", forHTTPHeaderField: "User-Agent")
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -65,14 +67,16 @@ struct WebTools: ToolHandler {
 
     private func handleFetchURL(_ args: [String: Any]) async -> String {
         guard let urlStr = args["url"] as? String,
-              let url = URL(string: urlStr) else {
+            let url = URL(string: urlStr)
+        else {
             return "Missing or invalid 'url' parameter"
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 15
-        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", forHTTPHeaderField: "User-Agent")
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", forHTTPHeaderField: "User-Agent")
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -84,7 +88,8 @@ struct WebTools: ToolHandler {
             let stripped = stripHTMLTags(body)
             let cleaned = collapseWhitespace(stripped)
             let maxChars = 5000
-            let truncated = cleaned.count > maxChars
+            let truncated =
+                cleaned.count > maxChars
                 ? String(cleaned.prefix(maxChars)) + "\n[... truncated, total \(cleaned.count) chars]"
                 : cleaned
             return "HTTP \(status) — \(url.host ?? urlStr)\n\n\(truncated)"
@@ -144,7 +149,8 @@ struct WebTools: ToolHandler {
 
     private func cleanDuckDuckGoURL(_ rawURL: String) -> String {
         if rawURL.contains("uddg="),
-           let uddgRange = rawURL.range(of: "uddg=") {
+            let uddgRange = rawURL.range(of: "uddg=")
+        {
             let afterUddg = String(rawURL[uddgRange.upperBound...])
             let encoded = afterUddg.components(separatedBy: "&").first ?? afterUddg
             return encoded.removingPercentEncoding ?? encoded

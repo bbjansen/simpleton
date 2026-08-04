@@ -46,8 +46,8 @@ func runAppConfigChecks(_ t: TestRunner) {
         do {
             // Simulate a config file with a full key set (older version)
             let json = """
-            {"version":1,"general":{"shell":"$SHELL","shellDetection":"environment","workingDirectory":"home","restorePreviousSession":true,"confirmBeforeClosing":true,"checkForUpdates":"automatic","termVariable":"xterm-256color","customWorkingDirectory":null},"appearance":{"theme":"default-dark","fontFamily":"SF Mono","fontSize":15,"cursorStyle":"beam","cursorBlink":true,"windowOpacity":1.0,"thinStrokes":false},"terminal":{"scrollbackLines":10000,"copyOnSelect":false,"pasteOnRightClick":true,"bellBehavior":"visual","mouseReporting":true,"closeOnCleanExit":false},"ssh":{"defaultUser":null,"keepaliveInterval":60,"autoReconnect":true,"maxReconnectAttempts":10,"agentForwarding":false,"x11Forwarding":false,"controlMaster":false}}
-            """
+                {"version":1,"general":{"shell":"$SHELL","shellDetection":"environment","workingDirectory":"home","restorePreviousSession":true,"confirmBeforeClosing":true,"checkForUpdates":"automatic","termVariable":"xterm-256color","customWorkingDirectory":null},"appearance":{"theme":"default-dark","fontFamily":"SF Mono","fontSize":15,"cursorStyle":"beam","cursorBlink":true,"windowOpacity":1.0,"thinStrokes":false},"terminal":{"scrollbackLines":10000,"copyOnSelect":false,"pasteOnRightClick":true,"bellBehavior":"visual","mouseReporting":true,"closeOnCleanExit":false},"ssh":{"defaultUser":null,"keepaliveInterval":60,"autoReconnect":true,"maxReconnectAttempts":10,"agentForwarding":false,"x11Forwarding":false,"controlMaster":false}}
+                """
             let decoded = try JSONDecoder().decode(ConfigFile.self, from: Data(json.utf8))
             t.expectEqual(decoded.config.appearance.fontSize, 15, "fontSize from file")
             t.expectEqual(decoded.config.appearance.cursorStyle, .beam, "cursorStyle from file")

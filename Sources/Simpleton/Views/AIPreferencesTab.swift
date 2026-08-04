@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Views/AIPreferencesTab.swift
 import SwiftUI
-import AppKit
 
 struct AIPreferencesTab: View {
     @State var config: AIConfig
@@ -73,9 +73,11 @@ struct AIPreferencesTab: View {
                     .foregroundColor(.secondary)
             }
             if !preset.supportsTools {
-                Label("Tool use runs via fenced command blocks for this provider.", systemImage: "wrench.and.screwdriver")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                Label(
+                    "Tool use runs via fenced command blocks for this provider.", systemImage: "wrench.and.screwdriver"
+                )
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
             }
         } header: {
             sectionLabel("PROVIDER")
@@ -110,8 +112,10 @@ struct AIPreferencesTab: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Paste it here (stored in macOS Keychain)").font(.system(size: 13, weight: .medium))
                     HStack {
-                        SecureField(preset.apiKeyPlaceholder.isEmpty ? "API key" : preset.apiKeyPlaceholder, text: $apiKeyText)
-                            .textFieldStyle(.roundedBorder)
+                        SecureField(
+                            preset.apiKeyPlaceholder.isEmpty ? "API key" : preset.apiKeyPlaceholder, text: $apiKeyText
+                        )
+                        .textFieldStyle(.roundedBorder)
                         Button(action: saveAndTestKey) {
                             if isTesting {
                                 ProgressView().scaleEffect(0.6).frame(width: 50)
@@ -198,12 +202,16 @@ struct AIPreferencesTab: View {
                 Text("Default: http://localhost:11434").font(.system(size: 11)).foregroundColor(.secondary)
             }
             if config.provider == .custom {
-                TextField("Base URL", text: Binding(
-                    get: { config.baseURL ?? "" },
-                    set: { config.baseURL = $0.isEmpty ? nil : $0 }
-                ))
+                TextField(
+                    "Base URL",
+                    text: Binding(
+                        get: { config.baseURL ?? "" },
+                        set: { config.baseURL = $0.isEmpty ? nil : $0 }
+                    )
+                )
                 .onChange(of: config.baseURL) { onChanged(config) }
-                Text("OpenAI-compatible endpoint, e.g. https://api.example.com/v1").font(.system(size: 11)).foregroundColor(.secondary)
+                Text("OpenAI-compatible endpoint, e.g. https://api.example.com/v1").font(.system(size: 11))
+                    .foregroundColor(.secondary)
             }
         } header: {
             sectionLabel("MODEL")
@@ -329,7 +337,8 @@ struct AIPreferencesTab: View {
                     modelError = nil
                     keyStatus = .valid
                 } else if let error = result.error {
-                    keyStatus = error.localizedCaseInsensitiveContains("unauthorized")
+                    keyStatus =
+                        error.localizedCaseInsensitiveContains("unauthorized")
                         ? .invalid("Invalid API key — check and try again")
                         : .invalid(error)
                 } else {

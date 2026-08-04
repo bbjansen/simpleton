@@ -1,7 +1,7 @@
 // Sources/Simpleton/Panels/SnippetsPanelController.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 struct SnippetsPanelView: View {
     let appSupportDir: URL
@@ -54,8 +54,10 @@ struct SnippetsPanelView: View {
                         .font(.system(size: 11, design: .monospaced))
                     HStack {
                         Spacer()
-                        Button("Cancel") { isAdding = false; newName = ""; newCommand = "" }
-                            .font(.system(size: 11))
+                        Button("Cancel") {
+                            isAdding = false; newName = ""; newCommand = ""
+                        }
+                        .font(.system(size: 11))
                         Button("Add") { addSnippet() }
                             .font(.system(size: 11))
                             .disabled(newName.isEmpty || newCommand.isEmpty)
@@ -84,7 +86,8 @@ struct SnippetsPanelView: View {
 
             // Fill form for selected snippet with placeholders
             if let id = selectedID,
-               let snippet = store.snippets.first(where: { $0.id == id }) {
+                let snippet = store.snippets.first(where: { $0.id == id })
+            {
                 let placeholders = extractPlaceholders(snippet.command)
                 if !placeholders.isEmpty {
                     Divider()
@@ -95,10 +98,13 @@ struct SnippetsPanelView: View {
                                     .font(.system(size: 10))
                                     .foregroundColor(.purple)
                                     .frame(width: 60, alignment: .leading)
-                                TextField(ph, text: Binding(
-                                    get: { fillValues[ph] ?? "" },
-                                    set: { fillValues[ph] = $0 }
-                                ))
+                                TextField(
+                                    ph,
+                                    text: Binding(
+                                        get: { fillValues[ph] ?? "" },
+                                        set: { fillValues[ph] = $0 }
+                                    )
+                                )
                                 .font(.system(size: 11))
                             }
                         }

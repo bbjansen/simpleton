@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Core/ConfigStoreTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class ConfigStoreTests: XCTestCase {
@@ -39,7 +40,7 @@ final class ConfigStoreTests: XCTestCase {
 
         let store = ConfigStore(directory: tempDir)
         let config = try await store.load()
-        XCTAssertEqual(config.appearance.fontFamily, "SF Mono") // default
+        XCTAssertEqual(config.appearance.fontFamily, "SF Mono")  // default
     }
 
     func testOrphanedTempFileRecovery() async throws {

@@ -4,7 +4,7 @@ import SimpletonCore
 
 struct AutoFillResult {
     var values: [String: String]
-    var aiSuggestedKeys: Set<String>   // params filled by AI — show ✦ indicator
+    var aiSuggestedKeys: Set<String>  // params filled by AI — show ✦ indicator
 }
 
 enum SkillAutoFill {
@@ -55,15 +55,15 @@ enum SkillAutoFill {
         let paramList = empty.map { "\($0.name) (\($0.label))" }.joined(separator: ", ")
 
         let prompt = """
-        Terminal context:
-        \(ctxStr)
+            Terminal context:
+            \(ctxStr)
 
-        Skill: "\(skill.name)"
-        Suggest values for these empty parameters: \(paramList)
+            Skill: "\(skill.name)"
+            Suggest values for these empty parameters: \(paramList)
 
-        Return ONLY a JSON object like {"paramName": "value"}.
-        Return null for any parameter you are not confident about.
-        """
+            Return ONLY a JSON object like {"paramName": "value"}.
+            Return null for any parameter you are not confident about.
+            """
 
         let response = try await aiService.complete(
             system: "You are a terminal context analyzer. Return only valid compact JSON, nothing else.",
@@ -72,7 +72,8 @@ enum SkillAutoFill {
         )
 
         guard let data = response.data(using: .utf8),
-              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else {
             return [:]
         }
         var result: [String: String] = [:]

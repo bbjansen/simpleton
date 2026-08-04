@@ -34,12 +34,15 @@ extension AgentSession {
         }
 
         if shouldAutoApprove {
-            await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: targetPane, paneLabel: targetLabel, wasFallback: resolved?.wasFallback ?? false, turns: &turns)
+            await executeCommand(
+                cmd, toolCallID: id, explanation: explanation, pane: targetPane, paneLabel: targetLabel,
+                wasFallback: resolved?.wasFallback ?? false, turns: &turns)
             return .continued
         }
 
         state = .waitingApproval(cmd: cmd, explanation: explanation, toolCallID: id, paneLabel: targetLabel)
-        let (action, overridePaneID) = await withCheckedContinuation { (continuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>) in
+        let (action, overridePaneID) = await withCheckedContinuation {
+            (continuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>) in
             pendingApprovalContinuation = continuation
             onApprovalNeeded?(cmd, explanation, targetLabel) { [weak self] action, overrideID in
                 self?.pendingApprovalContinuation?.resume(returning: (action, overrideID))
@@ -51,15 +54,18 @@ extension AgentSession {
             let finalPane: PaneController
             let finalLabel: String
             if let overrideID = overridePaneID,
-               let idx = conversation.paneOrder.firstIndex(of: overrideID),
-               let overrideResolved = conversation.resolvePane(number: idx + 1) {
+                let idx = conversation.paneOrder.firstIndex(of: overrideID),
+                let overrideResolved = conversation.resolvePane(number: idx + 1)
+            {
                 finalPane = overrideResolved.pane
                 finalLabel = overrideResolved.label
             } else {
                 finalPane = targetPane
                 finalLabel = targetLabel
             }
-            await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: finalPane, paneLabel: finalLabel, wasFallback: false, turns: &turns)
+            await executeCommand(
+                cmd, toolCallID: id, explanation: explanation, pane: finalPane, paneLabel: finalLabel,
+                wasFallback: false, turns: &turns)
             return .continued
         case .skip:
             turns.append(.toolResult(toolCallID: id, output: "[Command skipped by user]"))
@@ -81,7 +87,8 @@ extension AgentSession {
         let uuid = UUID().uuidString.prefix(8)
         let sentinel = "__SIMPLETON_DONE_\(uuid)__"
         // Embed exit code in sentinel: __SIMPLETON_DONE_xxxx_EXIT_0__
-        let fullCommand = "\(cmd)\n__simpleton_ec=$?; printf '\\n\(sentinel)_EXIT_%d__\\n' \"$__simpleton_ec\"; exit_unused=$__simpleton_ec\n"
+        let fullCommand =
+            "\(cmd)\n__simpleton_ec=$?; printf '\\n\(sentinel)_EXIT_%d__\\n' \"$__simpleton_ec\"; exit_unused=$__simpleton_ec\n"
         pane.terminalView.send(data: Array(fullCommand.utf8)[...])
 
         state = .capturingOutput
@@ -101,13 +108,14 @@ extension AgentSession {
         // Publish to workspace event bus for cross-tab awareness
         if let bus = eventBus, let tabID = pane.eventBusTabID {
             let snippet = String(output.prefix(200))
-            bus.publish(WorkspaceEvent(
-                id: UUID(),
-                timestamp: Date(),
-                tabID: tabID,
-                paneLabel: pane.paneLabel ?? paneLabel,
-                type: .commandCompleted(cmd: cmd, exitCode: Int32(exitCode ?? 0), outputSnippet: snippet)
-            ))
+            bus.publish(
+                WorkspaceEvent(
+                    id: UUID(),
+                    timestamp: Date(),
+                    tabID: tabID,
+                    paneLabel: pane.paneLabel ?? paneLabel,
+                    type: .commandCompleted(cmd: cmd, exitCode: Int32(exitCode ?? 0), outputSnippet: snippet)
+                ))
         }
     }
 
@@ -115,7 +123,7 @@ extension AgentSession {
     func captureOutputWithExitCode(sentinel: String, pane: PaneController) async -> (output: String, exitCode: Int?) {
         let terminal = pane.terminalView.getTerminal()
         let maxWait = 30_000
-        let pollMs  = 200
+        let pollMs = 200
         var elapsed = 0
         var lastBufferHash: Int = 0
         var stableElapsed = 0
@@ -171,18 +179,20 @@ extension AgentSession {
 
             // After 5 seconds with no output change, check for interactive prompt
             if stableElapsed >= 5000 {
-                let lastLine = lines.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?
+                let lastLine =
+                    lines.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?
                     .trimmingCharacters(in: .whitespaces) ?? ""
-                let looksLikePrompt = lastLine.hasSuffix(":") || lastLine.hasSuffix("?") ||
-                    lastLine.hasSuffix(">") || lastLine.hasSuffix("]") ||
-                    lastLine.lowercased().contains("password") ||
-                    lastLine.contains("[y/") || lastLine.contains("[Y/") ||
-                    lastLine.contains("(y/n)") || lastLine.contains("(Y/N)")
+                let looksLikePrompt =
+                    lastLine.hasSuffix(":") || lastLine.hasSuffix("?") || lastLine.hasSuffix(">")
+                    || lastLine.hasSuffix("]") || lastLine.lowercased().contains("password") || lastLine.contains("[y/")
+                    || lastLine.contains("[Y/") || lastLine.contains("(y/n)") || lastLine.contains("(Y/N)")
                 if looksLikePrompt {
                     let output = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                         .joined(separator: "\n")
-                    return ("[Command appears to be waiting for input. Last line: '\(lastLine)'. Use read_pane_output to check and send_keys to respond.]" +
-                            "\n\nOutput so far:\n\(output)", nil)
+                    return (
+                        "[Command appears to be waiting for input. Last line: '\(lastLine)'. Use read_pane_output to check and send_keys to respond.]"
+                            + "\n\nOutput so far:\n\(output)", nil
+                    )
                 }
                 stableElapsed = 0
             }

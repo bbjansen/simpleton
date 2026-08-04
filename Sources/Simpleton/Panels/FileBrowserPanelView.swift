@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Panels/FileBrowserPanelView.swift
 import SwiftUI
-import AppKit
 
 struct FileBrowserEntry: Identifiable {
     let id = UUID()
@@ -95,11 +95,13 @@ struct FileBrowserPanelView: View {
 
     private func loadEntries() {
         let fm = FileManager.default
-        guard let items = try? fm.contentsOfDirectory(
-            at: currentURL,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
+        guard
+            let items = try? fm.contentsOfDirectory(
+                at: currentURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else {
             entries = []
             return
         }

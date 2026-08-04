@@ -27,7 +27,8 @@ struct GitTools: ToolHandler {
         case "get_git_log":
             let dir = args["directory"] as? String
             let count = args["count"] as? Int ?? 10
-            let result = await processRunner.run("/usr/bin/git", args: ["log", "--oneline", "-\(min(count, 50))"], cwd: dir)
+            let result = await processRunner.run(
+                "/usr/bin/git", args: ["log", "--oneline", "-\(min(count, 50))"], cwd: dir)
             return result.isEmpty ? "[No commits]" : result
 
         default:

@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Panels/PanelEmptyStateView.swift
 import SwiftUI
-import AppKit
 
 /// Generic empty-state view used by panels whose dependency is absent.
 struct PanelEmptyStateView: View {

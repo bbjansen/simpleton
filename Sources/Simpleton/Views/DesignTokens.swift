@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Views/DesignTokens.swift
 import SwiftUI
-import AppKit
 
 /// Centralized design tokens for the Simpleton premium dark theme.
 enum DT {
@@ -27,13 +27,13 @@ enum DT {
     /// Secondary text
     static let textSecondary = Color.white.opacity(0.7)
     /// Tertiary text / captions
-    static let textTertiary = Color(red: 0.353, green: 0.353, blue: 0.416) // #5A5A6A
+    static let textTertiary = Color(red: 0.353, green: 0.353, blue: 0.416)  // #5A5A6A
     /// Muted text / section headers
-    static let textMuted = Color(red: 0.290, green: 0.290, blue: 0.353) // #4A4A5A
+    static let textMuted = Color(red: 0.290, green: 0.290, blue: 0.353)  // #4A4A5A
     /// Very muted text / footers
-    static let textFaint = Color(red: 0.227, green: 0.227, blue: 0.290) // #3A3A4A
+    static let textFaint = Color(red: 0.227, green: 0.227, blue: 0.290)  // #3A3A4A
     /// Help text in preferences
-    static let textHelp = Color(red: 0.416, green: 0.416, blue: 0.478) // #6A6A7A
+    static let textHelp = Color(red: 0.416, green: 0.416, blue: 0.478)  // #6A6A7A
 
     // MARK: - Accent Colors (muted, pop against dark)
 
@@ -48,13 +48,13 @@ enum DT {
 
     static func categoryColor(for category: String) -> Color {
         switch category.lowercased() {
-        case "window":  return Color(red: 0.145, green: 0.388, blue: 0.922) // #2563EB
-        case "ssh":     return Color(red: 0.086, green: 0.639, blue: 0.290) // #16A34A
-        case "view":    return Color(red: 0.576, green: 0.200, blue: 0.918) // #9333EA
-        case "edit":    return Color(red: 0.918, green: 0.345, blue: 0.047) // #EA580C
-        case "file":    return accentCyan
-        case "help":    return accentAmber
-        default:        return textTertiary
+        case "window": return Color(red: 0.145, green: 0.388, blue: 0.922)  // #2563EB
+        case "ssh": return Color(red: 0.086, green: 0.639, blue: 0.290)  // #16A34A
+        case "view": return Color(red: 0.576, green: 0.200, blue: 0.918)  // #9333EA
+        case "edit": return Color(red: 0.918, green: 0.345, blue: 0.047)  // #EA580C
+        case "file": return accentCyan
+        case "help": return accentAmber
+        default: return textTertiary
         }
     }
 

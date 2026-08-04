@@ -1,7 +1,7 @@
 // Sources/Simpleton/AI/Tools/TerminalTools.swift
 import Foundation
-import SwiftTerm
 import SimpletonCore
+import SwiftTerm
 
 @MainActor
 struct TerminalTools: ToolHandler {
@@ -133,13 +133,13 @@ struct TerminalTools: ToolHandler {
         }
         let output = readTerminalOutput(pane: pane, lines: 30)
         return """
-        \(label)
-        CWD: \(cwd)
-        Shell: \(shellStr)
-        Connection: \(connStr)
-        State: \(stateStr)
-        Recent output:
-        \(output)
-        """
+            \(label)
+            CWD: \(cwd)
+            Shell: \(shellStr)
+            Connection: \(connStr)
+            State: \(stateStr)
+            Recent output:
+            \(output)
+            """
     }
 }

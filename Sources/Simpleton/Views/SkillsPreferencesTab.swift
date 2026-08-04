@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/SkillsPreferencesTab.swift
 import SwiftUI
-import SimpletonCore
 import UniformTypeIdentifiers
 
 struct SkillsPreferencesTab: View {
@@ -43,26 +43,33 @@ struct SkillsPreferencesTab: View {
             // Right: editor — .id forces re-creation when selected skill changes
             Group {
                 if let skill = editingSkill {
-                    SkillEditor(skill: skill, onSave: { updated in
-                        try? skillStore.updateUserSkill(updated)
-                        editingSkill = updated
-                    }, onDelete: {
-                        try? skillStore.deleteUserSkill(id: skill.id)
-                        selectedSkillID = nil
-                        editingSkill = nil
-                    })
+                    SkillEditor(
+                        skill: skill,
+                        onSave: { updated in
+                            try? skillStore.updateUserSkill(updated)
+                            editingSkill = updated
+                        },
+                        onDelete: {
+                            try? skillStore.deleteUserSkill(id: skill.id)
+                            selectedSkillID = nil
+                            editingSkill = nil
+                        }
+                    )
                     .id(skill.id)
                 } else if let skill = selectedSkill, skill.builtIn {
-                    SkillEditor(skill: skill, readOnly: true, onDuplicate: {
-                        var copy = skill
-                        copy.id = UUID()
-                        copy.name = "\(skill.name) (Copy)"
-                        copy.slug = "\(skill.slug)-copy"
-                        copy.builtIn = false
-                        try? skillStore.addUserSkill(copy)
-                        selectedSkillID = copy.id
-                        editingSkill = copy
-                    })
+                    SkillEditor(
+                        skill: skill, readOnly: true,
+                        onDuplicate: {
+                            var copy = skill
+                            copy.id = UUID()
+                            copy.name = "\(skill.name) (Copy)"
+                            copy.slug = "\(skill.slug)-copy"
+                            copy.builtIn = false
+                            try? skillStore.addUserSkill(copy)
+                            selectedSkillID = copy.id
+                            editingSkill = copy
+                        }
+                    )
                     .id(skill.id)
                 } else {
                     Text("Select a skill to edit")

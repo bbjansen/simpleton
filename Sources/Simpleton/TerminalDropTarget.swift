@@ -25,7 +25,8 @@ final class TerminalDropTarget: NSView {
         guard let items = sender.draggingPasteboard.pasteboardItems else { return false }
         let paths = items.compactMap { item -> String? in
             guard let urlString = item.string(forType: .fileURL),
-                  let url = URL(string: urlString) else { return nil }
+                let url = URL(string: urlString)
+            else { return nil }
             let escaped = url.path.replacingOccurrences(of: "'", with: "'\\''")
             return "'\(escaped)'"
         }

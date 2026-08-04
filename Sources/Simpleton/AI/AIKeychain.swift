@@ -39,7 +39,8 @@ enum AIKeychain {
         ]
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
+            let data = result as? Data
+        else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
@@ -71,7 +72,7 @@ enum AIKeychain {
             kSecAttrAccount as String: "apiKey.\(provider.rawValue)",
         ]
         let attributes: [String: Any] = [
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecSuccess || status == errSecItemNotFound {

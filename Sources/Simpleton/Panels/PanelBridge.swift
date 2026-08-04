@@ -1,7 +1,7 @@
 // Sources/Simpleton/Panels/PanelBridge.swift
 import Foundation
-import WebKit
 import SimpletonCore
+import WebKit
 
 final class PanelBridge: NSObject, WKScriptMessageHandler {
 
@@ -31,25 +31,31 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
 
     func install(into controller: WKUserContentController) {
         guard let shimURL = Bundle.main.url(forResource: "panel-bridge", withExtension: "js"),
-              let shim = try? String(contentsOf: shimURL, encoding: .utf8) else {
+            let shim = try? String(contentsOf: shimURL, encoding: .utf8)
+        else {
             assertionFailure("panel-bridge.js missing from app bundle")
             return
         }
-        controller.addUserScript(WKUserScript(
-            source: shim,
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: true
-        ))
-        for name in ["insert", "getOutput", "getCwd", "getSelection",
-                     "onOutput", "offOutput", "storageGet", "storageSet", "storageGetAll"] {
+        controller.addUserScript(
+            WKUserScript(
+                source: shim,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            ))
+        for name in [
+            "insert", "getOutput", "getCwd", "getSelection",
+            "onOutput", "offOutput", "storageGet", "storageSet", "storageGetAll",
+        ] {
             controller.add(self, name: name)
         }
     }
 
     // MARK: - WKScriptMessageHandler
 
-    func userContentController(_ controller: WKUserContentController,
-                               didReceive message: WKScriptMessage) {
+    func userContentController(
+        _ controller: WKUserContentController,
+        didReceive message: WKScriptMessage
+    ) {
         DispatchQueue.main.async { [weak self] in self?.handle(message: message) }
     }
 
@@ -83,7 +89,8 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
 
         case "storageSet":
             if let body = (message.body as? [String: Any])?["body"] as? [String: Any],
-               let key = body["key"] as? String {
+                let key = body["key"] as? String
+            {
                 var store = loadStorage()
                 store[key] = body["value"]
                 saveStorage(store)
@@ -103,10 +110,12 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
         guard let callbackId = (message.body as? [String: Any])?["callbackId"] as? String else { return }
         let json: String
         if let data = try? JSONSerialization.data(withJSONObject: value, options: []),
-           let str = String(data: data, encoding: .utf8) {
+            let str = String(data: data, encoding: .utf8)
+        {
             json = str
         } else if let str = value as? String {
-            let escaped = str
+            let escaped =
+                str
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
                 .replacingOccurrences(of: "\n", with: "\\n")
@@ -166,7 +175,8 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
 
     private func deliverOutput(lines: [String]) {
         guard let data = try? JSONSerialization.data(withJSONObject: lines),
-              let json = String(data: data, encoding: .utf8) else { return }
+            let json = String(data: data, encoding: .utf8)
+        else { return }
         webView?.evaluateJavaScript("window.__deliverOutput(\(json));", completionHandler: nil)
     }
 
@@ -197,7 +207,8 @@ final class PanelBridge: NSObject, WKScriptMessageHandler {
 
     private func loadStorage() -> [String: Any] {
         guard let data = try? Data(contentsOf: storageFile),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
             return [:]
         }
         return dict

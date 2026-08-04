@@ -1,6 +1,6 @@
+import Combine
 // Sources/Simpleton/Panels/SnippetStore.swift
 import Foundation
-import Combine
 import SimpletonCore
 
 final class SnippetStore: ObservableObject {

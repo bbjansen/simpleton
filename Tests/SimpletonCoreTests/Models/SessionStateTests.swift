@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Models/SessionStateTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class SessionStateTests: XCTestCase {

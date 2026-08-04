@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Core/FrecencyScorerTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class FrecencyScorerTests: XCTestCase {
@@ -13,7 +14,7 @@ final class FrecencyScorerTests: XCTestCase {
             recentTimestamps: [now]
         )
         let score = FrecencyScorer.computeScore(entry: entry, now: now)
-        XCTAssertEqual(score, 100) // last 4 hours bucket
+        XCTAssertEqual(score, 100)  // last 4 hours bucket
     }
 
     func testOlderUseScoresLower() {
@@ -26,7 +27,7 @@ final class FrecencyScorerTests: XCTestCase {
             recentTimestamps: [twoDaysAgo]
         )
         let score = FrecencyScorer.computeScore(entry: entry, now: now)
-        XCTAssertEqual(score, 60) // last 7 days bucket
+        XCTAssertEqual(score, 60)  // last 7 days bucket
     }
 
     func testMultipleUsesAccumulate() {
@@ -37,12 +38,12 @@ final class FrecencyScorerTests: XCTestCase {
             useCount: 3,
             recentTimestamps: [
                 now,
-                now.addingTimeInterval(-3600),      // 1h ago, still in 4h bucket
+                now.addingTimeInterval(-3600),  // 1h ago, still in 4h bucket
                 now.addingTimeInterval(-25 * 3600),  // 25h ago, in 7d bucket
             ]
         )
         let score = FrecencyScorer.computeScore(entry: entry, now: now)
-        XCTAssertEqual(score, 260) // 100 + 100 + 60
+        XCTAssertEqual(score, 260)  // 100 + 100 + 60
     }
 
     func testOlderThan90DaysScoresZero() {
@@ -77,6 +78,6 @@ final class FrecencyScorerTests: XCTestCase {
         let old = now.addingTimeInterval(-91 * 24 * 3600)
         let entry = FrecencyEntry(score: 20, lastUsed: old, useCount: 1, recentTimestamps: [old])
         let pruned = FrecencyScorer.prune(entry: entry, now: now)
-        XCTAssertNil(pruned) // score 0 → pruned
+        XCTAssertNil(pruned)  // score 0 → pruned
     }
 }

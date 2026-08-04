@@ -1,7 +1,7 @@
 // Sources/Simpleton/AI/AIContextBuilder.swift
 import Foundation
-import SwiftTerm
 import SimpletonCore
+import SwiftTerm
 
 struct AIContext {
     var cwd: String?
@@ -79,7 +79,8 @@ enum AIContextBuilder {
             parts.append("Selected text:\n\(selection)")
         } else if let output = context.recentOutput {
             // Strip blank lines so we pack more meaningful content into fewer tokens
-            let stripped = output
+            let stripped =
+                output
                 .components(separatedBy: "\n")
                 .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                 .joined(separator: "\n")
@@ -116,16 +117,17 @@ enum AIContextBuilder {
 
             let label = paneLabel(for: pane, number: index + 1)
 
-            snapshots.append(PaneSnapshot(
-                paneID: paneID,
-                label: label,
-                paneNumber: index + 1,
-                cwd: singleCtx.cwd,
-                shell: singleCtx.shell,
-                recentOutput: singleCtx.recentOutput,
-                isFocused: paneID == focusedID,
-                connectionType: pane.connectionType
-            ))
+            snapshots.append(
+                PaneSnapshot(
+                    paneID: paneID,
+                    label: label,
+                    paneNumber: index + 1,
+                    cwd: singleCtx.cwd,
+                    shell: singleCtx.shell,
+                    recentOutput: singleCtx.recentOutput,
+                    isFocused: paneID == focusedID,
+                    connectionType: pane.connectionType
+                ))
         }
 
         return CompositeAIContext(
@@ -159,7 +161,8 @@ enum AIContextBuilder {
             parts.append("[\(pane.label)]\(focusTag) \(cwdStr) — \(shellStr)")
 
             if let output = pane.recentOutput {
-                let stripped = output
+                let stripped =
+                    output
                     .components(separatedBy: "\n")
                     .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                     .joined(separator: "\n")
@@ -170,7 +173,9 @@ enum AIContextBuilder {
         }
 
         parts.append("When running commands, specify the target pane by number (e.g. pane: 1).")
-        parts.append("If you don't specify, commands run on the focused pane (\(context.panes.first(where: { $0.isFocused })?.label ?? "Pane 1")).")
+        parts.append(
+            "If you don't specify, commands run on the focused pane (\(context.panes.first(where: { $0.isFocused })?.label ?? "Pane 1"))."
+        )
 
         return parts.joined(separator: "\n")
     }

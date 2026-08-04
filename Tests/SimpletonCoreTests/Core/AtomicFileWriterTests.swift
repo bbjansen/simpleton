@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Core/AtomicFileWriterTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class AtomicFileWriterTests: XCTestCase {

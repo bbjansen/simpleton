@@ -31,7 +31,8 @@ enum ShellDetector {
             return NSHomeDirectory()
         case .custom:
             if let custom = config.general.customWorkingDirectory,
-               FileManager.default.fileExists(atPath: custom) {
+                FileManager.default.fileExists(atPath: custom)
+            {
                 return custom
             }
             return NSHomeDirectory()
@@ -40,8 +41,9 @@ enum ShellDetector {
 
     private static func shellFromEnvironment() -> String? {
         guard let shell = ProcessInfo.processInfo.environment["SHELL"],
-              !shell.isEmpty,
-              FileManager.default.isExecutableFile(atPath: shell) else {
+            !shell.isEmpty,
+            FileManager.default.isExecutableFile(atPath: shell)
+        else {
             return nil
         }
         return shell

@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Models/ThemeTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class ThemeTests: XCTestCase {
