@@ -3,6 +3,9 @@
 Thanks for your interest in improving Simpleton! This is an early-stage (alpha) project, so
 contributions, bug reports, and ideas are all welcome.
 
+> **In a hurry?** [**AGENTS.md**](AGENTS.md) has the crisp rules (branching, Conventional Commits,
+> the checks to run, where code goes). This document is the fuller how-to.
+
 ## Getting set up
 
 Requirements:
