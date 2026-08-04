@@ -195,6 +195,18 @@ final class TabContainerController: NSViewController {
         let container = NSView(frame: frame)
         container.autoresizingMask = [.width, .height]
 
+        // Full-bleed vibrancy backdrop. Shows through the translucent activity rails and the
+        // connections sidebar; the opaque terminal covers its own region, so only the chrome
+        // picks up the desktop blur (the native macOS sidebar look).
+        let backdrop = NSVisualEffectView.backdrop(material: .sidebar)
+        container.addSubview(backdrop)
+        NSLayoutConstraint.activate([
+            backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            backdrop.topAnchor.constraint(equalTo: container.topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
         // Central NSSplitView: [leftPanel?] | terminal | [rightPanel?]
         let split = NSSplitView(frame: frame)
         split.isVertical = true
