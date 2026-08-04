@@ -1,0 +1,67 @@
+name: Release Please
+
+# Automated release system: release-please watches Conventional Commits on main, maintains a
+# release pull request (version bump + CHANGELOG), and when that PR is merged it tags the release
+# and creates the GitHub Release. A dependent macOS job then builds and attaches the .app bundle.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - id: rp
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build-app:
+    name: Build & attach app bundle
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Run CoreChecks
+        run: swift run -c release CoreChecks
+
+      - name: Assemble app bundle (ad-hoc signed)
+        run: bash scripts/e2e/make-app-bundle.sh release
+
+      - name: Zip app bundle
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          cd .build
+          ditto -c -k --keepParent Simpleton.app "Simpleton-${TAG}.zip"
+
+      - name: Attach artifact to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: .build/Simpleton-${{ needs.release-please.outputs.tag_name }}.zip
