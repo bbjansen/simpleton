@@ -60,6 +60,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
 
         window.contentViewController = tabContainer
+        window.alphaValue = config.appearance.windowOpacity
         window.delegate = self
 
         // Wire close-pane to close window when last pane closes
@@ -109,6 +110,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         newWindow.tabbingIdentifier = "com.simpleton.terminal"
         newWindow.appearance = NSAppearance(named: .darkAqua)
         newWindow.contentViewController = newTabContainer
+        newWindow.alphaValue = config.appearance.windowOpacity
 
         newTabContainer.splitController.onPaneClose = { [weak newWindow] _ in
             newWindow?.close()
