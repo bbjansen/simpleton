@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.2](https://github.com/bbjansen/simpleton/compare/v0.1.1...v0.1.2) (2026-08-04)
+
+
+### Features
+
+* **ai:** provider-agnostic AI with presets and live model selection ([#7](https://github.com/bbjansen/simpleton/issues/7)) ([77df043](https://github.com/bbjansen/simpleton/commit/77df043a3c90307599e343e73cb443d3a6b391de))
+
+
+### Bug Fixes
+
+* **prefs:** make the Skills list column resizable and wider by default ([7bc8b18](https://github.com/bbjansen/simpleton/commit/7bc8b18111a432a23a44965edba0ac49336ec727))
+
 ## [0.1.1] - 2026-08-04
 
 First public alpha.
