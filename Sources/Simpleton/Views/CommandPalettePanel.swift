@@ -32,7 +32,8 @@ final class CommandPalettePanel {
             newPanel.level = .floating
             newPanel.titleVisibility = .hidden
             newPanel.titlebarAppearsTransparent = true
-            newPanel.backgroundColor = NSColor(red: 0.051, green: 0.051, blue: 0.078, alpha: 0.98)
+            newPanel.backgroundColor = .clear
+            newPanel.isOpaque = false
             newPanel.hasShadow = true
             newPanel.becomesKeyOnlyIfNeeded = false
 
@@ -150,11 +151,11 @@ struct CommandPaletteContentView: View {
             .padding(.horizontal, 14)
         }
         .frame(width: 520, height: 420)
-        .background(DT.base)
-        .clipShape(RoundedRectangle(cornerRadius: DT.radiusPanel))
+        .background(VisualEffect(material: .hudWindow, blendingMode: .behindWindow))
+        .clipShape(.rect(cornerRadius: DT.radiusPanel, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: DT.radiusPanel)
-                .stroke(DT.panelBorder, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: DT.radiusPanel, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         )
         .opacity(isAppeared ? 1 : 0)
         .scaleEffect(isAppeared ? 1 : 0.97)
