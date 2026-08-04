@@ -1,7 +1,7 @@
 // Sources/Simpleton/Views/SidebarHostController.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 /// NSViewController that hosts the SwiftUI SidebarView for embedding in AppKit NSSplitView.
 final class SidebarHostController: NSViewController {

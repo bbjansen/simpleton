@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Models/SmartGroupTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class SmartGroupTests: XCTestCase {
@@ -30,9 +31,11 @@ final class SmartGroupTests: XCTestCase {
 
     func testSmartGroupFileRoundTrip() throws {
         let file = SmartGroupFile(groups: [
-            SmartGroup(name: "Staging", color: "#eab308", combinator: .and, rules: [
-                SmartGroupRule(field: .hostname, operator: .contains, value: "staging")
-            ])
+            SmartGroup(
+                name: "Staging", color: "#eab308", combinator: .and,
+                rules: [
+                    SmartGroupRule(field: .hostname, operator: .contains, value: "staging")
+                ])
         ])
         let data = try JSONEncoder().encode(file)
         let decoded = try JSONDecoder().decode(SmartGroupFile.self, from: data)

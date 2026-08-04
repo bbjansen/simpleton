@@ -106,14 +106,16 @@ struct ChatBubble: View {
         let first = text.components(separatedBy: " ").first ?? ""
         guard !first.isEmpty else { return false }
         // Must start with a lowercase letter (command name) or common prefixes
-        guard first.first?.isLowercase == true
-                || text.hasPrefix("./") || text.hasPrefix("~/") else { return false }
+        guard
+            first.first?.isLowercase == true
+                || text.hasPrefix("./") || text.hasPrefix("~/")
+        else { return false }
         // Skip common English sentence-starter words that aren't commands
         let prose: Set<String> = [
             "you", "the", "this", "that", "it", "if", "in", "on", "at", "to", "a",
             "an", "and", "or", "for", "of", "with", "by", "from", "make", "note",
             "use", "run", "check", "see", "also", "ensure", "when", "where", "then",
-            "just", "now", "here", "these", "those", "both", "all", "each"
+            "just", "now", "here", "these", "those", "both", "all", "each",
         ]
         return !prose.contains(first.lowercased())
     }

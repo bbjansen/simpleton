@@ -4,11 +4,11 @@ import Foundation
 public enum FrecencyScorer {
 
     private static let buckets: [(maxAge: TimeInterval, points: Double)] = [
-        (4 * 3600,       100),  // last 4 hours
-        (24 * 3600,       80),  // last 24 hours
-        (7 * 24 * 3600,   60),  // last 7 days
-        (30 * 24 * 3600,  40),  // last 30 days
-        (90 * 24 * 3600,  20),  // last 90 days
+        (4 * 3600, 100),  // last 4 hours
+        (24 * 3600, 80),  // last 24 hours
+        (7 * 24 * 3600, 60),  // last 7 days
+        (30 * 24 * 3600, 40),  // last 30 days
+        (90 * 24 * 3600, 20),  // last 90 days
     ]
 
     public static func computeScore(entry: FrecencyEntry, now: Date = Date()) -> Double {

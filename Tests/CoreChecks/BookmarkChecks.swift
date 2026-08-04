@@ -14,7 +14,9 @@ func runBookmarkChecks(_ t: TestRunner) {
                 user: "deploy",
                 auth: .key(identityFile: "~/.ssh/prod_ed25519"),
                 jumpHosts: ["bastion-jump"],
-                portForwards: [PortForward(direction: .local, localPort: 3000, remoteHost: "localhost", remotePort: 3000)],
+                portForwards: [
+                    PortForward(direction: .local, localPort: 3000, remoteHost: "localhost", remotePort: 3000)
+                ],
                 tags: ["prod", "web"],
                 notes: "Main web server",
                 pinned: true,

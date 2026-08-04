@@ -1,7 +1,7 @@
 // Sources/Simpleton/Panels/JSPanelController.swift
 import AppKit
-import WebKit
 import SimpletonCore
+import WebKit
 
 extension PanelDefinition {
     static func jsPanel(manifest: ScriptPluginPanelManifest, htmlURL: URL) -> PanelDefinition {

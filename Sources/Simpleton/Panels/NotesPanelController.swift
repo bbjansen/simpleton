@@ -1,7 +1,7 @@
-// Sources/Simpleton/Panels/NotesPanelController.swift
-import SwiftUI
 import Combine
 import SimpletonCore
+// Sources/Simpleton/Panels/NotesPanelController.swift
+import SwiftUI
 
 struct NotesPanelView: View {
     let appSupportDir: URL
@@ -24,8 +24,8 @@ struct NotesPanelView: View {
     private var noteKey: String {
         let raw = cwd ?? "global"
         return raw.replacingOccurrences(of: "/", with: "_")
-                  .replacingOccurrences(of: " ", with: "-")
-                  .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+            .replacingOccurrences(of: " ", with: "-")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
     }
 
     private var noteFile: URL { notesDir.appendingPathComponent(noteKey + ".md") }
@@ -78,7 +78,8 @@ struct NotesPanelView: View {
     }
 
     private func setupSaveTimer() {
-        saveTimer = savePublisher
+        saveTimer =
+            savePublisher
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { payload in
                 try? payload.text.write(to: payload.url, atomically: true, encoding: .utf8)

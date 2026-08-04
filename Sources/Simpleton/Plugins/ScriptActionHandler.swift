@@ -6,7 +6,10 @@ import UserNotifications
 final class ScriptActionHandler {
 
     /// Handle a script action. Returns true if the action was processed.
-    func handle(action: ScriptAction, plugin: ScriptPlugin, pasteHandler: ((String) -> Void)?, commandHandler: ((String) -> Void)?) -> Bool {
+    func handle(
+        action: ScriptAction, plugin: ScriptPlugin, pasteHandler: ((String) -> Void)?,
+        commandHandler: ((String) -> Void)?
+    ) -> Bool {
         // Permission check
         guard plugin.grantedPermissions.contains(action.type) else {
             return false
@@ -28,7 +31,8 @@ final class ScriptActionHandler {
             return true
         case "set-env":
             if let key = action.payload["key"] as? String,
-               let value = action.payload["value"] as? String {
+                let value = action.payload["value"] as? String
+            {
                 setenv(key, value, 1)
             }
             return true

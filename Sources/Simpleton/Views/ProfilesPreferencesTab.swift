@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/ProfilesPreferencesTab.swift
 import SwiftUI
-import SimpletonCore
 
 struct ProfilesPreferencesTab: View {
     @ObservedObject var registry: PanelRegistry
@@ -257,10 +257,10 @@ struct ProfileTemplatePickerView: View {
     @State private var profileName = "New Profile"
 
     enum TemplateOption: String, CaseIterable, Identifiable {
-        case blank      = "Blank"
-        case general    = "General"
-        case developer  = "Developer"
-        case devops     = "DevOps"
+        case blank = "Blank"
+        case general = "General"
+        case developer = "Developer"
+        case devops = "DevOps"
         var id: String { rawValue }
     }
 

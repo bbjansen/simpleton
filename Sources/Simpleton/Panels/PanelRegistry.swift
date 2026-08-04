@@ -47,7 +47,8 @@ final class PanelRegistry: ObservableObject {
         try? FileManager.default.createDirectory(at: profilesDir, withIntermediateDirectories: true)
         let file = profilesDir.appendingPathComponent("profiles.json")
         guard let data = try? Data(contentsOf: file),
-              let saved = try? JSONDecoder().decode([PanelProfile].self, from: data) else { return }
+            let saved = try? JSONDecoder().decode([PanelProfile].self, from: data)
+        else { return }
         // Merge: keep default profiles + append user-created ones (skip if id matches a default)
         let userOnly = saved.filter { p in
             !PanelProfile.defaultProfiles.contains(where: { $0.id == p.id })

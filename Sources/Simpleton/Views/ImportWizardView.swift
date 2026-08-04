@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/ImportWizardView.swift
 import SwiftUI
-import SimpletonCore
 
 struct ImportWizardView: View {
     let entries: [SSHConfigEntry]
@@ -112,10 +112,19 @@ struct ImportWizardView: View {
             List {
                 ForEach(entries.filter(\.isConcrete), id: \.hostAlias) { entry in
                     HStack {
-                        Toggle("", isOn: Binding(
-                            get: { selectedEntries.contains(entry.hostAlias) },
-                            set: { if $0 { selectedEntries.insert(entry.hostAlias) } else { selectedEntries.remove(entry.hostAlias) } }
-                        ))
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { selectedEntries.contains(entry.hostAlias) },
+                                set: {
+                                    if $0 {
+                                        selectedEntries.insert(entry.hostAlias)
+                                    } else {
+                                        selectedEntries.remove(entry.hostAlias)
+                                    }
+                                }
+                            )
+                        )
                         .labelsHidden()
 
                         VStack(alignment: .leading) {
@@ -160,10 +169,19 @@ struct ImportWizardView: View {
                 List {
                     ForEach(suggestedGroups) { group in
                         HStack {
-                            Toggle("", isOn: Binding(
-                                get: { acceptedGroups.contains(group.id) },
-                                set: { if $0 { acceptedGroups.insert(group.id) } else { acceptedGroups.remove(group.id) } }
-                            ))
+                            Toggle(
+                                "",
+                                isOn: Binding(
+                                    get: { acceptedGroups.contains(group.id) },
+                                    set: {
+                                        if $0 {
+                                            acceptedGroups.insert(group.id)
+                                        } else {
+                                            acceptedGroups.remove(group.id)
+                                        }
+                                    }
+                                )
+                            )
                             .labelsHidden()
 
                             Circle()
@@ -198,10 +216,19 @@ struct ImportWizardView: View {
             List {
                 ForEach(bookmarks) { bookmark in
                     HStack {
-                        Toggle("", isOn: Binding(
-                            get: { pinnedBookmarks.contains(bookmark.id) },
-                            set: { if $0 { pinnedBookmarks.insert(bookmark.id) } else { pinnedBookmarks.remove(bookmark.id) } }
-                        ))
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { pinnedBookmarks.contains(bookmark.id) },
+                                set: {
+                                    if $0 {
+                                        pinnedBookmarks.insert(bookmark.id)
+                                    } else {
+                                        pinnedBookmarks.remove(bookmark.id)
+                                    }
+                                }
+                            )
+                        )
                         .labelsHidden()
 
                         Image(systemName: pinnedBookmarks.contains(bookmark.id) ? "star.fill" : "star")
@@ -230,7 +257,8 @@ struct ImportWizardView: View {
             step = 1
         case 1:
             // Convert selected entries to bookmarks
-            bookmarks = entries
+            bookmarks =
+                entries
                 .filter { selectedEntries.contains($0.hostAlias) }
                 .map { $0.toBookmark() }
             // Generate smart group suggestions
@@ -259,33 +287,38 @@ struct ImportWizardView: View {
         // Group by hostname patterns
         let prodHosts = bookmarks.filter { $0.host.contains("prod") || $0.name.contains("prod") }
         if prodHosts.count >= 2 {
-            groups.append(SmartGroup(
-                name: "Production",
-                color: "#ef4444",
-                combinator: .or,
-                rules: [SmartGroupRule(field: .hostname, operator: .contains, value: "prod")]
-            ))
+            groups.append(
+                SmartGroup(
+                    name: "Production",
+                    color: "#ef4444",
+                    combinator: .or,
+                    rules: [SmartGroupRule(field: .hostname, operator: .contains, value: "prod")]
+                ))
         }
 
         let stagingHosts = bookmarks.filter { $0.host.contains("staging") || $0.name.contains("staging") }
         if stagingHosts.count >= 2 {
-            groups.append(SmartGroup(
-                name: "Staging",
-                color: "#eab308",
-                combinator: .or,
-                rules: [SmartGroupRule(field: .hostname, operator: .contains, value: "staging")]
-            ))
+            groups.append(
+                SmartGroup(
+                    name: "Staging",
+                    color: "#eab308",
+                    combinator: .or,
+                    rules: [SmartGroupRule(field: .hostname, operator: .contains, value: "staging")]
+                ))
         }
 
         // Group by jump host
-        let jumpHostGroups = Dictionary(grouping: bookmarks.filter { !$0.jumpHosts.isEmpty }) { $0.jumpHosts.first ?? "" }
+        let jumpHostGroups = Dictionary(grouping: bookmarks.filter { !$0.jumpHosts.isEmpty }) {
+            $0.jumpHosts.first ?? ""
+        }
         for (jumpHost, hosts) in jumpHostGroups where hosts.count >= 2 {
-            groups.append(SmartGroup(
-                name: "Via \(jumpHost)",
-                color: "#818cf8",
-                combinator: .and,
-                rules: [SmartGroupRule(field: .jumpHost, operator: .equals, value: jumpHost)]
-            ))
+            groups.append(
+                SmartGroup(
+                    name: "Via \(jumpHost)",
+                    color: "#818cf8",
+                    combinator: .and,
+                    rules: [SmartGroupRule(field: .jumpHost, operator: .equals, value: jumpHost)]
+                ))
         }
 
         return groups

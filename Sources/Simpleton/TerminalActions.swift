@@ -38,7 +38,8 @@ final class TerminalActions {
 
     func pickLayout() {
         guard let window = NSApp.keyWindow,
-              let sc = activeSplitController() else { return }
+            let sc = activeSplitController()
+        else { return }
 
         let alert = NSAlert()
         alert.messageText = "Pick Layout"
@@ -62,24 +63,27 @@ final class TerminalActions {
 
     func switchToTabN(tag: Int) {
         guard let window = NSApp.keyWindow,
-              let tabbedWindows = window.tabbedWindows,
-              tag > 0, tag <= tabbedWindows.count else { return }
+            let tabbedWindows = window.tabbedWindows,
+            tag > 0, tag <= tabbedWindows.count
+        else { return }
         tabbedWindows[tag - 1].makeKeyAndOrderFront(nil)
     }
 
     // MARK: - Focus Navigation
 
-    func focusLeft()  { activeSplitController()?.moveFocus(.left) }
+    func focusLeft() { activeSplitController()?.moveFocus(.left) }
     func focusRight() { activeSplitController()?.moveFocus(.right) }
-    func focusUp()    { activeSplitController()?.moveFocus(.up) }
-    func focusDown()  { activeSplitController()?.moveFocus(.down) }
+    func focusUp() { activeSplitController()?.moveFocus(.up) }
+    func focusDown() { activeSplitController()?.moveFocus(.down) }
 
     // MARK: - Tab Actions
 
     func newTab() {
         guard let keyWindow = NSApp.keyWindow else { return }
         let wcs = windowControllers()
-        if let wc = wcs.first(where: { $0.window === keyWindow || $0.window?.tabbedWindows?.contains(keyWindow) == true }) {
+        if let wc = wcs.first(where: {
+            $0.window === keyWindow || $0.window?.tabbedWindows?.contains(keyWindow) == true
+        }) {
             wc.newTab()
         } else {
             activeWindowController()?.newTab()

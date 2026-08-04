@@ -17,17 +17,17 @@ struct PanelProfile: Codable, Identifiable {
 extension PanelProfile {
     enum PanelID {
         static let connections = "connections"
-        static let aiChat      = "ai-chat"
-        static let skills      = "skills"
-        static let notes       = "notes"
-        static let snippets    = "snippets"
-        static let history     = "history"
+        static let aiChat = "ai-chat"
+        static let skills = "skills"
+        static let notes = "notes"
+        static let snippets = "snippets"
+        static let history = "history"
         static let environment = "environment"
         static let fileBrowser = "file-browser"
-        static let processes   = "processes"
-        static let sshTunnels  = "ssh-tunnels"
-        static let git         = "git"
-        static let docker      = "docker"
+        static let processes = "processes"
+        static let sshTunnels = "ssh-tunnels"
+        static let git = "git"
+        static let docker = "docker"
     }
 }
 
@@ -50,12 +50,12 @@ extension PanelProfile {
 
     /// Moves a panel from whichever side it's on to `destination`, preserving its active state.
     mutating func movePanel(id: String, to destination: PanelSide) {
-        let wasActiveLeft  = leftActivePanelID == id
+        let wasActiveLeft = leftActivePanelID == id
         let wasActiveRight = rightActivePanelID == id
 
-        leftPanelIDs.removeAll  { $0 == id }
+        leftPanelIDs.removeAll { $0 == id }
         rightPanelIDs.removeAll { $0 == id }
-        if wasActiveLeft  { leftActivePanelID  = nil }
+        if wasActiveLeft { leftActivePanelID = nil }
         if wasActiveRight { rightActivePanelID = nil }
 
         if destination == .left {
@@ -92,7 +92,10 @@ extension PanelProfile {
         PanelProfile(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
             name: "Developer",
-            leftPanelIDs: ["connections", "snippets", "notes", "history", "environment", "file-browser", "processes", "ssh-tunnels"],
+            leftPanelIDs: [
+                "connections", "snippets", "notes", "history", "environment", "file-browser", "processes",
+                "ssh-tunnels",
+            ],
             rightPanelIDs: ["ai-chat"],
             leftActivePanelID: "connections",
             rightActivePanelID: "ai-chat"

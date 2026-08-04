@@ -1,18 +1,19 @@
 // Sources/Simpleton/Views/AIChatPanel.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
-    let role: String // "user" or "assistant"
+    let role: String  // "user" or "assistant"
     var content: String
     let timestamp = Date()
 }
 
 enum AgentUIMessage: Identifiable {
     case chat(ChatMessage)
-    case execution(id: UUID, cmd: String, explanation: String, status: AgentExecutionBubble.BubbleStatus, output: String)
+    case execution(
+        id: UUID, cmd: String, explanation: String, status: AgentExecutionBubble.BubbleStatus, output: String)
 
     var id: UUID {
         switch self {
@@ -78,11 +79,13 @@ struct AIChatPanelView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 10))
                         .foregroundColor(.black)
-                    Text(autopilotMode == .full
-                         ? "Autopilot FULL — AI executes all commands without approval"
-                         : "Autopilot SAFE — read-only commands auto-approved, writes need approval")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.black)
+                    Text(
+                        autopilotMode == .full
+                            ? "Autopilot FULL — AI executes all commands without approval"
+                            : "Autopilot SAFE — read-only commands auto-approved, writes need approval"
+                    )
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.black)
                     Spacer()
                 }
                 .padding(.horizontal, 10)
@@ -153,21 +156,27 @@ struct AIChatPanelView: View {
                                         pendingApprovals[id]?(.allow)
                                         pendingApprovals.removeValue(forKey: id)
                                         if let idx = agentBubbles.firstIndex(where: { $0.id == id }) {
-                                            agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: explanation, status: .running, output: "")
+                                            agentBubbles[idx] = .execution(
+                                                id: id, cmd: cmd, explanation: explanation, status: .running, output: ""
+                                            )
                                         }
                                     },
                                     onSkip: {
                                         pendingApprovals[id]?(.skip)
                                         pendingApprovals.removeValue(forKey: id)
                                         if let idx = agentBubbles.firstIndex(where: { $0.id == id }) {
-                                            agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: explanation, status: .skipped, output: "")
+                                            agentBubbles[idx] = .execution(
+                                                id: id, cmd: cmd, explanation: explanation, status: .skipped, output: ""
+                                            )
                                         }
                                     },
                                     onStop: {
                                         pendingApprovals[id]?(.stop)
                                         pendingApprovals.removeValue(forKey: id)
                                         if let idx = agentBubbles.firstIndex(where: { $0.id == id }) {
-                                            agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: explanation, status: .skipped, output: "")
+                                            agentBubbles[idx] = .execution(
+                                                id: id, cmd: cmd, explanation: explanation, status: .skipped, output: ""
+                                            )
                                         }
                                     }
                                 )
@@ -275,7 +284,8 @@ struct AIChatPanelView: View {
                 return false
             }) {
                 if case .execution(let id, _, let exp, _, _) = agentBubbles[idx] {
-                    agentBubbles[idx] = .execution(id: id, cmd: cmd, explanation: "[\(paneLabel)] \(exp)", status: .done, output: output)
+                    agentBubbles[idx] = .execution(
+                        id: id, cmd: cmd, explanation: "[\(paneLabel)] \(exp)", status: .done, output: output)
                 }
             }
         }
@@ -299,7 +309,10 @@ struct AIChatPanelView: View {
         session.onApprovalNeeded = { cmd, explanation, paneLabel, completion in
             let approvalID = UUID()
             pendingApprovals[approvalID] = { action in completion(action, nil) }
-            agentBubbles.append(.execution(id: approvalID, cmd: cmd, explanation: "[\(paneLabel)] \(explanation)", status: .waitingApproval, output: ""))
+            agentBubbles.append(
+                .execution(
+                    id: approvalID, cmd: cmd, explanation: "[\(paneLabel)] \(explanation)", status: .waitingApproval,
+                    output: ""))
         }
     }
 
@@ -361,77 +374,80 @@ struct AIChatPanelView: View {
         // Capture MCP config for async connection in Task blocks
         let mcpStore = mcpConfigStore
         let currentMCPClients = mcpClients
+        let autopilotLine: String
+        switch autopilotMode {
+        case .full:
+            autopilotLine =
+                "- AUTOPILOT MODE (FULL): Commands execute immediately without user approval. You have full autonomous control. Execute commands directly — do not ask for permission or confirmation."
+        case .safe:
+            autopilotLine =
+                "- AUTOPILOT MODE (SAFE): Read-only commands (ls, cat, grep, git status, etc.) execute automatically. Destructive or write commands require user approval."
+        case .off:
+            autopilotLine =
+                "- Commands require user approval before executing. The user will see each command and can allow, skip, or stop."
+        }
         let system = """
-        You are a powerful terminal agent embedded in a native macOS terminal emulator. You have full access to the user's terminal panes and can execute commands, read output, and orchestrate multi-step workflows.
+            You are a powerful terminal agent embedded in a native macOS terminal emulator. You have full access to the user's terminal panes and can execute commands, read output, and orchestrate multi-step workflows.
 
-        \(contextStr)\(skillsSection)\(memorySection)\(crossTabSection)
+            \(contextStr)\(skillsSection)\(memorySection)\(crossTabSection)
 
-        ## Your tools
-        - **run_command(cmd, pane?)**: Execute shell commands. Target a specific pane by number. Output + exit code are captured automatically.
-        - **read_pane_output(pane?, lines?)**: Read recent terminal output without running anything. Default 50 lines, max 200. Check status, errors, or long-running processes.
-        - **list_panes()**: See all panes with their CWD, shell, and state.
-        - **get_pane_state(pane)**: Detailed pane info including CWD, shell, connection type, recent output.
-        - **read_file(path)**: Read a file directly (up to 10k chars). Avoids shell quoting issues.
-        - **write_file(path, content)**: Write a file directly. Creates parent directories. Avoids heredoc escaping.
-        - **edit_file(path, old_text, new_text, replace_all?, trim_whitespace?)**: Search-and-replace in a file. Safer than write_file for targeted edits. Set trim_whitespace=true to match ignoring whitespace differences.
-        - **list_directory(path?)**: List files/dirs with types and sizes. Faster than ls.
-        - **search_files(pattern, directory?)**: Recursive grep across files. Find code, config values, etc.
-        - **get_git_status(directory?)**: Git status (short format).
-        - **get_git_diff(directory?, staged?)**: Git diff summary.
-        - **get_git_log(directory?, count?)**: Recent commit history.
-        - **clipboard_copy(text)**: Copy text to the system clipboard.
-        - **send_keys(keys, pane?)**: Send keystrokes to a pane — ctrl+c, ctrl+d, enter, arrow keys, etc. Use to stop processes, navigate menus, or provide interactive input.
-        - **get_env(name?)**: Get one or all environment variables.
-        - **http_request(url, method?, headers?, body?)**: Make HTTP requests — test APIs, check endpoints. Headers is a dictionary, body is a string.
-        - **check_port(port, host?)**: Check if a port is in use and what process holds it.
-        - **find_process(name)**: Find running processes by name.
-        - **kill_process(pid, signal?)**: Send signals to processes. Supports: TERM, KILL, INT, HUP, STOP, CONT, USR1, USR2, QUIT.
-        - **get_system_info()**: OS, hostname, CPU, memory, uptime, user, shell.
-        - **web_search(query, count?)**: Search the web via DuckDuckGo. Returns titles, snippets, and URLs. Default 5 results, max 10.
-        - **fetch_url(url)**: Fetch a web page and return text content (HTML stripped, max 5000 chars). Use to read documentation, API responses, etc.
-        - **save_memory(content, type, tags)**: Save information to persistent project memory. Types: errorFix, convention, decision, environment, preference. Tags help retrieval.
-        - **recall_memory(query, count?)**: Search project memory semantically. Returns the most relevant saved memories. Use when you need to recall past decisions, fixes, or conventions.
-        - **list_memories(type?)**: List all saved memories, optionally filtered by type.
-        - **forget_memory(id)**: Delete a memory entry by ID (full UUID or first 8 chars).
-        - **list_skills(category?)**: List available skills. Optionally filter by keyword. Shows slug, description, and parameters.
-        - **run_skill(slug, params?)**: Invoke a skill by its slug (e.g., "system-health"). Pass params as an object. Missing params auto-fill from terminal context. Returns task instructions to execute.
+            ## Your tools
+            - **run_command(cmd, pane?)**: Execute shell commands. Target a specific pane by number. Output + exit code are captured automatically.
+            - **read_pane_output(pane?, lines?)**: Read recent terminal output without running anything. Default 50 lines, max 200. Check status, errors, or long-running processes.
+            - **list_panes()**: See all panes with their CWD, shell, and state.
+            - **get_pane_state(pane)**: Detailed pane info including CWD, shell, connection type, recent output.
+            - **read_file(path)**: Read a file directly (up to 10k chars). Avoids shell quoting issues.
+            - **write_file(path, content)**: Write a file directly. Creates parent directories. Avoids heredoc escaping.
+            - **edit_file(path, old_text, new_text, replace_all?, trim_whitespace?)**: Search-and-replace in a file. Safer than write_file for targeted edits. Set trim_whitespace=true to match ignoring whitespace differences.
+            - **list_directory(path?)**: List files/dirs with types and sizes. Faster than ls.
+            - **search_files(pattern, directory?)**: Recursive grep across files. Find code, config values, etc.
+            - **get_git_status(directory?)**: Git status (short format).
+            - **get_git_diff(directory?, staged?)**: Git diff summary.
+            - **get_git_log(directory?, count?)**: Recent commit history.
+            - **clipboard_copy(text)**: Copy text to the system clipboard.
+            - **send_keys(keys, pane?)**: Send keystrokes to a pane — ctrl+c, ctrl+d, enter, arrow keys, etc. Use to stop processes, navigate menus, or provide interactive input.
+            - **get_env(name?)**: Get one or all environment variables.
+            - **http_request(url, method?, headers?, body?)**: Make HTTP requests — test APIs, check endpoints. Headers is a dictionary, body is a string.
+            - **check_port(port, host?)**: Check if a port is in use and what process holds it.
+            - **find_process(name)**: Find running processes by name.
+            - **kill_process(pid, signal?)**: Send signals to processes. Supports: TERM, KILL, INT, HUP, STOP, CONT, USR1, USR2, QUIT.
+            - **get_system_info()**: OS, hostname, CPU, memory, uptime, user, shell.
+            - **web_search(query, count?)**: Search the web via DuckDuckGo. Returns titles, snippets, and URLs. Default 5 results, max 10.
+            - **fetch_url(url)**: Fetch a web page and return text content (HTML stripped, max 5000 chars). Use to read documentation, API responses, etc.
+            - **save_memory(content, type, tags)**: Save information to persistent project memory. Types: errorFix, convention, decision, environment, preference. Tags help retrieval.
+            - **recall_memory(query, count?)**: Search project memory semantically. Returns the most relevant saved memories. Use when you need to recall past decisions, fixes, or conventions.
+            - **list_memories(type?)**: List all saved memories, optionally filtered by type.
+            - **forget_memory(id)**: Delete a memory entry by ID (full UUID or first 8 chars).
+            - **list_skills(category?)**: List available skills. Optionally filter by keyword. Shows slug, description, and parameters.
+            - **run_skill(slug, params?)**: Invoke a skill by its slug (e.g., "system-health"). Pass params as an object. Missing params auto-fill from terminal context. Returns task instructions to execute.
 
-        ## Interactive commands
-        Some commands require interactive input (y/n prompts, selection menus, passwords).
-        When a command appears to be waiting for input (no new output for several seconds):
-        1. Use read_pane_output to check what the command is showing
-        2. Use send_keys to send the appropriate response (e.g., "y", "enter", arrow keys)
-        3. For password prompts: STOP and tell the user — never type passwords
+            ## Interactive commands
+            Some commands require interactive input (y/n prompts, selection menus, passwords).
+            When a command appears to be waiting for input (no new output for several seconds):
+            1. Use read_pane_output to check what the command is showing
+            2. Use send_keys to send the appropriate response (e.g., "y", "enter", arrow keys)
+            3. For password prompts: STOP and tell the user — never type passwords
 
-        Common patterns:
-        - "y/n" or "[Y/n]" prompts: send_keys with "y" then "enter"
-        - "Press any key": send_keys with "enter"
-        - Arrow-key menus: send_keys with "up"/"down" then "enter"
-        - "password:" or "Password:": STOP immediately, ask the user to enter it manually
+            Common patterns:
+            - "y/n" or "[Y/n]" prompts: send_keys with "y" then "enter"
+            - "Press any key": send_keys with "enter"
+            - Arrow-key menus: send_keys with "up"/"down" then "enter"
+            - "password:" or "Password:": STOP immediately, ask the user to enter it manually
 
-        ## How to act
-        - When the user asks you to DO something (install, run, fix, deploy, set up, create files, etc.), use your tools to execute it directly. Don't just suggest — act.
-        - ALWAYS use run_command to execute commands. NEVER suggest commands in code blocks when you can execute them directly. The user expects action, not suggestions.
-        - When there are multiple panes, target the right one based on CWD context.
-        - Chain tools across panes: start a server in pane 1, read_pane_output to confirm it's ready, then run tests in pane 2.
-        - After running a command, check the exit code. If non-zero, read the output, diagnose, and retry with a fix (up to 3 attempts per command).
-        - Use read_file/write_file for file operations — they're faster and more reliable than shell echo/cat.
-        - When answering questions, respond with plain text. Keep it concise.
-        \({
-            switch autopilotMode {
-            case .full:
-                return "- AUTOPILOT MODE (FULL): Commands execute immediately without user approval. You have full autonomous control. Execute commands directly — do not ask for permission or confirmation."
-            case .safe:
-                return "- AUTOPILOT MODE (SAFE): Read-only commands (ls, cat, grep, git status, etc.) execute automatically. Destructive or write commands require user approval."
-            case .off:
-                return "- Commands require user approval before executing. The user will see each command and can allow, skip, or stop."
-            }
-        }())
-        """
+            ## How to act
+            - When the user asks you to DO something (install, run, fix, deploy, set up, create files, etc.), use your tools to execute it directly. Don't just suggest — act.
+            - ALWAYS use run_command to execute commands. NEVER suggest commands in code blocks when you can execute them directly. The user expects action, not suggestions.
+            - When there are multiple panes, target the right one based on CWD context.
+            - Chain tools across panes: start a server in pane 1, read_pane_output to confirm it's ready, then run tests in pane 2.
+            - After running a command, check the exit code. If non-zero, read the output, diagnose, and retry with a fix (up to 3 attempts per command).
+            - Use read_file/write_file for file operations — they're faster and more reliable than shell echo/cat.
+            - When answering questions, respond with plain text. Keep it concise.
+            \(autopilotLine)
+            """
 
         // Build conversation history as proper turns
         var history: [ConversationTurn] = []
-        for msg in messages.dropLast() { // exclude the message we just appended
+        for msg in messages.dropLast() {  // exclude the message we just appended
             let content = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !content.isEmpty else { continue }
             if msg.role == "user" {
@@ -453,7 +469,9 @@ struct AIChatPanelView: View {
                     mcpClients = connectedClients
                 }
 
-                let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus, mcpClients: connectedClients)
+                let session = AgentSession(
+                    aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus,
+                    mcpClients: connectedClients)
                 await MainActor.run {
                     configureSession(session, conversation: conv)
                     conv.activeSession = session
@@ -487,11 +505,13 @@ struct AIChatPanelView: View {
                             case .toolResult: break
                             }
                         }
-                        userPrompt = "[Previous conversation]\n\(parts.joined(separator: "\n\n"))\n\n[Current message]\n\(text)"
+                        userPrompt =
+                            "[Previous conversation]\n\(parts.joined(separator: "\n\n"))\n\n[Current message]\n\(text)"
                     } else {
                         userPrompt = text
                     }
-                    let stream = aiService.stream(system: enrichedSystem, user: userPrompt, options: AIOptions(maxTokens: 4000, temperature: 0.3))
+                    let stream = aiService.stream(
+                        system: enrichedSystem, user: userPrompt, options: AIOptions(maxTokens: 4000, temperature: 0.3))
                     for try await token in stream {
                         if let lastIndex = messages.indices.last, messages[lastIndex].role == "assistant" {
                             messages[lastIndex].content += token
@@ -531,22 +551,30 @@ struct AIChatPanelView: View {
         skillValues = [:]
         aiSuggestedKeys = []
 
-        let session = AgentSession(aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus, mcpClients: mcpClients)
+        let session = AgentSession(
+            aiService: aiService, memoryStore: memoryStore, skillStore: skillStore, eventBus: eventBus,
+            mcpClients: mcpClients)
 
         if let conv = conversation, let resolved = conv.resolvePane(number: nil) {
             configureSession(session, conversation: conv)
             conv.activeSession = session
             let runningID = UUID()
-            agentBubbles.append(.execution(id: runningID, cmd: "Starting \(skill.name)...", explanation: "", status: .running, output: ""))
+            agentBubbles.append(
+                .execution(
+                    id: runningID, cmd: "Starting \(skill.name)...", explanation: "", status: .running, output: ""))
             isStreaming = true
             conv.isRunning = true
             Task {
-                await session.run(skill: skill, params: params, conversation: conv, focusedPane: resolved.pane, autopilotMode: autopilotMode)
+                await session.run(
+                    skill: skill, params: params, conversation: conv, focusedPane: resolved.pane,
+                    autopilotMode: autopilotMode)
             }
         } else if let pane = currentPane {
             configureSession(session, conversation: nil)
             let runningID = UUID()
-            agentBubbles.append(.execution(id: runningID, cmd: "Starting \(skill.name)...", explanation: "", status: .running, output: ""))
+            agentBubbles.append(
+                .execution(
+                    id: runningID, cmd: "Starting \(skill.name)...", explanation: "", status: .running, output: ""))
             isStreaming = true
             Task {
                 await session.run(skill: skill, params: params, pane: pane, autopilotMode: autopilotMode)
@@ -591,4 +619,3 @@ struct AIChatPanelView: View {
         return "\n\n## External tools (MCP servers)\n\(descriptions)"
     }
 }
-

@@ -1,7 +1,7 @@
 // Sources/Simpleton/Views/QuickConnectPanel.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 /// Floating panel for Cmd+K quick connect — fuzzy search bookmarks with frecency ranking.
 final class QuickConnectPanel {
@@ -185,10 +185,11 @@ struct QuickConnectContentView: View {
             }
         }
         .onExitCommand { onDismiss() }
-        .background(KeyEventHandler(
-            onUpArrow: { moveSelection(-1) },
-            onDownArrow: { moveSelection(1) }
-        ))
+        .background(
+            KeyEventHandler(
+                onUpArrow: { moveSelection(-1) },
+                onDownArrow: { moveSelection(1) }
+            ))
     }
 
     private func footerHint(keys: String, label: String) -> some View {
@@ -364,8 +365,8 @@ struct KeyEventHandler: NSViewRepresentable {
 
         override func keyDown(with event: NSEvent) {
             switch event.keyCode {
-            case 126: onUpArrow?() // up arrow
-            case 125: onDownArrow?() // down arrow
+            case 126: onUpArrow?()  // up arrow
+            case 125: onDownArrow?()  // down arrow
             default: super.keyDown(with: event)
             }
         }

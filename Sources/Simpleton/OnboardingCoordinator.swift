@@ -1,7 +1,7 @@
 // Sources/Simpleton/OnboardingCoordinator.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 final class OnboardingCoordinator {
 
@@ -27,10 +27,11 @@ final class OnboardingCoordinator {
 
     func showOnboardingIfNeeded() {
         let simpletonDir = AppPaths.appSupport
-        let legacy  = simpletonDir.appendingPathComponent(".wizard-done")
+        let legacy = simpletonDir.appendingPathComponent(".wizard-done")
         let current = simpletonDir.appendingPathComponent(".onboarding-done")
         guard !FileManager.default.fileExists(atPath: current.path),
-              !FileManager.default.fileExists(atPath: legacy.path) else { return }
+            !FileManager.default.fileExists(atPath: legacy.path)
+        else { return }
 
         let entries = sshConfigWatcher()?.concreteEntries ?? []
 
@@ -60,11 +61,14 @@ final class OnboardingCoordinator {
                             try? await bookmarkStore()?.add(bookmark)
                         }
                     }
-                    FileManager.default.createFile(atPath: simpletonDir.appendingPathComponent(".onboarding-done").path, contents: nil)
+                    FileManager.default.createFile(
+                        atPath: simpletonDir.appendingPathComponent(".onboarding-done").path, contents: nil)
                 },
                 onSkip: {
                     window.endSheet(window.sheets.last ?? window)
-                    let defaultPanel: [String] = ["connections", "history", "file-browser", "environment", "processes", "ssh-tunnels"]
+                    let defaultPanel: [String] = [
+                        "connections", "history", "file-browser", "environment", "processes", "ssh-tunnels",
+                    ]
                     let silentProfile = PanelProfile(
                         id: PanelProfile.defaultProfileID,
                         name: "Default",
@@ -75,7 +79,8 @@ final class OnboardingCoordinator {
                     )
                     try? panelRegistry()?.saveProfile(silentProfile)
                     panelRegistry()?.activateProfile(silentProfile)
-                    FileManager.default.createFile(atPath: simpletonDir.appendingPathComponent(".onboarding-done").path, contents: nil)
+                    FileManager.default.createFile(
+                        atPath: simpletonDir.appendingPathComponent(".onboarding-done").path, contents: nil)
                 }
             )
 

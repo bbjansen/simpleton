@@ -27,7 +27,7 @@ func runFrecencyScorerChecks(_ t: TestRunner) {
             useCount: 3,
             recentTimestamps: [
                 now,
-                now.addingTimeInterval(-3600),       // 1h ago, still in 4h bucket
+                now.addingTimeInterval(-3600),  // 1h ago, still in 4h bucket
                 now.addingTimeInterval(-25 * 3600),  // 25h ago, in 7d bucket
             ]
         )

@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/SkillParameterForm.swift
 import SwiftUI
-import SimpletonCore
 
 struct SkillParameterForm: View {
     let skill: Skill
@@ -142,7 +142,8 @@ struct SkillParameterForm: View {
                 .font(.system(size: 11))
                 .onAppear {
                     if (values[param.name] ?? "").isEmpty,
-                       let first = param.pickerOptions?.first {
+                        let first = param.pickerOptions?.first
+                    {
                         values[param.name] = first
                     }
                 }

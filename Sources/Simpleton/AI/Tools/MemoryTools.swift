@@ -45,7 +45,8 @@ struct MemoryTools: ToolHandler {
         }
 
         if let entry = store.addMemory(content: content, type: type, tags: tags) {
-            return "Memory saved (id: \(entry.id.uuidString.prefix(8)), type: \(type.rawValue), tags: \(tags.joined(separator: ", ")))"
+            return
+                "Memory saved (id: \(entry.id.uuidString.prefix(8)), type: \(type.rawValue), tags: \(tags.joined(separator: ", ")))"
         } else {
             return "Failed to save memory"
         }
@@ -108,8 +109,7 @@ struct MemoryTools: ToolHandler {
 
         let allMemories = store.allMemories()
         let match = allMemories.first { entry in
-            entry.id.uuidString == idStr ||
-            entry.id.uuidString.lowercased().hasPrefix(idStr.lowercased())
+            entry.id.uuidString == idStr || entry.id.uuidString.lowercased().hasPrefix(idStr.lowercased())
         }
 
         guard let entry = match else {
@@ -117,7 +117,8 @@ struct MemoryTools: ToolHandler {
         }
 
         if store.deleteMemory(id: entry.id) {
-            return "Memory deleted (id: \(entry.id.uuidString.prefix(8)), content: '\(String(entry.content.prefix(50)))...')"
+            return
+                "Memory deleted (id: \(entry.id.uuidString.prefix(8)), content: '\(String(entry.content.prefix(50)))...')"
         } else {
             return "Failed to delete memory"
         }

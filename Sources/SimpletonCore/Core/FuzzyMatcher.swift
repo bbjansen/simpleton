@@ -25,11 +25,11 @@ public enum FuzzyMatcher {
         var matchScore: Double = 0
 
         if c == q {
-            matchScore = 1000 // exact match
+            matchScore = 1000  // exact match
         } else if c.hasPrefix(q) {
-            matchScore = 900 // prefix match
+            matchScore = 900  // prefix match
         } else if c.contains(q) {
-            matchScore = 800 // substring match
+            matchScore = 800  // substring match
         } else {
             // subsequence match — score based on gap count
             var gaps = 0

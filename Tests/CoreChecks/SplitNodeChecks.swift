@@ -38,7 +38,8 @@ func runSplitNodeChecks(_ t: TestRunner) {
 
     t.suite("SplitNode.testNestedSplitRoundTrip") {
         do {
-            let inner = SplitNode.split(direction: .horizontal, children: [.pane(UUID()), .pane(UUID())], ratios: [0.6, 0.4])
+            let inner = SplitNode.split(
+                direction: .horizontal, children: [.pane(UUID()), .pane(UUID())], ratios: [0.6, 0.4])
             let outer = SplitNode.split(direction: .vertical, children: [.pane(UUID()), inner], ratios: [0.5, 0.5])
 
             let data = try JSONEncoder().encode(outer)
@@ -48,8 +49,12 @@ func runSplitNodeChecks(_ t: TestRunner) {
                 if case .split(let dir, let innerChildren, _) = children[1] {
                     t.expectEqual(dir, .horizontal, "nested direction")
                     t.expectEqual(innerChildren.count, 2, "nested children count")
-                } else { t.expect(false, "Expected nested .split") }
-            } else { t.expect(false, "Expected .split") }
+                } else {
+                    t.expect(false, "Expected nested .split")
+                }
+            } else {
+                t.expect(false, "Expected .split")
+            }
         } catch {
             t.expect(false, "unexpected error: \(error)")
         }
@@ -59,7 +64,9 @@ func runSplitNodeChecks(_ t: TestRunner) {
         let id1 = UUID(), id2 = UUID(), id3 = UUID()
         let tree = SplitNode.split(
             direction: .vertical,
-            children: [.pane(id1), .split(direction: .horizontal, children: [.pane(id2), .pane(id3)], ratios: [0.5, 0.5])],
+            children: [
+                .pane(id1), .split(direction: .horizontal, children: [.pane(id2), .pane(id3)], ratios: [0.5, 0.5]),
+            ],
             ratios: [0.5, 0.5]
         )
         let ids = tree.allPaneIDs
@@ -78,10 +85,11 @@ func runSplitNodeChecks(_ t: TestRunner) {
 
     t.suite("SplitNode.decode — mismatched ratios are normalized (crash regression)") {
         // 3 children but only 1 ratio (truncated/corrupt state): must normalize, not crash.
-        let json = "{\"type\":\"split\",\"direction\":\"vertical\",\"children\":[" +
-            "{\"type\":\"pane\",\"id\":\"11111111-1111-1111-1111-111111111111\"}," +
-            "{\"type\":\"pane\",\"id\":\"22222222-2222-2222-2222-222222222222\"}," +
-            "{\"type\":\"pane\",\"id\":\"33333333-3333-3333-3333-333333333333\"}],\"ratios\":[1.0]}"
+        let json =
+            "{\"type\":\"split\",\"direction\":\"vertical\",\"children\":["
+            + "{\"type\":\"pane\",\"id\":\"11111111-1111-1111-1111-111111111111\"},"
+            + "{\"type\":\"pane\",\"id\":\"22222222-2222-2222-2222-222222222222\"},"
+            + "{\"type\":\"pane\",\"id\":\"33333333-3333-3333-3333-333333333333\"}],\"ratios\":[1.0]}"
         do {
             let decoded = try JSONDecoder().decode(SplitNode.self, from: Data(json.utf8))
             if case .split(_, let children, let ratios) = decoded {

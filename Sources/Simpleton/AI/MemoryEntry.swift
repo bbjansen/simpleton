@@ -19,7 +19,10 @@ struct MemoryEntry: Codable, Identifiable {
         case preference
     }
 
-    init(id: UUID = UUID(), type: MemoryType, content: String, tags: [String], embedding: [Float], createdAt: Date = Date(), lastUsed: Date = Date(), useCount: Int = 0) {
+    init(
+        id: UUID = UUID(), type: MemoryType, content: String, tags: [String], embedding: [Float],
+        createdAt: Date = Date(), lastUsed: Date = Date(), useCount: Int = 0
+    ) {
         self.id = id
         self.type = type
         self.content = content

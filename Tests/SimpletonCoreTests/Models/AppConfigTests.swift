@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Models/AppConfigTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class AppConfigTests: XCTestCase {
@@ -41,8 +42,8 @@ final class AppConfigTests: XCTestCase {
     func testConfigMergesDefaults() throws {
         // Simulate a config file with missing keys (older version)
         let json = """
-        {"version":1,"general":{"shell":"$SHELL","shellDetection":"environment","workingDirectory":"home","restorePreviousSession":true,"confirmBeforeClosing":true,"checkForUpdates":"automatic","termVariable":"xterm-256color","customWorkingDirectory":null},"appearance":{"theme":"default-dark","fontFamily":"SF Mono","fontSize":15,"cursorStyle":"beam","cursorBlink":true,"windowOpacity":1.0,"thinStrokes":false},"terminal":{"scrollbackLines":10000,"copyOnSelect":false,"pasteOnRightClick":true,"bellBehavior":"visual","mouseReporting":true,"closeOnCleanExit":false},"ssh":{"defaultUser":null,"keepaliveInterval":60,"autoReconnect":true,"maxReconnectAttempts":10,"agentForwarding":false,"x11Forwarding":false,"controlMaster":false}}
-        """
+            {"version":1,"general":{"shell":"$SHELL","shellDetection":"environment","workingDirectory":"home","restorePreviousSession":true,"confirmBeforeClosing":true,"checkForUpdates":"automatic","termVariable":"xterm-256color","customWorkingDirectory":null},"appearance":{"theme":"default-dark","fontFamily":"SF Mono","fontSize":15,"cursorStyle":"beam","cursorBlink":true,"windowOpacity":1.0,"thinStrokes":false},"terminal":{"scrollbackLines":10000,"copyOnSelect":false,"pasteOnRightClick":true,"bellBehavior":"visual","mouseReporting":true,"closeOnCleanExit":false},"ssh":{"defaultUser":null,"keepaliveInterval":60,"autoReconnect":true,"maxReconnectAttempts":10,"agentForwarding":false,"x11Forwarding":false,"controlMaster":false}}
+            """
         let decoded = try JSONDecoder().decode(ConfigFile.self, from: Data(json.utf8))
         XCTAssertEqual(decoded.config.appearance.fontSize, 15)
         XCTAssertEqual(decoded.config.appearance.cursorStyle, .beam)

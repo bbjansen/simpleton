@@ -22,8 +22,8 @@ struct OpenAIProvider: AIProviderProtocol {
             "temperature": options.temperature,
             "messages": [
                 ["role": "system", "content": system],
-                ["role": "user", "content": user]
-            ]
+                ["role": "user", "content": user],
+            ],
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -36,9 +36,10 @@ struct OpenAIProvider: AIProviderProtocol {
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let first = choices.first,
-              let message = first["message"] as? [String: Any] else {
+            let choices = json["choices"] as? [[String: Any]],
+            let first = choices.first,
+            let message = first["message"] as? [String: Any]
+        else {
             throw AIError.invalidResponse
         }
         // Some models (e.g. Qwen) put thinking in "reasoning" and answer in "content"
@@ -70,8 +71,8 @@ struct OpenAIProvider: AIProviderProtocol {
                         "stream": true,
                         "messages": [
                             ["role": "system", "content": system],
-                            ["role": "user", "content": user]
-                        ]
+                            ["role": "user", "content": user],
+                        ],
                     ]
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -96,11 +97,13 @@ struct OpenAIProvider: AIProviderProtocol {
                         guard line.hasPrefix("data: ") else { continue }
                         let jsonStr = String(line.dropFirst(6))
                         guard jsonStr != "[DONE]",
-                              let data = jsonStr.data(using: .utf8),
-                              let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+                            let data = jsonStr.data(using: .utf8),
+                            let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                        else { continue }
 
                         if let choices = event["choices"] as? [[String: Any]],
-                           let delta = choices.first?["delta"] as? [String: Any] {
+                            let delta = choices.first?["delta"] as? [String: Any]
+                        {
                             // Check both "content" and "reasoning" (Qwen-style thinking models)
                             if let content = delta["content"] as? String, !content.isEmpty {
                                 continuation.yield(content)
@@ -143,17 +146,21 @@ struct OpenAIProvider: AIProviderProtocol {
                 "type": "function",
                 "function": [
                     "name": "run_command",
-                    "description": "Execute a shell command in a terminal pane and return its output. Use 'pane' to target a specific pane by number.",
+                    "description":
+                        "Execute a shell command in a terminal pane and return its output. Use 'pane' to target a specific pane by number.",
                     "parameters": [
                         "type": "object",
                         "properties": [
                             "cmd": ["type": "string", "description": "Shell command to execute"],
                             "explanation": ["type": "string", "description": "Brief reason this command is needed"],
-                            "pane": ["type": "integer", "description": "Target pane number (1-based). Omit for focused pane."]
+                            "pane": [
+                                "type": "integer",
+                                "description": "Target pane number (1-based). Omit for focused pane.",
+                            ],
                         ] as [String: Any],
-                        "required": ["cmd", "explanation"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["cmd", "explanation"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -163,20 +170,25 @@ struct OpenAIProvider: AIProviderProtocol {
                     "parameters": [
                         "type": "object",
                         "properties": [
-                            "pane": ["type": "integer", "description": "Pane number (1-based). Omit for focused pane."],
-                            "lines": ["type": "integer", "description": "Number of recent lines (default 50, max 200)"]
+                            "pane": [
+                                "type": "integer", "description": "Pane number (1-based). Omit for focused pane.",
+                            ],
+                            "lines": [
+                                "type": "integer", "description": "Number of recent lines (default 50, max 200)",
+                            ],
                         ] as [String: Any],
-                        "required": [] as [String]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": [] as [String],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
                 "function": [
                     "name": "list_panes",
                     "description": "List all terminal panes with their working directory, shell, and state.",
-                    "parameters": ["type": "object", "properties": [:] as [String: Any], "required": [] as [String]] as [String: Any]
-                ] as [String: Any]
+                    "parameters": ["type": "object", "properties": [:] as [String: Any], "required": [] as [String]]
+                        as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -188,9 +200,9 @@ struct OpenAIProvider: AIProviderProtocol {
                         "properties": [
                             "pane": ["type": "integer", "description": "Pane number (1-based)"]
                         ] as [String: Any],
-                        "required": ["pane"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["pane"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -202,9 +214,9 @@ struct OpenAIProvider: AIProviderProtocol {
                         "properties": [
                             "path": ["type": "string", "description": "File path (~ expansion supported)"]
                         ] as [String: Any],
-                        "required": ["path"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["path"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -215,11 +227,11 @@ struct OpenAIProvider: AIProviderProtocol {
                         "type": "object",
                         "properties": [
                             "path": ["type": "string", "description": "File path"],
-                            "content": ["type": "string", "description": "Full file content"]
+                            "content": ["type": "string", "description": "Full file content"],
                         ] as [String: Any],
-                        "required": ["path", "content"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["path", "content"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -231,9 +243,9 @@ struct OpenAIProvider: AIProviderProtocol {
                         "properties": [
                             "path": ["type": "string", "description": "Directory path (default: cwd). ~ supported."]
                         ] as [String: Any],
-                        "required": [] as [String]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": [] as [String],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -244,19 +256,20 @@ struct OpenAIProvider: AIProviderProtocol {
                         "type": "object",
                         "properties": [
                             "pattern": ["type": "string", "description": "Text or regex pattern"],
-                            "directory": ["type": "string", "description": "Directory to search (default: cwd)"]
+                            "directory": ["type": "string", "description": "Directory to search (default: cwd)"],
                         ] as [String: Any],
-                        "required": ["pattern"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["pattern"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
                 "function": [
                     "name": "get_system_info",
                     "description": "Get OS, hostname, CPU, memory, uptime, user, shell.",
-                    "parameters": ["type": "object", "properties": [:] as [String: Any], "required": [] as [String]] as [String: Any]
-                ] as [String: Any]
+                    "parameters": ["type": "object", "properties": [:] as [String: Any], "required": [] as [String]]
+                        as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -269,19 +282,22 @@ struct OpenAIProvider: AIProviderProtocol {
                             "path": ["type": "string"],
                             "old_text": ["type": "string", "description": "Exact text to find"],
                             "new_text": ["type": "string", "description": "Replacement"],
-                            "replace_all": ["type": "boolean", "description": "Replace all matches (default false)"]
+                            "replace_all": ["type": "boolean", "description": "Replace all matches (default false)"],
                         ] as [String: Any],
-                        "required": ["path", "old_text", "new_text"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["path", "old_text", "new_text"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
                 "function": [
                     "name": "get_git_status",
                     "description": "Git status (short format).",
-                    "parameters": ["type": "object", "properties": ["directory": ["type": "string"]] as [String: Any], "required": [] as [String]] as [String: Any]
-                ] as [String: Any]
+                    "parameters": [
+                        "type": "object", "properties": ["directory": ["type": "string"]] as [String: Any],
+                        "required": [] as [String],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -292,11 +308,11 @@ struct OpenAIProvider: AIProviderProtocol {
                         "type": "object",
                         "properties": [
                             "directory": ["type": "string"],
-                            "staged": ["type": "boolean"]
+                            "staged": ["type": "boolean"],
                         ] as [String: Any],
-                        "required": [] as [String]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": [] as [String],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -307,11 +323,11 @@ struct OpenAIProvider: AIProviderProtocol {
                         "type": "object",
                         "properties": [
                             "directory": ["type": "string"],
-                            "count": ["type": "integer"]
+                            "count": ["type": "integer"],
                         ] as [String: Any],
-                        "required": [] as [String]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": [] as [String],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -321,32 +337,36 @@ struct OpenAIProvider: AIProviderProtocol {
                     "parameters": [
                         "type": "object",
                         "properties": ["text": ["type": "string"]] as [String: Any],
-                        "required": ["text"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["text"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
                 "function": [
                     "name": "send_keys",
-                    "description": "Send keystrokes to a pane: ctrl+c, ctrl+d, enter, tab, escape, arrow keys, or raw text.",
+                    "description":
+                        "Send keystrokes to a pane: ctrl+c, ctrl+d, enter, tab, escape, arrow keys, or raw text.",
                     "parameters": [
                         "type": "object",
                         "properties": [
                             "keys": ["type": "string", "description": "Key name or raw text"],
-                            "pane": ["type": "integer", "description": "Target pane (1-based)"]
+                            "pane": ["type": "integer", "description": "Target pane (1-based)"],
                         ] as [String: Any],
-                        "required": ["keys"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["keys"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
                 "function": [
                     "name": "get_env",
                     "description": "Get environment variable(s). Omit name for all.",
-                    "parameters": ["type": "object", "properties": ["name": ["type": "string"]] as [String: Any], "required": [] as [String]] as [String: Any]
-                ] as [String: Any]
+                    "parameters": [
+                        "type": "object", "properties": ["name": ["type": "string"]] as [String: Any],
+                        "required": [] as [String],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -359,11 +379,11 @@ struct OpenAIProvider: AIProviderProtocol {
                             "url": ["type": "string"],
                             "method": ["type": "string", "description": "GET, POST, PUT, DELETE, etc."],
                             "headers": ["type": "object"],
-                            "body": ["type": "string"]
+                            "body": ["type": "string"],
                         ] as [String: Any],
-                        "required": ["url"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["url"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -374,19 +394,22 @@ struct OpenAIProvider: AIProviderProtocol {
                         "type": "object",
                         "properties": [
                             "port": ["type": "integer"],
-                            "host": ["type": "string"]
+                            "host": ["type": "string"],
                         ] as [String: Any],
-                        "required": ["port"]
-                    ] as [String: Any]
-                ] as [String: Any]
+                        "required": ["port"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
                 "function": [
                     "name": "find_process",
                     "description": "Find processes by name.",
-                    "parameters": ["type": "object", "properties": ["name": ["type": "string"]] as [String: Any], "required": ["name"]] as [String: Any]
-                ] as [String: Any]
+                    "parameters": [
+                        "type": "object", "properties": ["name": ["type": "string"]] as [String: Any],
+                        "required": ["name"],
+                    ] as [String: Any],
+                ] as [String: Any],
             ],
             [
                 "type": "function",
@@ -397,18 +420,18 @@ struct OpenAIProvider: AIProviderProtocol {
                         "type": "object",
                         "properties": [
                             "pid": ["type": "integer"],
-                            "signal": ["type": "string"]
+                            "signal": ["type": "string"],
                         ] as [String: Any],
-                        "required": ["pid"]
-                    ] as [String: Any]
-                ] as [String: Any]
-            ]
+                        "required": ["pid"],
+                    ] as [String: Any],
+                ] as [String: Any],
+            ],
         ]
 
         let body: [String: Any] = [
             "model": model, "max_tokens": options.maxTokens,
             "temperature": options.temperature,
-            "messages": messages, "tools": tools, "tool_choice": "auto"
+            "messages": messages, "tools": tools, "tool_choice": "auto",
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -418,20 +441,22 @@ struct OpenAIProvider: AIProviderProtocol {
             throw AIError.providerError("OpenAI tool use error: \(msg)")
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let first = choices.first,
-              let message = first["message"] as? [String: Any] else {
+            let choices = json["choices"] as? [[String: Any]],
+            let first = choices.first,
+            let message = first["message"] as? [String: Any]
+        else {
             throw AIError.invalidResponse
         }
 
         if let toolCalls = message["tool_calls"] as? [[String: Any]],
-           let call = toolCalls.first,
-           let toolID = call["id"] as? String,
-           let function = call["function"] as? [String: Any],
-           let toolName = function["name"] as? String,
-           let argsStr = function["arguments"] as? String,
-           let argsData = argsStr.data(using: .utf8),
-           let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
+            let call = toolCalls.first,
+            let toolID = call["id"] as? String,
+            let function = call["function"] as? [String: Any],
+            let toolName = function["name"] as? String,
+            let argsStr = function["arguments"] as? String,
+            let argsData = argsStr.data(using: .utf8),
+            let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any]
+        {
             return .toolCall(id: toolID, name: toolName, arguments: args)
         }
 

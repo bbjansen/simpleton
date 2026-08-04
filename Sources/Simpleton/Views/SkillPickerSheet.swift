@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/SkillPickerSheet.swift
 import SwiftUI
-import SimpletonCore
 
 struct SkillPickerSheet: View {
     let skillStore: SkillStore
@@ -13,9 +13,8 @@ struct SkillPickerSheet: View {
         guard !searchText.isEmpty else { return skillStore.allSkills }
         let q = searchText.lowercased()
         return skillStore.allSkills.filter {
-            $0.name.lowercased().contains(q) ||
-            $0.slug.lowercased().contains(q) ||
-            $0.description.lowercased().contains(q)
+            $0.name.lowercased().contains(q) || $0.slug.lowercased().contains(q)
+                || $0.description.lowercased().contains(q)
         }
     }
 
@@ -58,7 +57,9 @@ struct SkillPickerSheet: View {
                 .padding(.bottom, 4)
 
             ForEach(skills) { skill in
-                Button(action: { onSelect(skill); onDismiss() }) {
+                Button(action: {
+                    onSelect(skill); onDismiss()
+                }) {
                     HStack(spacing: 10) {
                         Image(systemName: skill.icon)
                             .font(.system(size: 13))

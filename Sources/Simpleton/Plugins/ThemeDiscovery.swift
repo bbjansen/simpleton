@@ -52,26 +52,30 @@ final class ThemeDiscovery {
 
         // Built-in themes
         discovered.append(Theme(name: "Simpleton Dark"))
-        discovered.append(Theme(name: "Simpleton Light", colors: ThemeColors(
-            background: "#f8fafc", foreground: "#1a1a2e",
-            cursor: "#818cf8", selection: "#c7d2fe",
-            black: "#1a1a2e", red: "#dc2626",
-            green: "#16a34a", yellow: "#ca8a04",
-            blue: "#2563eb", magenta: "#9333ea",
-            cyan: "#0891b2", white: "#f8fafc",
-            brightBlack: "#64748b", brightRed: "#ef4444",
-            brightGreen: "#22c55e", brightYellow: "#eab308",
-            brightBlue: "#3b82f6", brightMagenta: "#a855f7",
-            brightCyan: "#06b6d4", brightWhite: "#ffffff",
-            splitBorder: "#e2e8f0", sidebar: "#f1f5f9",
-            tabBar: "#e2e8f0"
-        )))
+        discovered.append(
+            Theme(
+                name: "Simpleton Light",
+                colors: ThemeColors(
+                    background: "#f8fafc", foreground: "#1a1a2e",
+                    cursor: "#818cf8", selection: "#c7d2fe",
+                    black: "#1a1a2e", red: "#dc2626",
+                    green: "#16a34a", yellow: "#ca8a04",
+                    blue: "#2563eb", magenta: "#9333ea",
+                    cyan: "#0891b2", white: "#f8fafc",
+                    brightBlack: "#64748b", brightRed: "#ef4444",
+                    brightGreen: "#22c55e", brightYellow: "#eab308",
+                    brightBlue: "#3b82f6", brightMagenta: "#a855f7",
+                    brightCyan: "#06b6d4", brightWhite: "#ffffff",
+                    splitBorder: "#e2e8f0", sidebar: "#f1f5f9",
+                    tabBar: "#e2e8f0"
+                )))
 
         // User themes from directory
         if let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
             for file in files where file.pathExtension == "json" {
                 if let data = try? Data(contentsOf: file),
-                   let themeFile = try? JSONDecoder().decode(ThemeFile.self, from: data) {
+                    let themeFile = try? JSONDecoder().decode(ThemeFile.self, from: data)
+                {
                     discovered.append(themeFile.theme)
                 }
             }

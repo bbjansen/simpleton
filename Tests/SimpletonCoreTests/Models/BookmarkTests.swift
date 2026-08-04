@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Models/BookmarkTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class BookmarkTests: XCTestCase {

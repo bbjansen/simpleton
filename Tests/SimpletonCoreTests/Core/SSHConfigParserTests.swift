@@ -1,17 +1,18 @@
 // Tests/SimpletonCoreTests/Core/SSHConfigParserTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class SSHConfigParserTests: XCTestCase {
 
     func testParseBasicHost() throws {
         let config = """
-        Host myserver
-            HostName 10.0.1.5
-            User deploy
-            Port 2222
-            IdentityFile ~/.ssh/id_ed25519
-        """
+            Host myserver
+                HostName 10.0.1.5
+                User deploy
+                Port 2222
+                IdentityFile ~/.ssh/id_ed25519
+            """
         let entries = SSHConfigParser.parse(content: config)
         XCTAssertEqual(entries.count, 1)
         XCTAssertEqual(entries[0].hostAlias, "myserver")
@@ -24,13 +25,13 @@ final class SSHConfigParserTests: XCTestCase {
 
     func testParseMultipleHosts() throws {
         let config = """
-        Host server1
-            HostName 10.0.1.1
+            Host server1
+                HostName 10.0.1.1
 
-        Host server2
-            HostName 10.0.1.2
-            User admin
-        """
+            Host server2
+                HostName 10.0.1.2
+                User admin
+            """
         let entries = SSHConfigParser.parse(content: config)
         XCTAssertEqual(entries.count, 2)
         XCTAssertEqual(entries[0].hostAlias, "server1")
@@ -40,22 +41,22 @@ final class SSHConfigParserTests: XCTestCase {
 
     func testParseProxyJump() throws {
         let config = """
-        Host target
-            HostName 10.0.2.5
-            ProxyJump bastion1,bastion2
-        """
+            Host target
+                HostName 10.0.2.5
+                ProxyJump bastion1,bastion2
+            """
         let entries = SSHConfigParser.parse(content: config)
         XCTAssertEqual(entries[0].proxyJump, ["bastion1", "bastion2"])
     }
 
     func testWildcardHostIsNotConcrete() {
         let config = """
-        Host *.example.com
-            User deploy
+            Host *.example.com
+                User deploy
 
-        Host 10.0.*
-            User admin
-        """
+            Host 10.0.*
+                User admin
+            """
         let entries = SSHConfigParser.parse(content: config)
         XCTAssertEqual(entries.count, 2)
         XCTAssertFalse(entries[0].isConcrete)
@@ -64,20 +65,20 @@ final class SSHConfigParserTests: XCTestCase {
 
     func testParseDefaultPort() {
         let config = """
-        Host myhost
-            HostName example.com
-        """
+            Host myhost
+                HostName example.com
+            """
         let entries = SSHConfigParser.parse(content: config)
         XCTAssertEqual(entries[0].port, 22)
     }
 
     func testParseLocalForward() {
         let config = """
-        Host myhost
-            HostName example.com
-            LocalForward 8080 localhost:80
-            LocalForward 3000 127.0.0.1:3000
-        """
+            Host myhost
+                HostName example.com
+                LocalForward 8080 localhost:80
+                LocalForward 3000 127.0.0.1:3000
+            """
         let entries = SSHConfigParser.parse(content: config)
         XCTAssertEqual(entries[0].localForwards.count, 2)
         XCTAssertEqual(entries[0].localForwards[0].localPort, 8080)
@@ -87,12 +88,12 @@ final class SSHConfigParserTests: XCTestCase {
 
     func testSkipGlobalWildcard() {
         let config = """
-        Host *
-            ServerAliveInterval 60
+            Host *
+                ServerAliveInterval 60
 
-        Host myhost
-            HostName example.com
-        """
+            Host myhost
+                HostName example.com
+            """
         let entries = SSHConfigParser.parse(content: config)
         // Host * is a global config, not a connectable entry
         let concrete = entries.filter(\.isConcrete)
@@ -119,7 +120,9 @@ final class SSHConfigParserTests: XCTestCase {
         XCTAssertEqual(bookmark.sshConfigHost, "prod-web")
         if case .key(let file) = bookmark.auth {
             XCTAssertEqual(file, "~/.ssh/prod_key")
-        } else { XCTFail("Expected .key auth") }
+        } else {
+            XCTFail("Expected .key auth")
+        }
     }
 
     func testEmptyConfig() {
@@ -129,11 +132,11 @@ final class SSHConfigParserTests: XCTestCase {
 
     func testCommentsIgnored() {
         let config = """
-        # This is a comment
-        Host myhost
-            # Another comment
-            HostName example.com
-        """
+            # This is a comment
+            Host myhost
+                # Another comment
+                HostName example.com
+            """
         let entries = SSHConfigParser.parse(content: config)
         XCTAssertEqual(entries.count, 1)
     }

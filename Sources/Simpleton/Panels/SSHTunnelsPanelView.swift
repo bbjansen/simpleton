@@ -1,7 +1,7 @@
-// Sources/Simpleton/Panels/SSHTunnelsPanelView.swift
-import SwiftUI
 import AppKit
 import SimpletonCore
+// Sources/Simpleton/Panels/SSHTunnelsPanelView.swift
+import SwiftUI
 
 struct TunnelEntry: Identifiable {
     let id = UUID()
@@ -75,8 +75,9 @@ struct SSHTunnelsPanelView: View {
         }
         tunnels = panes.values.flatMap { pane -> [TunnelEntry] in
             guard case .ssh(let bookmarkID) = pane.connectionType,
-                  let bookmark = bookmarkStore?.bookmark(for: bookmarkID),
-                  !bookmark.portForwards.isEmpty else { return [] }
+                let bookmark = bookmarkStore?.bookmark(for: bookmarkID),
+                !bookmark.portForwards.isEmpty
+            else { return [] }
             let name = bookmark.name
             return bookmark.portForwards
                 .filter { $0.direction == .local }

@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/OnboardingWizardView.swift
 import SwiftUI
-import SimpletonCore
 
 struct OnboardingWizardView: View {
     let allPanels: [PanelDefinition]
@@ -47,7 +47,7 @@ struct OnboardingWizardView: View {
         let defaultOff: Set<String> = [
             PanelProfile.PanelID.git,
             PanelProfile.PanelID.docker,
-            PanelProfile.PanelID.skills
+            PanelProfile.PanelID.skills,
         ]
         var defaults: [String: Bool] = [:]
         for panel in allPanels {
@@ -137,10 +137,12 @@ struct OnboardingWizardView: View {
             Divider()
             List {
                 ForEach(allPanels, id: \.id) { panel in
-                    Toggle(isOn: Binding(
-                        get: { enabledPanels[panel.id] ?? false },
-                        set: { enabledPanels[panel.id] = $0 }
-                    )) {
+                    Toggle(
+                        isOn: Binding(
+                            get: { enabledPanels[panel.id] ?? false },
+                            set: { enabledPanels[panel.id] = $0 }
+                        )
+                    ) {
                         HStack(spacing: 10) {
                             Image(systemName: panel.icon)
                                 .frame(width: 20)
@@ -247,10 +249,19 @@ struct OnboardingWizardView: View {
             List {
                 ForEach(sshEntries.filter(\.isConcrete), id: \.hostAlias) { entry in
                     HStack {
-                        Toggle("", isOn: Binding(
-                            get: { selectedEntries.contains(entry.hostAlias) },
-                            set: { if $0 { selectedEntries.insert(entry.hostAlias) } else { selectedEntries.remove(entry.hostAlias) } }
-                        ))
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { selectedEntries.contains(entry.hostAlias) },
+                                set: {
+                                    if $0 {
+                                        selectedEntries.insert(entry.hostAlias)
+                                    } else {
+                                        selectedEntries.remove(entry.hostAlias)
+                                    }
+                                }
+                            )
+                        )
                         .labelsHidden()
                         VStack(alignment: .leading) {
                             Text(entry.hostAlias).font(.system(size: 13))
@@ -297,10 +308,19 @@ struct OnboardingWizardView: View {
                 List {
                     ForEach(suggestedGroups) { group in
                         HStack {
-                            Toggle("", isOn: Binding(
-                                get: { acceptedGroups.contains(group.id) },
-                                set: { if $0 { acceptedGroups.insert(group.id) } else { acceptedGroups.remove(group.id) } }
-                            ))
+                            Toggle(
+                                "",
+                                isOn: Binding(
+                                    get: { acceptedGroups.contains(group.id) },
+                                    set: {
+                                        if $0 {
+                                            acceptedGroups.insert(group.id)
+                                        } else {
+                                            acceptedGroups.remove(group.id)
+                                        }
+                                    }
+                                )
+                            )
                             .labelsHidden()
                             Circle()
                                 .fill(Color(hex: group.color) ?? .gray)
@@ -339,10 +359,19 @@ struct OnboardingWizardView: View {
             List {
                 ForEach(bookmarks) { bookmark in
                     HStack {
-                        Toggle("", isOn: Binding(
-                            get: { pinnedBookmarks.contains(bookmark.id) },
-                            set: { if $0 { pinnedBookmarks.insert(bookmark.id) } else { pinnedBookmarks.remove(bookmark.id) } }
-                        ))
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { pinnedBookmarks.contains(bookmark.id) },
+                                set: {
+                                    if $0 {
+                                        pinnedBookmarks.insert(bookmark.id)
+                                    } else {
+                                        pinnedBookmarks.remove(bookmark.id)
+                                    }
+                                }
+                            )
+                        )
                         .labelsHidden()
                         Image(systemName: pinnedBookmarks.contains(bookmark.id) ? "star.fill" : "star")
                             .foregroundColor(pinnedBookmarks.contains(bookmark.id) ? .yellow : .secondary)
@@ -404,7 +433,8 @@ struct OnboardingWizardView: View {
         // (Review → Organize → Back → Next) must preserve the user's group choices
         // instead of resetting acceptedGroups back to all-selected.
         if step == 4 && bookmarks.isEmpty {
-            bookmarks = sshEntries
+            bookmarks =
+                sshEntries
                 .filter { selectedEntries.contains($0.hostAlias) }
                 .map { $0.toBookmark() }
             suggestedGroups = generateSmartGroups(from: bookmarks)
@@ -428,10 +458,12 @@ struct OnboardingWizardView: View {
     }
 
     private func buildProfile() -> PanelProfile {
-        let leftIDs = allPanels
+        let leftIDs =
+            allPanels
             .filter { ($0.defaultSide == .left) && (enabledPanels[$0.id] ?? false) }
             .map(\.id)
-        let rightIDs = allPanels
+        let rightIDs =
+            allPanels
             .filter { ($0.defaultSide == .right) && (enabledPanels[$0.id] ?? false) }
             .map(\.id)
         return PanelProfile(
@@ -448,30 +480,35 @@ struct OnboardingWizardView: View {
         var groups: [SmartGroup] = []
         let prodHosts = bookmarks.filter { $0.host.contains("prod") || $0.name.contains("prod") }
         if prodHosts.count >= 2 {
-            groups.append(SmartGroup(
-                name: "Production",
-                color: "#ef4444",
-                combinator: .or,
-                rules: [SmartGroupRule(field: .hostname, operator: .contains, value: "prod")]
-            ))
+            groups.append(
+                SmartGroup(
+                    name: "Production",
+                    color: "#ef4444",
+                    combinator: .or,
+                    rules: [SmartGroupRule(field: .hostname, operator: .contains, value: "prod")]
+                ))
         }
         let stagingHosts = bookmarks.filter { $0.host.contains("staging") || $0.name.contains("staging") }
         if stagingHosts.count >= 2 {
-            groups.append(SmartGroup(
-                name: "Staging",
-                color: "#eab308",
-                combinator: .or,
-                rules: [SmartGroupRule(field: .hostname, operator: .contains, value: "staging")]
-            ))
+            groups.append(
+                SmartGroup(
+                    name: "Staging",
+                    color: "#eab308",
+                    combinator: .or,
+                    rules: [SmartGroupRule(field: .hostname, operator: .contains, value: "staging")]
+                ))
         }
-        let jumpHostGroups = Dictionary(grouping: bookmarks.filter { !$0.jumpHosts.isEmpty }) { $0.jumpHosts.first ?? "" }
+        let jumpHostGroups = Dictionary(grouping: bookmarks.filter { !$0.jumpHosts.isEmpty }) {
+            $0.jumpHosts.first ?? ""
+        }
         for (jumpHost, hosts) in jumpHostGroups where hosts.count >= 2 {
-            groups.append(SmartGroup(
-                name: "Via \(jumpHost)",
-                color: "#818cf8",
-                combinator: .and,
-                rules: [SmartGroupRule(field: .jumpHost, operator: .equals, value: jumpHost)]
-            ))
+            groups.append(
+                SmartGroup(
+                    name: "Via \(jumpHost)",
+                    color: "#818cf8",
+                    combinator: .and,
+                    rules: [SmartGroupRule(field: .jumpHost, operator: .equals, value: jumpHost)]
+                ))
         }
         return groups
     }

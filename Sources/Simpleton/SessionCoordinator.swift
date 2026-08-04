@@ -1,7 +1,7 @@
 // Sources/Simpleton/SessionCoordinator.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 final class SessionCoordinator {
 
@@ -111,7 +111,8 @@ final class SessionCoordinator {
     func showRestorePrompt(state: SessionState) {
         let alert = NSAlert()
         alert.messageText = "Restore previous session?"
-        alert.informativeText = "Simpleton didn't shut down cleanly. Would you like to restore your previous windows and tabs?"
+        alert.informativeText =
+            "Simpleton didn't shut down cleanly. Would you like to restore your previous windows and tabs?"
         alert.addButton(withTitle: "Restore")
         alert.addButton(withTitle: "Start Fresh")
 
@@ -149,7 +150,8 @@ final class SessionCoordinator {
             }
 
             if let firstTab = windowState.tabs.first,
-               let tabContainer = wc.window?.contentViewController as? TabContainerController {
+                let tabContainer = wc.window?.contentViewController as? TabContainerController
+            {
                 restoreSplitTree(firstTab.splitTree, in: tabContainer)
             }
             // Recreate any additional tabs (native tab group) beyond the first.
@@ -219,7 +221,8 @@ final class SessionCoordinator {
             let name = input.stringValue
 
             guard let self,
-                  let tabContainer = window.contentViewController as? TabContainerController else { return }
+                let tabContainer = window.contentViewController as? TabContainerController
+            else { return }
 
             let frame = WindowFrame(
                 x: Double(window.frame.origin.x),

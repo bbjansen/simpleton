@@ -24,7 +24,7 @@ final class ScrollbackSearchBar: NSVisualEffectView {
         searchField.font = NSFont.systemFont(ofSize: 13, weight: .regular)
         searchField.isBordered = false
         searchField.drawsBackground = true
-        searchField.backgroundColor = NSColor(red: 0.082, green: 0.082, blue: 0.122, alpha: 1) // Theme.elevated
+        searchField.backgroundColor = NSColor(red: 0.082, green: 0.082, blue: 0.122, alpha: 1)  // Theme.elevated
         searchField.textColor = .white
         searchField.focusRingType = .exterior
         searchField.wantsLayer = true
@@ -56,7 +56,7 @@ final class ScrollbackSearchBar: NSVisualEffectView {
 
         matchLabel = NSTextField(labelWithString: "")
         matchLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
-        matchLabel.textColor = NSColor(red: 0.353, green: 0.353, blue: 0.416, alpha: 1) // Theme.textTertiary
+        matchLabel.textColor = NSColor(red: 0.353, green: 0.353, blue: 0.416, alpha: 1)  // Theme.textTertiary
 
         super.init(frame: NSRect(x: 0, y: 0, width: 400, height: 36))
 

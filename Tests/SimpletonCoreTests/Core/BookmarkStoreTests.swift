@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Core/BookmarkStoreTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class BookmarkStoreTests: XCTestCase {
@@ -84,7 +85,7 @@ final class BookmarkStoreTests: XCTestCase {
 
         let results = await store.search(query: "web")
         XCTAssertEqual(results.count, 2)
-        XCTAssertEqual(results[0].id, b2.id) // b2 has higher frecency
+        XCTAssertEqual(results[0].id, b2.id)  // b2 has higher frecency
     }
 
     func testPersistenceAcrossInstances() async throws {

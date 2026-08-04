@@ -82,14 +82,18 @@ func runSessionStateChecks(_ t: TestRunner) {
             ],
             ratios: [0.2, 0.3, 0.5]
         )
-        let (tree, leaves) = saved.materialize(makeID: { let id = UUID(); ids.append(id); return id })
+        let (tree, leaves) = saved.materialize(makeID: {
+            let id = UUID(); ids.append(id); return id
+        })
 
         t.expectEqual(leaves.count, 3, "three leaves")
-        t.expectEqual(leaves.map(\.connection), [
-            .local(workingDirectory: "/a"),
-            .local(workingDirectory: "/b"),
-            .local(workingDirectory: "/c"),
-        ], "leaves preserve left-to-right order")
+        t.expectEqual(
+            leaves.map(\.connection),
+            [
+                .local(workingDirectory: "/a"),
+                .local(workingDirectory: "/b"),
+                .local(workingDirectory: "/c"),
+            ], "leaves preserve left-to-right order")
         if case .split(let dir, let children, let ratios) = tree {
             t.expectEqual(dir, .vertical, "direction preserved")
             t.expectEqual(ratios, [0.2, 0.3, 0.5], "ratios preserved")
@@ -122,11 +126,13 @@ func runSessionStateChecks(_ t: TestRunner) {
 
         // Three leaves, depth-first, connections intact.
         t.expectEqual(leaves.count, 3, "three leaves across the nested tree")
-        t.expectEqual(leaves.map(\.connection), [
-            .local(workingDirectory: "/a"),
-            .ssh(bookmarkId: bmID),
-            .local(workingDirectory: "/c"),
-        ], "leaves flattened depth-first with connections intact")
+        t.expectEqual(
+            leaves.map(\.connection),
+            [
+                .local(workingDirectory: "/a"),
+                .ssh(bookmarkId: bmID),
+                .local(workingDirectory: "/c"),
+            ], "leaves flattened depth-first with connections intact")
         // All pane IDs unique — no leaf shares an id.
         t.expectEqual(Set(tree.allPaneIDs).count, 3, "all pane ids are unique")
 
@@ -138,7 +144,8 @@ func runSessionStateChecks(_ t: TestRunner) {
         t.expectEqual(outerRatios, [0.3, 0.7], "outer ratios preserved")
         t.expectEqual(outerChildren.count, 2, "outer split has two children (pane + nested split)")
         if case .pane = outerChildren.first {} else { t.expect(false, "first outer child is a pane") }
-        guard outerChildren.count == 2, case .split(let innerDir, let innerChildren, let innerRatios) = outerChildren[1] else {
+        guard outerChildren.count == 2, case .split(let innerDir, let innerChildren, let innerRatios) = outerChildren[1]
+        else {
             t.expect(false, "second outer child is a nested split"); return
         }
         t.expectEqual(innerDir, .vertical, "inner direction preserved")

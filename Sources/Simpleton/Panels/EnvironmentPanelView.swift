@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Panels/EnvironmentPanelView.swift
 import SwiftUI
-import AppKit
 
 struct EnvironmentPanelView: View {
     let shellProvider: () -> String
@@ -12,10 +12,11 @@ struct EnvironmentPanelView: View {
     @State private var isSSH = false
 
     private var filtered: [(key: String, value: String)] {
-        query.isEmpty ? entries : entries.filter {
-            $0.key.localizedCaseInsensitiveContains(query) ||
-            $0.value.localizedCaseInsensitiveContains(query)
-        }
+        query.isEmpty
+            ? entries
+            : entries.filter {
+                $0.key.localizedCaseInsensitiveContains(query) || $0.value.localizedCaseInsensitiveContains(query)
+            }
     }
 
     var body: some View {

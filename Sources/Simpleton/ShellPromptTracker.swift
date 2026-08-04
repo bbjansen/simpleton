@@ -95,7 +95,8 @@ final class ShellPromptTracker {
             }
             let codeBytes = rest.first == UInt8(ascii: ";") ? rest.dropFirst() : rest
             if let codeStr = String(bytes: codeBytes, encoding: .ascii),
-               let code = Int32(codeStr) {
+                let code = Int32(codeStr)
+            {
                 return .commandEnd(code)
             }
             return .commandEnd(nil)

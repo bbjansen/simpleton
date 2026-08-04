@@ -1,7 +1,7 @@
 // Sources/Simpleton/PaneController.swift
 import AppKit
-import SwiftTerm
 import SimpletonCore
+import SwiftTerm
 
 /// Owns a single terminal pane — its LocalProcessTerminalView, process lifecycle,
 /// and exit/disconnect state. This is the bridge between the logical SplitNode.pane(id)
@@ -219,13 +219,15 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
         // Fire plugin event (treat startProcess as authenticated for now —
         // full auth detection requires ConnectionStateTracker which is Phase B)
-        pluginManager?.fireEvent(.onSSHAuthenticated, context: [
-            "host": bookmark.host,
-            "user": bookmark.user ?? "",
-            "port": bookmark.port,
-            "bookmarkId": bookmark.id.uuidString,
-            "bookmarkName": bookmark.name,
-        ])
+        pluginManager?.fireEvent(
+            .onSSHAuthenticated,
+            context: [
+                "host": bookmark.host,
+                "user": bookmark.user ?? "",
+                "port": bookmark.port,
+                "bookmarkId": bookmark.id.uuidString,
+                "bookmarkName": bookmark.name,
+            ])
     }
 
     /// Attempt to reconnect an SSH session.
@@ -269,13 +271,14 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
             if let bus = eventBus, let tabID = eventBusTabID {
                 let label = paneLabel ?? "Pane"
-                bus.publish(WorkspaceEvent(
-                    id: UUID(),
-                    timestamp: Date(),
-                    tabID: tabID,
-                    paneLabel: label,
-                    type: .directoryChanged(path: dir)
-                ))
+                bus.publish(
+                    WorkspaceEvent(
+                        id: UUID(),
+                        timestamp: Date(),
+                        tabID: tabID,
+                        paneLabel: label,
+                        type: .directoryChanged(path: dir)
+                    ))
             }
         }
     }
@@ -290,13 +293,15 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
             onProcessExit?(self, exitCode)
 
             if let bookmark = sshBookmark {
-                pluginManager?.fireEvent(.onSSHDisconnected, context: [
-                    "host": bookmark.host,
-                    "user": bookmark.user ?? "",
-                    "port": bookmark.port,
-                    "bookmarkId": bookmark.id.uuidString,
-                    "exitCode": code,
-                ])
+                pluginManager?.fireEvent(
+                    .onSSHDisconnected,
+                    context: [
+                        "host": bookmark.host,
+                        "user": bookmark.user ?? "",
+                        "port": bookmark.port,
+                        "bookmarkId": bookmark.id.uuidString,
+                        "exitCode": code,
+                    ])
             }
 
             if let manager = sshReconnectManager {
@@ -318,11 +323,13 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
             onProcessExit?(self, exitCode)
             bannerManager?.showExitBanner(exitCode: code)
 
-            pluginManager?.fireEvent(.onPaneExit, context: [
-                "paneId": id.uuidString,
-                "exitCode": code,
-                "connectionType": "local",
-            ])
+            pluginManager?.fireEvent(
+                .onPaneExit,
+                context: [
+                    "paneId": id.uuidString,
+                    "exitCode": code,
+                    "connectionType": "local",
+                ])
         }
     }
 
@@ -335,7 +342,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     private func markSSHConnected() {
         guard case .ssh = connectionType, state == .connecting else { return }
         state = .running
-        sshReconnectManager?.reset()   // a successful (re)connect clears the auto-reconnect attempt counter
+        sshReconnectManager?.reset()  // a successful (re)connect clears the auto-reconnect attempt counter
         let title = lastTerminalTitle.isEmpty ? (sshBookmark?.name ?? "SSH") : lastTerminalTitle
         onTitleChange?(statusTitle(title))
     }
@@ -345,18 +352,18 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         switch state {
         case .running:
             if case .ssh = connectionType {
-                emoji = "\u{1F7E2}" // green circle — running SSH
+                emoji = "\u{1F7E2}"  // green circle — running SSH
             } else {
-                return title // no prefix for local shells
+                return title  // no prefix for local shells
             }
         case .connecting:
-            emoji = "\u{1F7E1}" // yellow circle
+            emoji = "\u{1F7E1}"  // yellow circle
         case .disconnected:
-            emoji = "\u{1F534}" // red circle
+            emoji = "\u{1F534}"  // red circle
         case .exited:
-            emoji = "\u{23F9}\u{FE0F}" // stop button
+            emoji = "\u{23F9}\u{FE0F}"  // stop button
         case .authRequired:
-            emoji = "\u{1F7E1}" // yellow circle
+            emoji = "\u{1F7E1}"  // yellow circle
         }
         return "\(emoji) \(title)"
     }
@@ -464,12 +471,14 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
         Task { @MainActor [weak self] in
             guard let self = self else { return }
-            guard let hint = await self.activeAIHint.requestHint(
-                paneID: paneID,
-                exitCode: exitCode,
-                recentOutput: recentOutput,
-                aiService: aiService
-            ) else { return }
+            guard
+                let hint = await self.activeAIHint.requestHint(
+                    paneID: paneID,
+                    exitCode: exitCode,
+                    recentOutput: recentOutput,
+                    aiService: aiService
+                )
+            else { return }
 
             self.showHintToast(hint)
         }

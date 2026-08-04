@@ -1,8 +1,8 @@
 // Sources/Simpleton/AppDelegate.swift
 import AppKit
-import SwiftUI
-import SwiftTerm
 import SimpletonCore
+import SwiftTerm
+import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -48,8 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 2. Load bookmarks
         let store = BookmarkStore(directory: simpletonDir)
         Task {
-            do { try await store.load() }
-            catch { print("[Simpleton] Failed to load bookmarks: \(error)") }
+            do { try await store.load() } catch { print("[Simpleton] Failed to load bookmarks: \(error)") }
         }
         bookmarkStore = store
 
@@ -68,7 +67,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pluginManager?.pasteHandler = { [weak self] text in
             // Paste into focused terminal
             guard let sc = self?.activeSplitController,
-                  let pane = sc.panes[sc.focusedPaneID] else { return }
+                let pane = sc.panes[sc.focusedPaneID]
+            else { return }
             let bytes = Array(text.utf8)
             pane.terminalView.send(data: bytes[...])
         }
@@ -138,24 +138,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.panelRegistry = panelRegistry
 
         // Fire startup event
-        pluginManager?.fireEvent(.onStartup, context: [
-            "version": "0.1.1",
-            "configDir": simpletonDir.path
-        ])
+        pluginManager?.fireEvent(
+            .onStartup,
+            context: [
+                "version": "0.1.1",
+                "configDir": simpletonDir.path,
+            ])
 
         // 4. Initialize panels
         quickConnectPanel = QuickConnectPanel(bookmarkStore: store, config: config)
         commandPalettePanel = CommandPalettePanel()
-        preferencesController = PreferencesWindowController(config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore, panelRegistry: panelRegistry, onConfigChanged: { [weak self] newConfig in
-            self?.config = newConfig
-            self?.saveConfig(newConfig)
-            self?.updateManager?.setCheckMode(newConfig.general.checkForUpdates)
-            self?.applyConfigToAllPanes()   // re-apply appearance (font/cursor/theme) to already-open panes
-        }, onAIConfigChanged: { [weak self] newAIConfig in
-            self?.aiConfig = newAIConfig
-            self?.aiService?.updateConfig(newAIConfig)
-            self?.saveAIConfig(newAIConfig)
-        })
+        preferencesController = PreferencesWindowController(
+            config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore,
+            panelRegistry: panelRegistry,
+            onConfigChanged: { [weak self] newConfig in
+                self?.config = newConfig
+                self?.saveConfig(newConfig)
+                self?.updateManager?.setCheckMode(newConfig.general.checkForUpdates)
+                self?.applyConfigToAllPanes()  // re-apply appearance (font/cursor/theme) to already-open panes
+            },
+            onAIConfigChanged: { [weak self] newAIConfig in
+                self?.aiConfig = newAIConfig
+                self?.aiService?.updateConfig(newAIConfig)
+                self?.saveAIConfig(newAIConfig)
+            })
 
         // Coordinators — constructed before the launch sequence (restore / onboarding) below, which use them.
         terminalActions = TerminalActions(
@@ -287,7 +293,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let alert = NSAlert()
         alert.messageText = "Quit Simpleton?"
-        alert.informativeText = "There \(activeSSHCount == 1 ? "is" : "are") \(activeSSHCount) active SSH session\(activeSSHCount == 1 ? "" : "s"). Are you sure you want to quit?"
+        alert.informativeText =
+            "There \(activeSSHCount == 1 ? "is" : "are") \(activeSSHCount) active SSH session\(activeSSHCount == 1 ? "" : "s"). Are you sure you want to quit?"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Quit")
         alert.addButton(withTitle: "Cancel")
@@ -359,7 +366,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// This correctly handles native AppKit tabbing where each tab is a separate NSWindow.
     private var activeSplitController: SplitController? {
         guard let window = NSApp.keyWindow,
-              let tabContainer = window.contentViewController as? TabContainerController else {
+            let tabContainer = window.contentViewController as? TabContainerController
+        else {
             return nil
         }
         return tabContainer.splitController
@@ -386,7 +394,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func saveConfig(_ config: AppConfig) {
         let simpletonDir = AppPaths.appSupport
         do {
-            try AtomicFileWriter.writeJSON(ConfigFile(config: config), to: simpletonDir.appendingPathComponent("config.json"))
+            try AtomicFileWriter.writeJSON(
+                ConfigFile(config: config), to: simpletonDir.appendingPathComponent("config.json"))
         } catch {
             print("[Simpleton] Failed to save config: \(error)")
         }
@@ -454,36 +463,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildPaletteActions() -> [PaletteAction] {
         var actions = [
-            PaletteAction(title: "Split Right", shortcut: "⌘D", category: "Window") { [weak self] in self?.splitRight() },
-            PaletteAction(title: "Split Down", shortcut: "⌘⇧D", category: "Window") { [weak self] in self?.splitDown() },
-            PaletteAction(title: "Pick Layout", shortcut: "⌘⇧L", category: "Window") { [weak self] in self?.pickLayout() },
+            PaletteAction(title: "Split Right", shortcut: "⌘D", category: "Window") { [weak self] in self?.splitRight()
+            },
+            PaletteAction(title: "Split Down", shortcut: "⌘⇧D", category: "Window") { [weak self] in self?.splitDown()
+            },
+            PaletteAction(title: "Pick Layout", shortcut: "⌘⇧L", category: "Window") { [weak self] in self?.pickLayout()
+            },
             PaletteAction(title: "Close Pane", shortcut: "⌘W", category: "Window") { [weak self] in self?.closePane() },
             PaletteAction(title: "New Tab", shortcut: "⌘T", category: "Window") { [weak self] in self?.newTab() },
-            PaletteAction(title: "New Window", shortcut: "⌘N", category: "Window") { [weak self] in self?.createNewWindow() },
-            PaletteAction(title: "Toggle Sidebar", shortcut: "⌘⇧S", category: "View") { [weak self] in self?.toggleSidebar() },
-            PaletteAction(title: "Quick Connect", shortcut: "⌘K", category: "SSH") { [weak self] in self?.showQuickConnect() },
-            PaletteAction(title: "New Connection", shortcut: nil, category: "SSH") { [weak self] in self?.showNewConnection() },
-            PaletteAction(title: "Preferences", shortcut: "⌘,", category: "App") { [weak self] in self?.showPreferences() },
-            PaletteAction(title: "Increase Font Size", shortcut: "⌘+", category: "View") { [weak self] in self?.increaseFontSize() },
-            PaletteAction(title: "Decrease Font Size", shortcut: "⌘-", category: "View") { [weak self] in self?.decreaseFontSize() },
-            PaletteAction(title: "Reset Font Size", shortcut: "⌘0", category: "View") { [weak self] in self?.resetFontSize() },
-            PaletteAction(title: "Change Theme", shortcut: nil, category: "App") { [weak self] in self?.showThemePicker() },
-            PaletteAction(title: "AI: Chat", shortcut: "\u{2318}\u{21e7}A", category: "AI") { [weak self] in self?.toggleAIChat() },
-            PaletteAction(title: "AI: Run Skill", shortcut: "\u{2318}\u{21e7}K", category: "AI") { [weak self] in self?.showSkillPicker() },
-            PaletteAction(title: "AI: Explain Selection", shortcut: nil, category: "AI") { [weak self] in self?.explainSelection() },
-            PaletteAction(title: "AI: Explain Error", shortcut: nil, category: "AI") { [weak self] in self?.explainLastError() },
+            PaletteAction(title: "New Window", shortcut: "⌘N", category: "Window") { [weak self] in
+                self?.createNewWindow()
+            },
+            PaletteAction(title: "Toggle Sidebar", shortcut: "⌘⇧S", category: "View") { [weak self] in
+                self?.toggleSidebar()
+            },
+            PaletteAction(title: "Quick Connect", shortcut: "⌘K", category: "SSH") { [weak self] in
+                self?.showQuickConnect()
+            },
+            PaletteAction(title: "New Connection", shortcut: nil, category: "SSH") { [weak self] in
+                self?.showNewConnection()
+            },
+            PaletteAction(title: "Preferences", shortcut: "⌘,", category: "App") { [weak self] in
+                self?.showPreferences()
+            },
+            PaletteAction(title: "Increase Font Size", shortcut: "⌘+", category: "View") { [weak self] in
+                self?.increaseFontSize()
+            },
+            PaletteAction(title: "Decrease Font Size", shortcut: "⌘-", category: "View") { [weak self] in
+                self?.decreaseFontSize()
+            },
+            PaletteAction(title: "Reset Font Size", shortcut: "⌘0", category: "View") { [weak self] in
+                self?.resetFontSize()
+            },
+            PaletteAction(title: "Change Theme", shortcut: nil, category: "App") { [weak self] in
+                self?.showThemePicker()
+            },
+            PaletteAction(title: "AI: Chat", shortcut: "\u{2318}\u{21e7}A", category: "AI") { [weak self] in
+                self?.toggleAIChat()
+            },
+            PaletteAction(title: "AI: Run Skill", shortcut: "\u{2318}\u{21e7}K", category: "AI") { [weak self] in
+                self?.showSkillPicker()
+            },
+            PaletteAction(title: "AI: Explain Selection", shortcut: nil, category: "AI") { [weak self] in
+                self?.explainSelection()
+            },
+            PaletteAction(title: "AI: Explain Error", shortcut: nil, category: "AI") { [weak self] in
+                self?.explainLastError()
+            },
         ]
 
         // Plugin commands
         if let pm = pluginManager {
             for (pluginName, cmd) in pm.pluginCommands {
-                actions.append(PaletteAction(
-                    title: cmd.title,
-                    shortcut: cmd.shortcut,
-                    category: "Plugin: \(pluginName)"
-                ) { [weak self] in
-                    self?.pluginManager?.executeCommand(id: cmd.id)
-                })
+                actions.append(
+                    PaletteAction(
+                        title: cmd.title,
+                        shortcut: cmd.shortcut,
+                        category: "Plugin: \(pluginName)"
+                    ) { [weak self] in
+                        self?.pluginManager?.executeCommand(id: cmd.id)
+                    })
             }
         }
 
@@ -500,7 +539,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showThemePicker() {
         guard let window = NSApp.keyWindow,
-              let themes = pluginManager?.themeDiscovery.themes else { return }
+            let themes = pluginManager?.themeDiscovery.themes
+        else { return }
         let alert = NSAlert()
         alert.messageText = "Choose Theme"
         for theme in themes {
@@ -574,7 +614,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.endSheet(window.sheets.last ?? window)
             }
         )
-        let sheetWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        let sheetWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 600), styleMask: [.titled], backing: .buffered,
+            defer: false)
         sheetWindow.contentView = NSHostingView(rootView: formView)
         window.beginSheet(sheetWindow)
     }
@@ -617,19 +659,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func previousPrompt() {
         guard let sc = activeSplitController,
-              let pane = sc.panes[sc.focusedPaneID] else { return }
+            let pane = sc.panes[sc.focusedPaneID]
+        else { return }
         pane.navigateToPreviousPrompt()
     }
 
     @objc func nextPrompt() {
         guard let sc = activeSplitController,
-              let pane = sc.panes[sc.focusedPaneID] else { return }
+            let pane = sc.panes[sc.focusedPaneID]
+        else { return }
         pane.navigateToNextPrompt()
     }
 
     @objc func selectCommandOutput() {
         guard let sc = activeSplitController,
-              let pane = sc.panes[sc.focusedPaneID] else { return }
+            let pane = sc.panes[sc.focusedPaneID]
+        else { return }
         pane.selectCommandOutput()
     }
 
@@ -640,7 +685,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // that aren't terminal windows (e.g. floating panels).
         let candidates = [targetWindow, NSApp.keyWindow].compactMap { $0 }
         guard let window = candidates.first(where: { $0.contentViewController is TabContainerController }),
-              let tabContainer = window.contentViewController as? TabContainerController else { return }
+            let tabContainer = window.contentViewController as? TabContainerController
+        else { return }
         tabContainer.openSSHConnection(bookmark: bookmark)
     }
 

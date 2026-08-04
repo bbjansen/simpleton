@@ -158,12 +158,13 @@ final class BannerManager {
 
     private func makeBannerContainer(in hostView: NSView) -> NSVisualEffectView {
         let inset = DT.Banner.inset
-        let banner = NSVisualEffectView(frame: NSRect(
-            x: inset,
-            y: 0,
-            width: hostView.bounds.width - inset * 2,
-            height: DT.Banner.height
-        ))
+        let banner = NSVisualEffectView(
+            frame: NSRect(
+                x: inset,
+                y: 0,
+                width: hostView.bounds.width - inset * 2,
+                height: DT.Banner.height
+            ))
         banner.material = .hudWindow
         banner.blendingMode = .behindWindow
         banner.state = .active

@@ -4,7 +4,7 @@ import Foundation
 public struct Snippet: Codable, Identifiable {
     public var id: UUID
     public var name: String
-    public var command: String     // may contain {placeholder} tokens
+    public var command: String  // may contain {placeholder} tokens
     public var tags: [String]
 
     public init(id: UUID = UUID(), name: String, command: String, tags: [String] = []) {

@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Models/FrecencyEntryTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class FrecencyEntryTests: XCTestCase {
@@ -19,7 +20,9 @@ final class FrecencyEntryTests: XCTestCase {
 
     func testFrecencyFileRoundTrip() throws {
         let id = UUID()
-        let file = FrecencyFile(entries: [id: FrecencyEntry(score: 100, lastUsed: Date(), useCount: 5, recentTimestamps: [])])
+        let file = FrecencyFile(entries: [
+            id: FrecencyEntry(score: 100, lastUsed: Date(), useCount: 5, recentTimestamps: [])
+        ])
         let data = try JSONEncoder().encode(file)
         let decoded = try JSONDecoder().decode(FrecencyFile.self, from: data)
         XCTAssertEqual(decoded.version, 1)

@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Panels/HistoryPanelView.swift
 import SwiftUI
-import AppKit
 
 struct HistoryPanelView: View {
     let shellProvider: () -> String
@@ -49,7 +49,8 @@ struct HistoryPanelView: View {
             historyURL = home.appendingPathComponent(".bash_history")
         }
         guard let data = try? Data(contentsOf: historyURL),
-              let raw = String(data: data, encoding: .utf8) else { return }
+            let raw = String(data: data, encoding: .utf8)
+        else { return }
         let lines = raw.components(separatedBy: "\n")
             .compactMap { line -> String? in
                 let stripped: String

@@ -1,12 +1,12 @@
+import AppKit
 // Sources/Simpleton/AI/AgentSession.swift
 import Foundation
-import AppKit
 import SimpletonCore
 
 enum AutopilotMode: String, Codable {
-    case off       // approve every command
-    case safe      // auto-approve read-only commands, prompt for writes
-    case full      // approve everything (current autopilot=true)
+    case off  // approve every command
+    case safe  // auto-approve read-only commands, prompt for writes
+    case full  // approve everything (current autopilot=true)
 }
 
 @MainActor
@@ -50,7 +50,10 @@ final class AgentSession: ObservableObject {
     var maxTurns = 25
     private var warningTurn: Int { max(maxTurns - 10, 10) }
 
-    init(aiService: AIService, memoryStore: MemoryStore? = nil, skillStore: SkillStore? = nil, eventBus: WorkspaceEventBus? = nil, mcpClients: [MCPClient] = []) {
+    init(
+        aiService: AIService, memoryStore: MemoryStore? = nil, skillStore: SkillStore? = nil,
+        eventBus: WorkspaceEventBus? = nil, mcpClients: [MCPClient] = []
+    ) {
         self.aiService = aiService
         self.memoryStore = memoryStore
         self.skillStore = skillStore
@@ -105,7 +108,12 @@ final class AgentSession: ObservableObject {
         while !isCancelled {
             turnCount += 1
             if turnCount > maxTurns {
-                onMessage?(ChatMessage(role: "assistant", content: "Reached the maximum number of steps (\(maxTurns)). Stopping to avoid runaway execution. Here's what was accomplished so far."))
+                onMessage?(
+                    ChatMessage(
+                        role: "assistant",
+                        content:
+                            "Reached the maximum number of steps (\(maxTurns)). Stopping to avoid runaway execution. Here's what was accomplished so far."
+                    ))
                 state = .done
                 onComplete?()
                 return
@@ -115,7 +123,8 @@ final class AgentSession: ObservableObject {
             var turnOptions = AIOptions(maxTokens: 4000, temperature: 0.3)
             var effectiveSystem = systemPrompt
             if turnCount == warningTurn {
-                effectiveSystem += "\n\n[SYSTEM NOTE: You are approaching the step limit (\(maxTurns)). Start wrapping up — finish the current task and provide a summary.]"
+                effectiveSystem +=
+                    "\n\n[SYSTEM NOTE: You are approaching the step limit (\(maxTurns)). Start wrapping up — finish the current task and provide a summary.]"
             }
 
             state = .streaming
@@ -166,7 +175,8 @@ final class AgentSession: ObservableObject {
                         lastErrorOutput = output
                     } else if lastErrorOutput != nil {
                         // Transition from failure → success: hint the agent to save the fix
-                        let hint = "[SYSTEM NOTE: You just fixed an error. The original error was from command '\(lastErrorCmd ?? "unknown")'. Consider saving this fix to memory using save_memory with type \"errorFix\" so it can help in future sessions.]"
+                        let hint =
+                            "[SYSTEM NOTE: You just fixed an error. The original error was from command '\(lastErrorCmd ?? "unknown")'. Consider saving this fix to memory using save_memory with type \"errorFix\" so it can help in future sessions.]"
                         turns.append(.user(hint))
                         lastErrorCmd = nil
                         lastErrorOutput = nil
@@ -177,7 +187,9 @@ final class AgentSession: ObservableObject {
             return result
         }
 
-        let context = ToolContext(conversation: conversation, focusedPane: focusedPane, processRunner: processRunner, memoryStore: memoryStore, skillStore: skillStore)
+        let context = ToolContext(
+            conversation: conversation, focusedPane: focusedPane, processRunner: processRunner,
+            memoryStore: memoryStore, skillStore: skillStore)
         if let handler = toolRegistry.handler(for: name) {
             let output = await handler.handle(name: name, args: args, context: context)
             turns.append(.toolResult(toolCallID: id, output: output))
@@ -190,9 +202,13 @@ final class AgentSession: ObservableObject {
 
     // MARK: - Skill Execution (Multi-Pane)
 
-    func run(skill: Skill, params: [String: String], conversation: TabConversation, focusedPane: PaneController, autopilotMode: AutopilotMode) async {
+    func run(
+        skill: Skill, params: [String: String], conversation: TabConversation, focusedPane: PaneController,
+        autopilotMode: AutopilotMode
+    ) async {
         isCancelled = false
-        let system = promptBuilder.buildSystemPrompt(skill: skill, params: params, conversation: conversation, focusedPane: focusedPane)
+        let system = promptBuilder.buildSystemPrompt(
+            skill: skill, params: params, conversation: conversation, focusedPane: focusedPane)
         let initialMessage = "Run the \(skill.name) skill.\(promptBuilder.buildParamSummary(params: params))"
         var turns: [ConversationTurn] = [.user(initialMessage)]
 
@@ -249,10 +265,14 @@ final class AgentSession: ObservableObject {
                     }
                     let explanation = args["explanation"] as? String ?? ""
                     if autopilotMode == .full {
-                        await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: pane, paneLabel: "focused pane", wasFallback: false, turns: &turns)
+                        await executeCommand(
+                            cmd, toolCallID: id, explanation: explanation, pane: pane, paneLabel: "focused pane",
+                            wasFallback: false, turns: &turns)
                     } else {
-                        state = .waitingApproval(cmd: cmd, explanation: explanation, toolCallID: id, paneLabel: "focused pane")
-                        let (action, _) = await withCheckedContinuation { (continuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>) in
+                        state = .waitingApproval(
+                            cmd: cmd, explanation: explanation, toolCallID: id, paneLabel: "focused pane")
+                        let (action, _) = await withCheckedContinuation {
+                            (continuation: CheckedContinuation<(ApprovalAction, PaneID?), Never>) in
                             pendingApprovalContinuation = continuation
                             onApprovalNeeded?(cmd, explanation, "focused pane") { [weak self] action, _ in
                                 self?.pendingApprovalContinuation?.resume(returning: (action, nil))
@@ -261,7 +281,9 @@ final class AgentSession: ObservableObject {
                         }
                         switch action {
                         case .allow:
-                            await executeCommand(cmd, toolCallID: id, explanation: explanation, pane: pane, paneLabel: "focused pane", wasFallback: false, turns: &turns)
+                            await executeCommand(
+                                cmd, toolCallID: id, explanation: explanation, pane: pane, paneLabel: "focused pane",
+                                wasFallback: false, turns: &turns)
                         case .skip:
                             turns.append(.toolResult(toolCallID: id, output: "[Command skipped by user]"))
                         case .stop:

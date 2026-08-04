@@ -21,7 +21,10 @@ final class WatchSession: ObservableObject {
     private var lastSeenExitCode: Int32? = nil
     private var isPaused = false
 
-    init(pane: PaneController, triggers: [TriggerType], aiService: AIService, memoryStore: MemoryStore? = nil, onEvent: @escaping (String) -> Void) {
+    init(
+        pane: PaneController, triggers: [TriggerType], aiService: AIService, memoryStore: MemoryStore? = nil,
+        onEvent: @escaping (String) -> Void
+    ) {
         self.pane = pane
         self.triggers = triggers
         self.aiService = aiService
@@ -85,9 +88,10 @@ final class WatchSession: ObservableObject {
         switch trigger {
         case .exitCodeNonZero:
             if let lastRegion = pane.promptTracker.regions.last,
-               let exitCode = lastRegion.exitCode,
-               exitCode != 0,
-               exitCode != lastSeenExitCode {
+                let exitCode = lastRegion.exitCode,
+                exitCode != 0,
+                exitCode != lastSeenExitCode
+            {
                 lastSeenExitCode = exitCode
                 return .exitCode(exitCode)
             }

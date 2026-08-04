@@ -1,7 +1,7 @@
 // Sources/Simpleton/Panels/BuiltInPanels.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 extension PanelDefinition {
 
@@ -69,11 +69,12 @@ extension PanelDefinition {
         defaultSide: .right,
         isBuiltIn: true
     ) { context in
-        NSHostingController(rootView: SkillsPanelView(
-            skillStore: context.skillStore,
-            aiService: context.aiService,
-            currentPaneProvider: context.currentPane
-        ))
+        NSHostingController(
+            rootView: SkillsPanelView(
+                skillStore: context.skillStore,
+                aiService: context.aiService,
+                currentPaneProvider: context.currentPane
+            ))
     }
 
     static let notes = PanelDefinition(
@@ -84,10 +85,11 @@ extension PanelDefinition {
         defaultSide: .left,
         isBuiltIn: true
     ) { context in
-        NSHostingController(rootView: NotesPanelView(
-            appSupportDir: context.appSupportDir,
-            currentPaneProvider: context.currentPane
-        ))
+        NSHostingController(
+            rootView: NotesPanelView(
+                appSupportDir: context.appSupportDir,
+                currentPaneProvider: context.currentPane
+            ))
     }
 
     static let snippets = PanelDefinition(
@@ -98,10 +100,11 @@ extension PanelDefinition {
         defaultSide: .left,
         isBuiltIn: true
     ) { context in
-        NSHostingController(rootView: SnippetsPanelView(
-            appSupportDir: context.appSupportDir,
-            onInsert: context.onInsertCommand
-        ))
+        NSHostingController(
+            rootView: SnippetsPanelView(
+                appSupportDir: context.appSupportDir,
+                onInsert: context.onInsertCommand
+            ))
     }
 
     static let history = PanelDefinition(
@@ -112,10 +115,11 @@ extension PanelDefinition {
         defaultSide: .left,
         isBuiltIn: true
     ) { context in
-        NSHostingController(rootView: HistoryPanelView(
-            shellProvider: { context.appConfig().general.shell },
-            onInsert: context.onInsertCommand
-        ))
+        NSHostingController(
+            rootView: HistoryPanelView(
+                shellProvider: { context.appConfig().general.shell },
+                onInsert: context.onInsertCommand
+            ))
     }
 
     static let environment = PanelDefinition(
@@ -126,10 +130,11 @@ extension PanelDefinition {
         defaultSide: .left,
         isBuiltIn: true
     ) { context in
-        NSHostingController(rootView: EnvironmentPanelView(
-            shellProvider: { context.appConfig().general.shell },
-            currentPaneProvider: context.currentPane
-        ))
+        NSHostingController(
+            rootView: EnvironmentPanelView(
+                shellProvider: { context.appConfig().general.shell },
+                currentPaneProvider: context.currentPane
+            ))
     }
 
     static let fileBrowser = PanelDefinition(
@@ -140,10 +145,11 @@ extension PanelDefinition {
         defaultSide: .left,
         isBuiltIn: true
     ) { context in
-        NSHostingController(rootView: FileBrowserPanelView(
-            onInsert: context.onInsertCommand,
-            currentPaneProvider: context.currentPane
-        ))
+        NSHostingController(
+            rootView: FileBrowserPanelView(
+                onInsert: context.onInsertCommand,
+                currentPaneProvider: context.currentPane
+            ))
     }
 
     static let processes = PanelDefinition(
@@ -165,10 +171,11 @@ extension PanelDefinition {
         defaultSide: .left,
         isBuiltIn: true
     ) { context in
-        NSHostingController(rootView: SSHTunnelsPanelView(
-            tabContainerProvider: context.tabContainer,
-            bookmarkStore: context.bookmarkStore
-        ))
+        NSHostingController(
+            rootView: SSHTunnelsPanelView(
+                tabContainerProvider: context.tabContainer,
+                bookmarkStore: context.bookmarkStore
+            ))
     }
 
     static let git = PanelDefinition(
@@ -179,9 +186,10 @@ extension PanelDefinition {
         defaultSide: .left,
         isBuiltIn: true
     ) { context in
-        NSHostingController(rootView: GitPanelView(
-            currentPaneProvider: context.currentPane
-        ))
+        NSHostingController(
+            rootView: GitPanelView(
+                currentPaneProvider: context.currentPane
+            ))
     }
 
     static let docker = PanelDefinition(

@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Core/FieldValidatorTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class FieldValidatorTests: XCTestCase {

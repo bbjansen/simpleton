@@ -1,7 +1,7 @@
 // Sources/Simpleton/ThemeApplier.swift
 import AppKit
-import SwiftTerm
 import SimpletonCore
+import SwiftTerm
 
 enum ThemeApplier {
 
@@ -13,7 +13,8 @@ enum ThemeApplier {
         if let font = NSFont(name: config.appearance.fontFamily, size: CGFloat(config.appearance.fontSize)) {
             terminalView.font = font
         } else {
-            terminalView.font = NSFont.monospacedSystemFont(ofSize: CGFloat(config.appearance.fontSize), weight: .regular)
+            terminalView.font = NSFont.monospacedSystemFont(
+                ofSize: CGFloat(config.appearance.fontSize), weight: .regular)
         }
 
         // Core colors
@@ -39,7 +40,8 @@ enum ThemeApplier {
         ]
         let palette = ansiHexes.compactMap { hex -> Color? in
             guard let nsColor = NSColor(hex: hex),
-                  let rgb = nsColor.usingColorSpace(.deviceRGB) else { return nil }
+                let rgb = nsColor.usingColorSpace(.deviceRGB)
+            else { return nil }
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             rgb.getRed(&r, green: &g, blue: &b, alpha: &a)
             return Color(red: UInt16(r * 65535), green: UInt16(g * 65535), blue: UInt16(b * 65535))

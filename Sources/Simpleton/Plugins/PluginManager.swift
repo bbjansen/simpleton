@@ -16,7 +16,7 @@ enum PluginEvent: String {
 /// Central plugin coordinator — discovers, loads, and manages all plugins.
 final class PluginManager {
 
-    private let baseDirectory: URL // ~/Library/Application Support/Simpleton/
+    private let baseDirectory: URL  // ~/Library/Application Support/Simpleton/
     private let runner = ScriptPluginRunner()
     private let actionHandler = ScriptActionHandler()
 
@@ -123,16 +123,19 @@ final class PluginManager {
         let scriptsDir = baseDirectory.appendingPathComponent("scripts")
         try? FileManager.default.createDirectory(at: scriptsDir, withIntermediateDirectories: true)
 
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: scriptsDir,
-            includingPropertiesForKeys: [.isDirectoryKey]
-        ) else {
+        guard
+            let contents = try? FileManager.default.contentsOfDirectory(
+                at: scriptsDir,
+                includingPropertiesForKeys: [.isDirectoryKey]
+            )
+        else {
             scriptPlugins = []
             return
         }
 
         let states = Self.persistedEnabledStates()
-        scriptPlugins = contents
+        scriptPlugins =
+            contents
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .compactMap { ScriptPlugin.load(from: $0) }
             .map { plugin in

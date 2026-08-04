@@ -57,7 +57,9 @@ struct ChatHeaderView: View {
                 Button("Enable", role: .destructive) { autopilotMode = .safe }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Safe mode auto-approves read-only commands (ls, cat, grep, git status, etc.). Destructive commands still require your approval. Tap again to switch to full autopilot.")
+                Text(
+                    "Safe mode auto-approves read-only commands (ls, cat, grep, git status, etc.). Destructive commands still require your approval. Tap again to switch to full autopilot."
+                )
             }
 
             if let dismiss = onDismiss {

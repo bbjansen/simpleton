@@ -19,7 +19,8 @@ enum AppTranslocationCheck {
 
         let alert = NSAlert()
         alert.messageText = "Move Simpleton to Applications"
-        alert.informativeText = "Simpleton is running from a temporary location (Downloads or quarantined path). Move it to /Applications for proper operation and automatic updates."
+        alert.informativeText =
+            "Simpleton is running from a temporary location (Downloads or quarantined path). Move it to /Applications for proper operation and automatic updates."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open Finder")
         alert.addButton(withTitle: "Later")

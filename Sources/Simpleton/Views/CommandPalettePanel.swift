@@ -1,7 +1,7 @@
 // Sources/Simpleton/Views/CommandPalettePanel.swift
 import AppKit
-import SwiftUI
 import SimpletonCore
+import SwiftUI
 
 struct PaletteAction: Identifiable {
     let id = UUID()
@@ -165,14 +165,15 @@ struct CommandPaletteContentView: View {
         }
         .onChange(of: query) { selectedIndex = 0 }
         .onExitCommand { onDismiss() }
-        .background(KeyEventHandler(
-            onUpArrow: {
-                if selectedIndex > 0 { selectedIndex -= 1 }
-            },
-            onDownArrow: {
-                if selectedIndex < filtered.count - 1 { selectedIndex += 1 }
-            }
-        ))
+        .background(
+            KeyEventHandler(
+                onUpArrow: {
+                    if selectedIndex > 0 { selectedIndex -= 1 }
+                },
+                onDownArrow: {
+                    if selectedIndex < filtered.count - 1 { selectedIndex += 1 }
+                }
+            ))
     }
 
     private func footerHint(keys: String, label: String) -> some View {

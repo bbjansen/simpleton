@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Models/SplitNodeTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class SplitNodeTests: XCTestCase {
@@ -29,7 +30,8 @@ final class SplitNodeTests: XCTestCase {
     }
 
     func testNestedSplitRoundTrip() throws {
-        let inner = SplitNode.split(direction: .horizontal, children: [.pane(UUID()), .pane(UUID())], ratios: [0.6, 0.4])
+        let inner = SplitNode.split(
+            direction: .horizontal, children: [.pane(UUID()), .pane(UUID())], ratios: [0.6, 0.4])
         let outer = SplitNode.split(direction: .vertical, children: [.pane(UUID()), inner], ratios: [0.5, 0.5])
 
         let data = try JSONEncoder().encode(outer)
@@ -39,15 +41,21 @@ final class SplitNodeTests: XCTestCase {
             if case .split(let dir, let innerChildren, _) = children[1] {
                 XCTAssertEqual(dir, .horizontal)
                 XCTAssertEqual(innerChildren.count, 2)
-            } else { XCTFail("Expected nested .split") }
-        } else { XCTFail("Expected .split") }
+            } else {
+                XCTFail("Expected nested .split")
+            }
+        } else {
+            XCTFail("Expected .split")
+        }
     }
 
     func testAllPaneIDs() {
         let id1 = UUID(), id2 = UUID(), id3 = UUID()
         let tree = SplitNode.split(
             direction: .vertical,
-            children: [.pane(id1), .split(direction: .horizontal, children: [.pane(id2), .pane(id3)], ratios: [0.5, 0.5])],
+            children: [
+                .pane(id1), .split(direction: .horizontal, children: [.pane(id2), .pane(id3)], ratios: [0.5, 0.5]),
+            ],
             ratios: [0.5, 0.5]
         )
         let ids = tree.allPaneIDs

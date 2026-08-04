@@ -45,7 +45,7 @@ final class SSHConfigWatcher {
             &context,
             pathsToWatch,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            1.0, // 1 second latency (batches rapid changes)
+            1.0,  // 1 second latency (batches rapid changes)
             FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
         )
 

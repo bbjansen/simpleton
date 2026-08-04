@@ -1,8 +1,8 @@
 // Sources/Simpleton/TabContainerController.swift
 import AppKit
-import SwiftUI
 import Combine
 import SimpletonCore
+import SwiftUI
 
 /// View controller for one tab's content. Owns a SplitController and manages
 /// creating new panes when splits are requested.
@@ -98,8 +98,9 @@ final class TabContainerController: NSViewController {
             forName: .simpletonPaneCloseRequested, object: nil, queue: .main
         ) { [weak self] notification in
             guard let paneID = notification.object as? PaneID,
-                  let self = self,
-                  self.splitController.panes[paneID] != nil else { return }
+                let self = self,
+                self.splitController.panes[paneID] != nil
+            else { return }
             self.splitController.closePane(paneID)
         }
 
@@ -107,7 +108,8 @@ final class TabContainerController: NSViewController {
             forName: .simpletonShowSearch, object: nil, queue: .main
         ) { [weak self] _ in
             guard let self = self,
-                  let pane = self.splitController.panes[self.splitController.focusedPaneID] else { return }
+                let pane = self.splitController.panes[self.splitController.focusedPaneID]
+            else { return }
             pane.showSearch()
         }
 
@@ -136,8 +138,9 @@ final class TabContainerController: NSViewController {
             forName: .simpletonRunSkillPicker, object: nil, queue: .main
         ) { [weak self] notification in
             guard let self = self,
-                  let registry = self.panelRegistry,
-                  self.view.window?.isKeyWindow == true else { return }
+                let registry = self.panelRegistry,
+                self.view.window?.isKeyWindow == true
+            else { return }
             // Update aiService if passed via notification (legacy path)
             if let svc = notification.object as? AIService { self.aiService = svc }
             var profile = registry.activeProfile
@@ -167,18 +170,22 @@ final class TabContainerController: NSViewController {
         }
 
         DispatchQueue.main.async { [weak self] in
-            self?.pluginManager?.fireEvent(.onTabOpen, context: [
-                "tabId": UUID().uuidString,
-                "windowId": self?.view.window?.windowNumber ?? 0,
-            ])
+            self?.pluginManager?.fireEvent(
+                .onTabOpen,
+                context: [
+                    "tabId": UUID().uuidString,
+                    "windowId": self?.view.window?.windowNumber ?? 0,
+                ])
         }
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     deinit {
-        [closeObserver, searchObserver, sidebarShimObserver,
-         aiChatShimObserver, skillPickerShimObserver].forEach {
+        [
+            closeObserver, searchObserver, sidebarShimObserver,
+            aiChatShimObserver, skillPickerShimObserver,
+        ].forEach {
             if let obs = $0 { NotificationCenter.default.removeObserver(obs) }
         }
     }
@@ -227,22 +234,24 @@ final class TabContainerController: NSViewController {
     private func mountActivityBars(in container: NSView, registry: PanelRegistry) {
         guard let split = contentSplit else { return }
 
-        let leftBar = NSHostingView(rootView: ActivityBarView(
-            side: .left,
-            registry: registry,
-            onOpenSettings: {
-                NotificationCenter.default.post(name: .simpletonShowPreferences, object: nil)
-            }
-        ))
+        let leftBar = NSHostingView(
+            rootView: ActivityBarView(
+                side: .left,
+                registry: registry,
+                onOpenSettings: {
+                    NotificationCenter.default.post(name: .simpletonShowPreferences, object: nil)
+                }
+            ))
         leftBar.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(leftBar)
         leftBarHost = leftBar
 
-        let rightBar = NSHostingView(rootView: ActivityBarView(
-            side: .right,
-            registry: registry,
-            onOpenSettings: nil
-        ))
+        let rightBar = NSHostingView(
+            rootView: ActivityBarView(
+                side: .right,
+                registry: registry,
+                onOpenSettings: nil
+            ))
         rightBar.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(rightBar)
         rightBarHost = rightBar
@@ -277,8 +286,8 @@ final class TabContainerController: NSViewController {
         // Remove old split-to-container constraints before remounting
         if let split = contentSplit {
             let old = container.constraints.filter {
-                ($0.firstItem as? NSView == split || $0.secondItem as? NSView == split) &&
-                ($0.firstItem as? NSView == container || $0.secondItem as? NSView == container)
+                ($0.firstItem as? NSView == split || $0.secondItem as? NSView == split)
+                    && ($0.firstItem as? NSView == container || $0.secondItem as? NSView == container)
             }
             NSLayoutConstraint.deactivate(old)
         }
@@ -321,7 +330,8 @@ final class TabContainerController: NSViewController {
 
         // ── 2. Insert left panel at index 0 (before terminal) ──
         if let id = profile.leftActivePanelID,
-           let vc = panelRegistry?.makeController(for: id, context: makeContext()) {
+            let vc = panelRegistry?.makeController(for: id, context: makeContext())
+        {
             addChild(vc)
             vc.view.frame = NSRect(x: 0, y: 0, width: profile.leftWidth, height: split.bounds.height)
             split.insertArrangedSubview(vc.view, at: 0)
@@ -331,7 +341,8 @@ final class TabContainerController: NSViewController {
 
         // ── 3. Append right panel at end (after terminal) ──────
         if let id = profile.rightActivePanelID,
-           let vc = panelRegistry?.makeController(for: id, context: makeContext()) {
+            let vc = panelRegistry?.makeController(for: id, context: makeContext())
+        {
             addChild(vc)
             vc.view.frame = NSRect(x: 0, y: 0, width: profile.rightWidth, height: split.bounds.height)
             split.addArrangedSubview(vc.view)
@@ -388,7 +399,8 @@ final class TabContainerController: NSViewController {
             },
             onInsertCommand: { [weak self] cmd in
                 guard let tc = self?.activePanelContainer,
-                      let pane = tc.splitController.panes[tc.splitController.focusedPaneID] else { return }
+                    let pane = tc.splitController.panes[tc.splitController.focusedPaneID]
+                else { return }
                 let bytes = Array(cmd.utf8)
                 pane.terminalView.send(data: bytes[...])
             },

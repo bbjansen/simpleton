@@ -1,7 +1,7 @@
 // Sources/Simpleton/UpdateManager.swift
 import Foundation
-import Sparkle
 import SimpletonCore
+import Sparkle
 
 final class UpdateManager {
     private let updaterController: SPUStandardUpdaterController

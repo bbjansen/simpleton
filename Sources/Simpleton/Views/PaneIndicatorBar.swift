@@ -1,6 +1,6 @@
+import SimpletonCore
 // Sources/Simpleton/Views/PaneIndicatorBar.swift
 import SwiftUI
-import SimpletonCore
 
 struct PaneIndicatorBar: View {
     @ObservedObject var conversation: TabConversation
@@ -22,7 +22,10 @@ struct PaneIndicatorBar: View {
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(conversation.targetPaneID == paneID ? Color.accentColor.opacity(0.2) : Color(nsColor: NSColor(white: 0.12, alpha: 1)))
+                        .background(
+                            conversation.targetPaneID == paneID
+                                ? Color.accentColor.opacity(0.2) : Color(nsColor: NSColor(white: 0.12, alpha: 1))
+                        )
                         .cornerRadius(4)
                     }
                     .buttonStyle(.plain)

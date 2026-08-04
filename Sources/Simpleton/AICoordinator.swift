@@ -1,7 +1,7 @@
 // Sources/Simpleton/AICoordinator.swift
 import AppKit
-import SwiftTerm
 import SimpletonCore
+import SwiftTerm
 
 final class AICoordinator {
 
@@ -33,8 +33,9 @@ final class AICoordinator {
 
     func explainSelection() {
         guard let ai = aiService(), ai.isEnabled,
-              let sc = activeSplitController(),
-              let pane = sc.panes[sc.focusedPaneID] else { return }
+            let sc = activeSplitController(),
+            let pane = sc.panes[sc.focusedPaneID]
+        else { return }
 
         let selected = pane.terminalView.getSelection() ?? ""
         guard !selected.isEmpty else { return }
@@ -50,8 +51,9 @@ final class AICoordinator {
 
     func explainLastError() {
         guard let ai = aiService(), ai.isEnabled,
-              let sc = activeSplitController(),
-              let pane = sc.panes[sc.focusedPaneID] else { return }
+            let sc = activeSplitController(),
+            let pane = sc.panes[sc.focusedPaneID]
+        else { return }
 
         let context = AIContextBuilder.build(terminalView: pane.terminalView, recentOutputLines: 50)
         let output = context.recentOutput ?? "(no output captured)"
@@ -70,7 +72,8 @@ final class AICoordinator {
 
         for wc in windowControllers() {
             guard let tabContainer = wc.window?.contentViewController as? TabContainerController,
-                  let pane = tabContainer.splitController.panes[paneID] else { continue }
+                let pane = tabContainer.splitController.panes[paneID]
+            else { continue }
 
             let context = AIContextBuilder.build(terminalView: pane.terminalView, recentOutputLines: 50)
             let output = context.recentOutput ?? "(no output captured)"

@@ -1,5 +1,6 @@
 // Tests/SimpletonCoreTests/Core/FuzzyMatcherTests.swift
 import XCTest
+
 @testable import SimpletonCore
 
 final class FuzzyMatcherTests: XCTestCase {
@@ -40,6 +41,6 @@ final class FuzzyMatcherTests: XCTestCase {
 
     func testEmptyQuery() {
         let result = FuzzyMatcher.score(query: "", candidate: "anything")
-        XCTAssertNotNil(result) // empty query matches everything
+        XCTAssertNotNil(result)  // empty query matches everything
     }
 }

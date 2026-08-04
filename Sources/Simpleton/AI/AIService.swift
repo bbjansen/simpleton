@@ -32,7 +32,8 @@ extension AgentTurnResult {
     /// Convenience for the common run_command case
     var asRunCommand: (id: String, cmd: String, explanation: String)? {
         guard case .toolCall(let id, let name, let args) = self, name == "run_command",
-              let cmd = args["cmd"] as? String else { return nil }
+            let cmd = args["cmd"] as? String
+        else { return nil }
         return (id, cmd, args["explanation"] as? String ?? "")
     }
 }
@@ -94,9 +95,11 @@ final class AIService {
                 }
             }
             let combined = messages.joined(separator: "\n\n")
-            let text = try await provider.complete(system: system, user: combined, model: config.model, options: options)
+            let text = try await provider.complete(
+                system: system, user: combined, model: config.model, options: options)
             if let cmd = parseFencedRunBlock(from: text) {
-                return .toolCall(id: UUID().uuidString, name: "run_command", arguments: ["cmd": cmd, "explanation": ""])
+                return .toolCall(
+                    id: UUID().uuidString, name: "run_command", arguments: ["cmd": cmd, "explanation": ""])
             }
             return .text(text)
         }
@@ -104,7 +107,8 @@ final class AIService {
 
     private func parseFencedRunBlock(from text: String) -> String? {
         guard let start = text.range(of: "```run\n"),
-              let end = text.range(of: "\n```", range: start.upperBound..<text.endIndex) else { return nil }
+            let end = text.range(of: "\n```", range: start.upperBound..<text.endIndex)
+        else { return nil }
         return String(text[start.upperBound..<end.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -148,7 +152,9 @@ enum AIError: Error, LocalizedError {
 protocol AIProviderProtocol {
     func complete(system: String, user: String, model: String, options: AIOptions) async throws -> String
     func stream(system: String, user: String, model: String, options: AIOptions) -> AsyncThrowingStream<String, Error>
-    func completeWithTools(system: String, turns: [ConversationTurn], model: String, options: AIOptions) async throws -> AgentTurnResult
+    func completeWithTools(
+        system: String, turns: [ConversationTurn], model: String, options: AIOptions
+    ) async throws -> AgentTurnResult
 }
 
 extension AIProviderProtocol {

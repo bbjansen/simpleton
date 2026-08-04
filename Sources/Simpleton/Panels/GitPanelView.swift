@@ -1,6 +1,6 @@
+import AppKit
 // Sources/Simpleton/Panels/GitPanelView.swift
 import SwiftUI
-import AppKit
 
 struct GitStatus {
     var branch: String = ""
@@ -130,12 +130,13 @@ struct GitPanelView: View {
         }.count
         let logResult = await runCommand(gitPath, args: ["log", "--oneline", "-10"], cwd: cwd)
         let commits = logResult.output.components(separatedBy: "\n").filter { !$0.isEmpty }
-        return .loaded(GitStatus(
-            branch: branch.isEmpty ? "HEAD" : branch,
-            stagedCount: staged,
-            unstagedCount: unstaged,
-            commits: commits
-        ))
+        return .loaded(
+            GitStatus(
+                branch: branch.isEmpty ? "HEAD" : branch,
+                stagedCount: staged,
+                unstagedCount: unstaged,
+                commits: commits
+            ))
     }
 
     private func findGit() -> String? {
@@ -145,7 +146,9 @@ struct GitPanelView: View {
         return nil
     }
 
-    private func runCommand(_ executable: String, args: [String], cwd: String) async -> (output: String, exitCode: Int32) {
+    private func runCommand(
+        _ executable: String, args: [String], cwd: String
+    ) async -> (output: String, exitCode: Int32) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = args

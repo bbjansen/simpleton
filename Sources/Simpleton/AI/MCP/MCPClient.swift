@@ -72,14 +72,16 @@ final class MCPClient {
         process = proc
 
         // 1. Send initialize
-        let initResult = try await sendRequest(method: "initialize", params: [
-            "protocolVersion": "2024-11-05",
-            "capabilities": [String: Any](),
-            "clientInfo": [
-                "name": "Simpleton",
-                "version": "1.0.0"
-            ]
-        ])
+        let initResult = try await sendRequest(
+            method: "initialize",
+            params: [
+                "protocolVersion": "2024-11-05",
+                "capabilities": [String: Any](),
+                "clientInfo": [
+                    "name": "Simpleton",
+                    "version": "1.0.0",
+                ],
+            ])
 
         guard initResult["protocolVersion"] != nil else {
             disconnect()
@@ -111,10 +113,12 @@ final class MCPClient {
             throw MCPError.notConnected(config.name)
         }
 
-        let result = try await sendRequest(method: "tools/call", params: [
-            "name": name,
-            "arguments": arguments
-        ], timeout: 10.0)
+        let result = try await sendRequest(
+            method: "tools/call",
+            params: [
+                "name": name,
+                "arguments": arguments,
+            ], timeout: 10.0)
 
         // MCP tool results have a "content" array with text blocks
         if let content = result["content"] as? [[String: Any]] {
@@ -127,7 +131,8 @@ final class MCPClient {
 
         // Fallback: return the raw result as JSON string
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.fragmentsAllowed]),
-           let str = String(data: data, encoding: .utf8) {
+            let str = String(data: data, encoding: .utf8)
+        {
             return str
         }
 
@@ -153,7 +158,9 @@ final class MCPClient {
 
     // MARK: - JSON-RPC Transport
 
-    private func sendRequest(method: String, params: [String: Any], timeout: TimeInterval = 10.0) async throws -> [String: Any] {
+    private func sendRequest(
+        method: String, params: [String: Any], timeout: TimeInterval = 10.0
+    ) async throws -> [String: Any] {
         let id: Int = ioQueue.sync {
             requestID += 1
             return requestID
@@ -163,7 +170,7 @@ final class MCPClient {
             "jsonrpc": "2.0",
             "id": id,
             "method": method,
-            "params": params
+            "params": params,
         ]
 
         try ioQueue.sync { try writeMessage(message) }
@@ -189,11 +196,12 @@ final class MCPClient {
         let message: [String: Any] = [
             "jsonrpc": "2.0",
             "method": method,
-            "params": params
+            "params": params,
         ]
         ioQueue.sync {
-            do { try writeMessage(message) }
-            catch { print("[MCP] Failed to send notification '\(method)' to \(config.name): \(error)") }
+            do { try writeMessage(message) } catch {
+                print("[MCP] Failed to send notification '\(method)' to \(config.name): \(error)")
+            }
         }
     }
 
@@ -203,7 +211,7 @@ final class MCPClient {
         }
         let data = try JSONSerialization.data(withJSONObject: message, options: [])
         var payload = data
-        payload.append(contentsOf: [0x0A]) // newline delimiter
+        payload.append(contentsOf: [0x0A])  // newline delimiter
         handle.write(payload)
     }
 
@@ -213,8 +221,9 @@ final class MCPClient {
 
             if let line = ioQueue.sync(execute: { readLine() }) {
                 guard let data = line.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                    continue // skip malformed lines
+                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else {
+                    continue  // skip malformed lines
                 }
 
                 // Check if this is a response to our request
@@ -232,7 +241,7 @@ final class MCPClient {
                 // Not our response — could be a notification; skip it
             } else {
                 // No complete line available yet, yield and retry
-                try await Task.sleep(nanoseconds: 10_000_000) // 10ms
+                try await Task.sleep(nanoseconds: 10_000_000)  // 10ms
             }
         }
     }

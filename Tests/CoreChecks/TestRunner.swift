@@ -36,9 +36,10 @@ final class TestRunner {
 
     /// Record an equality expectation with a helpful diff message.
     func expectEqual<T: Equatable>(_ actual: T, _ expected: T, _ label: String = "", line: Int = #line) {
-        expect(actual == expected,
-               "\(label.isEmpty ? "" : label + ": ")expected \(expected), got \(actual)",
-               line: line)
+        expect(
+            actual == expected,
+            "\(label.isEmpty ? "" : label + ": ")expected \(expected), got \(actual)",
+            line: line)
     }
 
     /// Print a summary and return a process exit code (0 = all passed).
