@@ -107,9 +107,10 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
                 self.promptTracker.handleEvent(event, atRow: row)
                 self.markSSHConnected()
 
-                // Trigger active AI hint on non-zero exit code
+                // Trigger active AI hint + a brief red flash on non-zero exit code
                 if case .commandEnd(let code) = event, let exitCode = code, exitCode != 0 {
                     self.requestActiveAIHint(exitCode: exitCode)
+                    self.flashCommandFailure()
                 }
             }
         }
@@ -337,6 +338,29 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
 
     /// Prefixes a title with a status emoji reflecting the pane's current state.
     /// Transition an SSH pane from connecting → running once the remote shell shows it is
+    /// Briefly outline the pane in red when a command exits non-zero — a lightweight, native
+    /// exit-status cue. Uses a temporary overlay layer so it never fights the persistent
+    /// focus border managed by SplitController.
+    private func flashCommandFailure() {
+        guard let host = terminalView.layer else { return }
+        let flash = CALayer()
+        flash.frame = terminalView.bounds
+        flash.borderWidth = 2
+        flash.borderColor = NSColor.systemRed.cgColor
+        flash.zPosition = 1000
+        host.addSublayer(flash)
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.85
+        fade.toValue = 0.0
+        fade.duration = 0.7
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        flash.opacity = 0
+        flash.add(fade, forKey: "fade")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { flash.removeFromSuperlayer() }
+    }
+
     /// interactive (set its title, reported its working directory, or emitted an OSC 133
     /// prompt), so the tab's status dot turns from yellow to green.
     private func markSSHConnected() {
