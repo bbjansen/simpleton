@@ -11,6 +11,10 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#-project-status)
 
+<br/>
+
+<img src="docs/images/demo.gif" alt="Simpleton terminal demo" width="720">
+
 </div>
 
 ---
