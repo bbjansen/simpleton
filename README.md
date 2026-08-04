@@ -51,6 +51,18 @@ Electron weight.
       <sub><b>AI copilot</b> — a per-tab assistant with <i>Watch</i> and <i>Autopilot</i> modes that can read your session and run commands, gated by a classifier that blocks destructive actions.</sub>
     </td>
     <td width="50%" valign="top">
+      <img src="docs/images/tabs.png" alt="Named tabs">
+      <br/>
+      <sub><b>Tabs &amp; splits</b> — native window tabbing (name tabs per session) with arbitrarily nested split panes.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/skills.png" alt="Skills preferences">
+      <br/>
+      <sub><b>Skills</b> — a catalog of reusable, parameterized actions (built-in and your own) the AI copilot can run on request.</sub>
+    </td>
+    <td width="50%" valign="top">
       <img src="docs/images/settings.png" alt="Preferences window">
       <br/>
       <sub><b>Preferences</b> — a resizable window covering General, Appearance, Terminal, SSH, Keys, Plugins, AI, Skills, and Profiles.</sub>
