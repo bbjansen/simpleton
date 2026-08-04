@@ -69,10 +69,14 @@ final class SessionCoordinator {
                 width: Double(window.frame.width),
                 height: Double(window.frame.height)
             )
-            guard let tabContainer = window.contentViewController as? TabContainerController else { return nil }
-            let splitTree = captureTree(from: tabContainer.splitController)
-            let tab = TabState(title: window.title, splitTree: splitTree)
-            return WindowState(frame: frame, tabs: [tab])
+            // Native AppKit tabs are separate NSWindows in the window's tab group — capture all of them.
+            let tabWindows = window.tabGroup?.windows ?? [window]
+            let tabs = tabWindows.compactMap { tabWin -> TabState? in
+                guard let tc = tabWin.contentViewController as? TabContainerController else { return nil }
+                return TabState(title: tabWin.title, splitTree: captureTree(from: tc.splitController))
+            }
+            guard !tabs.isEmpty else { return nil }
+            return WindowState(frame: frame, tabs: tabs)
         }
         return SessionState(cleanShutdown: false, savedAt: Date(), windows: windowStates)
     }
@@ -147,6 +151,11 @@ final class SessionCoordinator {
             if let firstTab = windowState.tabs.first,
                let tabContainer = wc.window?.contentViewController as? TabContainerController {
                 restoreSplitTree(firstTab.splitTree, in: tabContainer)
+            }
+            // Recreate any additional tabs (native tab group) beyond the first.
+            for extraTab in windowState.tabs.dropFirst() {
+                let tabContainer = wc.newTab()
+                restoreSplitTree(extraTab.splitTree, in: tabContainer)
             }
 
             wc.window?.makeKeyAndOrderFront(nil)

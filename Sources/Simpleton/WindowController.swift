@@ -85,8 +85,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         tabContainer.splitController
     }
 
-    /// Create a new tab in this window.
-    func newTab() {
+    /// Create a new tab in this window; returns the new tab's container (used by session restore).
+    @discardableResult
+    func newTab() -> TabContainerController {
         let newTabContainer = TabContainerController(config: config, theme: theme)
         newTabContainer.bookmarkStore = bookmarkStore
         newTabContainer.sshConfigWatcher = sshConfigWatcher
@@ -118,6 +119,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
 
         // Focus the new tab's terminal
         newTabContainer.splitController.setFocus(to: newTabContainer.splitController.focusedPaneID)
+        return newTabContainer
     }
 
     // MARK: - NSWindowDelegate
