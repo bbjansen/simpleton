@@ -1,0 +1,30 @@
+# SwiftLint configuration — https://github.com/realm/SwiftLint
+# Advisory in CI (non-blocking). Formatting/line-length is owned by swift-format, so those
+# rules are disabled here to avoid duplicate/conflicting signal.
+included:
+  - Sources
+  - Tests
+excluded:
+  - .build
+
+disabled_rules:
+  - line_length
+  - trailing_whitespace
+  - todo
+  - identifier_name
+  - type_name
+  - type_body_length
+  - file_length
+  - function_body_length
+  - function_parameter_count
+  - cyclomatic_complexity
+  - large_tuple
+  - nesting
+  - for_where
+  - blanket_disable_command
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+  - collection_alignment
+  - unneeded_parentheses_in_closure_argument
