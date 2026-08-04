@@ -37,5 +37,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
-          generate_release_notes: true
+          # Release notes are curated per release (see CHANGELOG.md); leave an existing
+          # release body untouched and just attach the freshly built artifact.
           files: .build/Simpleton-${{ github.ref_name }}.zip
