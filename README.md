@@ -37,7 +37,8 @@ Electron weight.
 | 🧭 **Connection sidebar** | Pinned + recent connections, live search, and SSH-config hosts — one click to connect in the active tab. |
 | 🤖 **AI integrations** | Bring your own provider — Claude, OpenAI, OpenRouter, Groq, Together, Mistral, DeepSeek, or local Ollama — with live model selection, per-tab chat, skills, and MCP tools, gated by a command classifier. |
 | 🧩 **Panels** | Dockable side panels: command history, environment, processes, Docker, notes, SSH tunnels, and more. |
-| 🎨 **Themes & plugins** | Theme discovery, a plugin manager with lifecycle events, and user scripts. |
+| 🎨 **Native theming** | **Dark / Light / Auto** appearance that follows macOS, plus a macOS-integrated **accent color** picker (Match System + the eight system accents) applied across the whole UI. |
+| 🔌 **Plugins** | A plugin manager with lifecycle events and user scripts (script plugins + HTML side panels). |
 | ⚙️ **Deep preferences** | General, Appearance, Terminal, SSH, Keys, Plugins, AI, Skills, and Profiles — in a resizable window. |
 | 🔄 **Auto-update** | [Sparkle](https://sparkle-project.org)-based update channel (disabled in dev builds). |
 
@@ -81,9 +82,9 @@ assistant proposes.
       <sub><b>Skills</b> — a catalog of reusable, parameterized actions (built-in and your own) the AI assistant can run on request.</sub>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/settings.png" alt="Preferences window">
+      <img src="docs/images/settings.png" alt="Appearance preferences — Dark/Light/Auto and accent color">
       <br/>
-      <sub><b>Preferences</b> — a resizable window covering General, Appearance, Terminal, SSH, Keys, Plugins, AI, Skills, and Profiles.</sub>
+      <sub><b>Native theming</b> — Dark / Light / Auto appearance and a macOS-integrated accent-color picker (Match System + the eight system accents), applied across the whole UI. Preferences is a resizable window covering General, Appearance, Terminal, SSH, Keys, Plugins, AI, Skills, and Profiles.</sub>
     </td>
   </tr>
 </table>
@@ -162,7 +163,7 @@ Keeping the domain logic in `SimpletonCore` (free of UI frameworks) is what make
 ## ⚙️ Configuration
 
 Settings live at `~/Library/Application Support/Simpleton/config.json` and are editable from the
-in-app **Preferences** window (`⌘,`). Connection bookmarks, themes, and plugins live alongside it.
+in-app **Preferences** window (`⌘,`). Connection bookmarks and plugins live alongside it.
 
 ## 🗺️ Roadmap
 

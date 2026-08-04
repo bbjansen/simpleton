@@ -54,12 +54,29 @@ func findTitle(_ e: AXUIElement, _ wanted: String, _ depth: Int = 0) -> AXUIElem
     return nil
 }
 
-func windowID(pid: pid_t, nameContains: String? = nil) -> CGWindowID? {
+func windowBounds(pid: pid_t) -> CGRect? {
     let list =
         CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
         as? [[String: Any]] ?? []
-    for w in list
-    where (w[kCGWindowOwnerPID as String] as? pid_t) == pid && (w[kCGWindowLayer as String] as? Int) == 0 {
+    for w in list where (w[kCGWindowOwnerPID as String] as? pid_t) == pid {
+        let b = w[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
+        let width = b["Width"] ?? 0, height = b["Height"] ?? 0
+        if width < 120 || height < 80 { continue }
+        return CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: width, height: height)
+    }
+    return nil
+}
+
+func windowID(pid: pid_t, nameContains: String? = nil) -> CGWindowID? {
+    // On-screen windows come back front-to-back, so the first match is the frontmost. We don't
+    // restrict to layer 0 — floating panels (command palette, quick connect) sit on a higher layer
+    // and must be capturable too. A size floor skips tooltips / shadows / menus.
+    let list =
+        CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+        as? [[String: Any]] ?? []
+    for w in list where (w[kCGWindowOwnerPID as String] as? pid_t) == pid {
+        let bounds = w[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
+        if (bounds["Width"] ?? 0) < 120 || (bounds["Height"] ?? 0) < 80 { continue }
         if let filter = nameContains, !filter.isEmpty {
             let name = (w[kCGWindowName as String] as? String) ?? ""
             guard name.localizedCaseInsensitiveContains(filter) else { continue }
@@ -74,8 +91,11 @@ func raise(pid: pid_t) {
     if let win = (attr(app, kAXWindowsAttribute as String) as? [AXUIElement])?.first {
         AXUIElementPerformAction(win, kAXRaiseAction as CFString)
     }
-    NSRunningApplication(processIdentifier: pid)?.activate(options: [])
-    usleep(400_000)
+    // Force frontmost — menu actions and key equivalents resolve via NSApp.keyWindow, which is
+    // nil unless the app is truly key. A plain activate() from a background CLI often isn't enough.
+    AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+    NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateIgnoringOtherApps])
+    usleep(450_000)
 }
 
 func err(_ m: String) { FileHandle.standardError.write((m + "\n").data(using: .utf8)!) }
@@ -117,6 +137,22 @@ case "press", "presstitle":
     let target = args[1] == "press" ? find(app, id: args[3]) : findTitle(app, args[3])
     guard let el = target else { err("element not found: \(args[3])"); exit(1) }
     exit(AXUIElementPerformAction(el, kAXPressAction as CFString) == .success ? 0 : 1)
+case "click":
+    // click <pid> <xFrac> <yFrac>   — left-click at a fractional point inside the window
+    // (0.5 0.5 = center). Guarantees the window is key + terminal is first responder before a
+    // subsequent `key`, which menu key-equivalents (e.g. ⌘D split) require.
+    raise(pid: pid)
+    guard let b = windowBounds(pid: pid) else { err("no window bounds"); exit(1) }
+    let xf = args.count > 3 ? (Double(args[3]) ?? 0.5) : 0.5
+    let yf = args.count > 4 ? (Double(args[4]) ?? 0.5) : 0.5
+    let pt = CGPoint(x: b.minX + b.width * CGFloat(xf), y: b.minY + b.height * CGFloat(yf))
+    let src = CGEventSource(stateID: .combinedSessionState)
+    CGEvent(mouseEventSource: src, mouseType: .leftMouseDown, mouseCursorPosition: pt, mouseButton: .left)?
+        .post(tap: .cghidEventTap)
+    usleep(40_000)
+    CGEvent(mouseEventSource: src, mouseType: .leftMouseUp, mouseCursorPosition: pt, mouseButton: .left)?
+        .post(tap: .cghidEventTap)
+    usleep(120_000)
 case "type":
     guard args.count > 3 else { exit(64) }
     raise(pid: pid)
