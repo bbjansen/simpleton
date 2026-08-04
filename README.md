@@ -2,7 +2,7 @@
 
 # ⚡ Simpleton
 
-### A fast, native macOS terminal — tabs, splits, SSH, and an AI copilot, built in Swift.
+### A fast, native macOS terminal — tabs, splits, SSH, and bring-your-own AI, built in Swift.
 
 [![CI](https://github.com/bbjansen/simpleton/actions/workflows/ci.yml/badge.svg)](https://github.com/bbjansen/simpleton/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/bbjansen/simpleton?include_prereleases&sort=semver&label=release)](https://github.com/bbjansen/simpleton/releases)
@@ -21,7 +21,7 @@
 
 Simpleton is a from-scratch, native **AppKit + SwiftUI** terminal for macOS. It pairs a
 GPU-friendly [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) core with native window
-tabbing, recursive split panes, first-class SSH, and an optional AI copilot — with none of the
+tabbing, recursive split panes, first-class SSH, and pluggable AI integrations — with none of the
 Electron weight.
 
 > **⚠️ Alpha software.** Simpleton is under active development at version `0.1.1`. Expect rough
@@ -35,11 +35,29 @@ Electron weight.
 | 🗂️ **Tabs & splits** | Native macOS window tabbing plus arbitrarily **nested** split panes (split right / split down, focus by direction, zoom a pane). |
 | 🔐 **SSH built in** | Connection bookmarks with frecency ranking, one-click `~/.ssh/config` import, keepalive, and auto-reconnect. |
 | 🧭 **Connection sidebar** | Pinned + recent connections, live search, and SSH-config hosts — one click to connect in the active tab. |
-| 🤖 **AI copilot** | Optional per-tab AI chat, skills, and MCP tool support, with a command classifier that gates destructive shell actions. |
+| 🤖 **AI integrations** | Bring your own provider — Claude, OpenAI, OpenRouter, Groq, Together, Mistral, DeepSeek, or local Ollama — with live model selection, per-tab chat, skills, and MCP tools, gated by a command classifier. |
 | 🧩 **Panels** | Dockable side panels: command history, environment, processes, Docker, notes, SSH tunnels, and more. |
 | 🎨 **Themes & plugins** | Theme discovery, a plugin manager with lifecycle events, and user scripts. |
 | ⚙️ **Deep preferences** | General, Appearance, Terminal, SSH, Keys, Plugins, AI, Skills, and Profiles — in a resizable window. |
 | 🔄 **Auto-update** | [Sparkle](https://sparkle-project.org)-based update channel (disabled in dev builds). |
+
+## 🤖 AI integrations
+
+Simpleton is **provider-agnostic** — bring your own key, or run fully local. Choose a provider and
+model right in **Preferences → AI**, with the model list fetched live from the provider:
+
+| Provider | Notes |
+|---|---|
+| **Anthropic** (Claude) | |
+| **OpenAI** (GPT) | |
+| **OpenRouter** | hundreds of models behind one key |
+| **Groq** | very fast inference |
+| **Together AI** · **Mistral** · **DeepSeek** | |
+| **Ollama** | fully local — nothing leaves your machine |
+| **Custom** | any OpenAI-compatible endpoint |
+
+Keys are stored in the macOS Keychain, and a command classifier gates destructive actions the
+assistant proposes.
 
 ## 🔎 A closer look
 
@@ -48,7 +66,7 @@ Electron weight.
     <td width="50%" valign="top">
       <img src="docs/images/ai-panel.png" alt="AI Assistant panel">
       <br/>
-      <sub><b>AI copilot</b> — a per-tab assistant with <i>Watch</i> and <i>Autopilot</i> modes that can read your session and run commands, gated by a classifier that blocks destructive actions.</sub>
+      <sub><b>AI integrations</b> — connect any provider (Claude, OpenAI, OpenRouter, Groq, Ollama, …) with live model selection. A per-tab assistant with <i>Watch</i> and <i>Autopilot</i> modes, gated by a classifier that blocks destructive actions.</sub>
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/tabs.png" alt="Named tabs">
@@ -60,7 +78,7 @@ Electron weight.
     <td width="50%" valign="top">
       <img src="docs/images/skills.png" alt="Skills preferences">
       <br/>
-      <sub><b>Skills</b> — a catalog of reusable, parameterized actions (built-in and your own) the AI copilot can run on request.</sub>
+      <sub><b>Skills</b> — a catalog of reusable, parameterized actions (built-in and your own) the AI assistant can run on request.</sub>
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/settings.png" alt="Preferences window">
