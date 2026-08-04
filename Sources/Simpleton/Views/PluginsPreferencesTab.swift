@@ -78,7 +78,7 @@ struct PluginsPreferencesTab: View {
                                 .cornerRadius(4)
                             Toggle("", isOn: Binding(
                                 get: { plugin.isEnabled },
-                                set: { plugin.isEnabled = $0 }
+                                set: { pluginManager.setEnabled($0, for: plugin) }
                             ))
                             .labelsHidden()
                         }

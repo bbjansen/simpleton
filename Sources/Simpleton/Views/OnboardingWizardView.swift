@@ -424,8 +424,6 @@ struct OnboardingWizardView: View {
     }
 
     private func completeWithDefaults() {
-        let profile = buildProfile()
-        onComplete(profile, nil, [], [])
         onSkip()
     }
 

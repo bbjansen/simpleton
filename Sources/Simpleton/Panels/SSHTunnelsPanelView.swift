@@ -63,6 +63,9 @@ struct SSHTunnelsPanelView: View {
         .onReceive(NotificationCenter.default.publisher(for: .simpletonWindowClosed)) { _ in
             loadTunnels()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .simpletonSplitChanged)) { _ in
+            loadTunnels()
+        }
     }
 
     private func loadTunnels() {

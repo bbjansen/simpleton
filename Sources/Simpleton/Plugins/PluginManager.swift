@@ -81,6 +81,22 @@ final class PluginManager {
         }
     }
 
+    /// Enable or disable a script plugin and persist the choice so it survives
+    /// reloads and app restarts. The enabled state is keyed by plugin name in
+    /// UserDefaults (plugins carry no persistent identity in their manifest).
+    func setEnabled(_ enabled: Bool, for plugin: ScriptPlugin) {
+        plugin.isEnabled = enabled
+        var states = Self.persistedEnabledStates()
+        states[plugin.name] = enabled
+        UserDefaults.standard.set(states, forKey: Self.enabledStatesKey)
+    }
+
+    private static let enabledStatesKey = "simpletonPluginEnabledStates"
+
+    private static func persistedEnabledStates() -> [String: Bool] {
+        (UserDefaults.standard.dictionary(forKey: enabledStatesKey) as? [String: Bool]) ?? [:]
+    }
+
     /// Execute a plugin command by ID.
     func executeCommand(id: String) {
         for plugin in scriptPlugins where plugin.isEnabled {
@@ -115,8 +131,13 @@ final class PluginManager {
             return
         }
 
+        let states = Self.persistedEnabledStates()
         scriptPlugins = contents
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .compactMap { ScriptPlugin.load(from: $0) }
+            .map { plugin in
+                if let enabled = states[plugin.name] { plugin.isEnabled = enabled }
+                return plugin
+            }
     }
 }

@@ -51,9 +51,9 @@ final class ActiveAIHintView: NSVisualEffectView {
         autoresizingMask = [.width, .maxYMargin]
 
         // Icon
-        let icon = NSImageView(
-            image: NSImage(systemSymbolName: "sparkles", accessibilityDescription: "AI hint")!
-        )
+        let iconImage = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "AI hint")
+            ?? NSImage(systemSymbolName: "star", accessibilityDescription: "AI hint")
+        let icon = NSImageView(image: iconImage ?? NSImage())
         icon.contentTintColor = DT.Banner.infoTint
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.setContentHuggingPriority(.required, for: .horizontal)
