@@ -38,7 +38,7 @@ struct SkillsPreferencesTab: View {
                 }
                 .padding(8)
             }
-            .frame(width: 200)
+            .frame(minWidth: 200, idealWidth: 260, maxWidth: 420)
 
             // Right: editor — .id forces re-creation when selected skill changes
             Group {
