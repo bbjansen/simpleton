@@ -534,6 +534,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             theme = named
         }
         applyThemeToAllPanes(theme)
+        // Panels are cached globally by PanelRegistry and read their config lazily via the
+        // container's `appConfig()` closure. Push the just-stored config into every tab's
+        // container so those closures return fresh values after a Preferences change.
+        for wc in windowControllers {
+            let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
+            for window in windows {
+                (window.contentViewController as? TabContainerController)?.updateConfig(config)
+            }
+        }
     }
 
     // MARK: - New Connection

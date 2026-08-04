@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 struct EnvironmentPanelView: View {
-    let shell: String
+    let shellProvider: () -> String
     let currentPaneProvider: () -> PaneController?
 
     @State private var entries: [(key: String, value: String)] = []
@@ -81,7 +81,7 @@ struct EnvironmentPanelView: View {
         isSSH = false
         isLoading = true
         defer { isLoading = false }
-        entries = await loadEnv(shell: shell)
+        entries = await loadEnv(shell: shellProvider())
     }
 
     private func loadEnv(shell: String) async -> [(key: String, value: String)] {

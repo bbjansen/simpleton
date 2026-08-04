@@ -9,7 +9,7 @@ import SimpletonCore
 final class TabContainerController: NSViewController {
 
     let splitController: SplitController
-    private let config: AppConfig
+    private var config: AppConfig
     private let theme: Theme
     private var closeObserver: NSObjectProtocol?
     private var searchObserver: NSObjectProtocol?
@@ -366,6 +366,10 @@ final class TabContainerController: NSViewController {
         (NSApp.keyWindow?.contentViewController as? TabContainerController) ?? self
     }
 
+    /// Push a fresh app config into this container so cached panels — which read
+    /// `appConfig()` lazily — observe changes made in Preferences.
+    func updateConfig(_ newConfig: AppConfig) { self.config = newConfig }
+
     private func makeContext() -> PanelContext {
         PanelContext(
             tabContainer: { [weak self] in self?.activePanelContainer },
@@ -377,7 +381,7 @@ final class TabContainerController: NSViewController {
             bookmarkStore: bookmarkStore,
             aiService: aiService,
             sshConfigWatcher: sshConfigWatcher,
-            appConfig: config,
+            appConfig: { [weak self] in self?.config ?? AppConfig() },
             currentPane: { [weak self] in
                 guard let tc = self?.activePanelContainer else { return nil }
                 return tc.splitController.panes[tc.splitController.focusedPaneID]

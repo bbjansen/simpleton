@@ -32,7 +32,7 @@ struct PanelContext {
     var bookmarkStore: BookmarkStore?
     var aiService: AIService?
     var sshConfigWatcher: SSHConfigWatcher?
-    var appConfig: AppConfig
+    var appConfig: () -> AppConfig
     var currentPane: () -> PaneController?
     var onInsertCommand: (String) -> Void
     var appSupportDir: URL

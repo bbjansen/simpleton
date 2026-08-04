@@ -17,7 +17,7 @@ extension PanelDefinition {
         let host = SidebarHostController(
             bookmarkStore: bookmarkStore,
             sshConfigWatcher: context.sshConfigWatcher,
-            config: context.appConfig
+            config: context.appConfig()
         )
         host.onConnect = { bookmark in context.tabContainer()?.openSSHConnection(bookmark: bookmark) }
         host.onNewConnection = {
@@ -113,7 +113,7 @@ extension PanelDefinition {
         isBuiltIn: true
     ) { context in
         NSHostingController(rootView: HistoryPanelView(
-            shell: context.appConfig.general.shell,
+            shellProvider: { context.appConfig().general.shell },
             onInsert: context.onInsertCommand
         ))
     }
@@ -127,7 +127,7 @@ extension PanelDefinition {
         isBuiltIn: true
     ) { context in
         NSHostingController(rootView: EnvironmentPanelView(
-            shell: context.appConfig.general.shell,
+            shellProvider: { context.appConfig().general.shell },
             currentPaneProvider: context.currentPane
         ))
     }

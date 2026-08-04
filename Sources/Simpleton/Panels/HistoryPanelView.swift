@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 struct HistoryPanelView: View {
-    let shell: String
+    let shellProvider: () -> String
     let onInsert: (String) -> Void
 
     @State private var entries: [String] = []
@@ -41,7 +41,7 @@ struct HistoryPanelView: View {
 
     private func loadHistory() {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let shellName = URL(fileURLWithPath: shell).lastPathComponent
+        let shellName = URL(fileURLWithPath: shellProvider()).lastPathComponent
         let historyURL: URL
         if shellName.contains("zsh") {
             historyURL = home.appendingPathComponent(".zsh_history")
