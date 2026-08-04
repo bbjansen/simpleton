@@ -48,6 +48,9 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     /// Stored environment for shell restarts.
     var shellEnvironment: [String]?
 
+    /// Stored launch args for shell restarts (e.g. login vs. --rcfile for bash integration).
+    private var shellArgs: [String] = ["-l"]
+
     /// Plugin manager reference for firing events.
     var pluginManager: PluginManager?
 
@@ -164,12 +167,15 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     }
 
     /// Start a local shell process.
-    func startLocalShell(shell: String, environment: [String]? = nil, workingDirectory: String? = nil) {
+    func startLocalShell(
+        shell: String, args: [String] = ["-l"], environment: [String]? = nil, workingDirectory: String? = nil
+    ) {
         self.shellEnvironment = environment
+        self.shellArgs = args
         state = .running
         terminalView.startProcess(
             executable: shell,
-            args: ["-l"],
+            args: args,
             environment: environment,
             execName: nil,
             currentDirectory: workingDirectory
@@ -184,7 +190,7 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         state = .running
         terminalView.startProcess(
             executable: shell,
-            args: ["-l"],
+            args: shellArgs,
             environment: environment,
             execName: nil,
             currentDirectory: workingDirectory

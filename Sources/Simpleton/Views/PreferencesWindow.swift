@@ -206,7 +206,7 @@ struct GeneralTab: View {
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
 
-                Toggle("Shell integration (zsh)", isOn: $config.general.shellIntegration)
+                Toggle("Shell integration (zsh & bash)", isOn: $config.general.shellIntegration)
                     .onChange(of: config.general.shellIntegration) { onChanged(config) }
                 Text(
                     "Injects OSC 133 markers so Simpleton knows when commands start, end, and fail "
