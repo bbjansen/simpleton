@@ -195,10 +195,11 @@ final class TabContainerController: NSViewController {
         let container = NSView(frame: frame)
         container.autoresizingMask = [.width, .height]
 
-        // Full-bleed vibrancy backdrop. Shows through the translucent activity rails and the
-        // connections sidebar; the opaque terminal covers its own region, so only the chrome
-        // picks up the desktop blur (the native macOS sidebar look).
-        let backdrop = NSVisualEffectView.backdrop(material: .sidebar)
+        // Subtle within-window vibrancy backdrop behind the chrome. The window stays opaque (so no
+        // view can leak the desktop and lose text contrast); the frosted Material on the rails and
+        // sidebar reads over this for a soft, legible native feel.
+        let backdrop = NSVisualEffectView.backdrop(material: .underWindowBackground)
+        backdrop.blendingMode = .withinWindow
         container.addSubview(backdrop)
         NSLayoutConstraint.activate([
             backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),

@@ -54,9 +54,6 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         window.tabbingMode = .preferred
         window.tabbingIdentifier = "com.simpleton.terminal"
         window.appearance = NSAppearance(named: .darkAqua)
-        // Let the vibrancy backdrop blur the desktop behind translucent chrome (sidebar/rails).
-        window.isOpaque = false
-        window.backgroundColor = .clear
 
         self.tabContainer = TabContainerController(config: config, theme: theme)
 
@@ -112,8 +109,6 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         newWindow.tabbingMode = .preferred
         newWindow.tabbingIdentifier = "com.simpleton.terminal"
         newWindow.appearance = NSAppearance(named: .darkAqua)
-        newWindow.isOpaque = false
-        newWindow.backgroundColor = .clear
         newWindow.contentViewController = newTabContainer
         newWindow.alphaValue = config.appearance.windowOpacity
 
