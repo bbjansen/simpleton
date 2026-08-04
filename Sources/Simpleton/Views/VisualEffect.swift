@@ -44,25 +44,40 @@ extension View {
     func glossyCard(cornerRadius: CGFloat = 12, tint: Color = .clear) -> some View {
         modifier(GlossyCard(cornerRadius: cornerRadius, tint: tint))
     }
+
+    /// A floating panel surface (command palette, quick connect): real Liquid Glass on macOS 26,
+    /// frosted `.hudWindow` vibrancy on macOS 14/15. Both get a continuous-corner clip + hairline.
+    @ViewBuilder
+    func frostedPanel(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(macOS 26.0, *) {
+            self.glassEffect(.regular, in: shape)
+                .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: 1))
+        } else {
+            self.background(VisualEffect(material: .hudWindow, blendingMode: .behindWindow))
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        }
+    }
 }
 
 private struct GlossyCard: ViewModifier {
     let cornerRadius: CGFloat
     let tint: Color
 
+    @ViewBuilder
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        return
+        if #available(macOS 26.0, *) {
+            // Real Liquid Glass on Tahoe — reflects/refracts content behind it.
+            content.glassEffect(.regular, in: shape)
+        } else {
+            // Graceful fallback on macOS 14/15: frosted material + hairline + soft shadow.
             content
-            .background {
-                if #available(macOS 26.0, *) {
-                    shape.fill(.ultraThinMaterial)  // Liquid Glass adoption tracked separately
-                } else {
-                    shape.fill(.ultraThinMaterial)
-                }
-            }
-            .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: 1))
-            .clipShape(shape)
-            .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
+                .background(shape.fill(.ultraThinMaterial))
+                .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: 1))
+                .clipShape(shape)
+                .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
+        }
     }
 }
