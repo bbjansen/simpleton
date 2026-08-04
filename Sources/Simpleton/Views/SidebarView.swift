@@ -88,7 +88,7 @@ struct SidebarView: View {
             .padding(.vertical, 10)
         }
         .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
-        .background(Color.clear)  // reveal the window's vibrancy backdrop
+        .background(.regularMaterial)  // frosted but legible; opaque window, no desktop leak
         .onAppear { refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .simpletonBookmarksChanged)) { _ in refresh() }
     }
