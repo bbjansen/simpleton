@@ -168,56 +168,37 @@ final class SessionCoordinator {
     }
 
     private func restoreSplitTree(_ node: SessionSplitNode, in tabContainer: TabContainerController) {
-        switch node {
-        case .pane(let conn):
-            if case .ssh(let bookmarkId) = conn {
-                Task { @MainActor [bookmarkStore] in
+        let sc = tabContainer.splitController
+        guard let factory = sc.paneFactory else { return }
+
+        // Materialize the saved layout into a live SplitNode with fresh pane IDs (nesting and ratios
+        // preserved) plus its ordered leaves. This reconstructs any layout — a single pane, a flat
+        // N-way split, or an arbitrarily nested tree — exactly as it was captured.
+        let (tree, leaves) = node.materialize(makeID: { UUID() })
+        guard let focusID = leaves.first?.id else { return }
+
+        // Create one pane per leaf, then install the whole layout declaratively.
+        var panes: [PaneID: PaneController] = [:]
+        for leaf in leaves { panes[leaf.id] = factory(leaf.id) }
+        sc.restore(tree: tree, panes: panes, focusedPaneID: focusID)
+
+        // Restore each leaf's saved connection into its pane. Panes are created in the default
+        // working directory, so a local leaf restarts its shell in the saved directory.
+        for leaf in leaves {
+            guard let pane = panes[leaf.id] else { continue }
+            switch leaf.connection {
+            case .ssh(let bookmarkId):
+                Task { @MainActor [bookmarkStore, config] in
                     if let bookmark = await bookmarkStore()?.bookmark(for: bookmarkId) {
-                        tabContainer.openSSHConnection(bookmark: bookmark)
+                        pane.startSSH(bookmark: bookmark, config: config())
                     }
                 }
-            } else if case .local(let dir) = conn {
-                restoreLocalWorkingDirectory(dir, in: tabContainer, paneID: tabContainer.splitController.focusedPaneID)
-            }
-
-        case .split(let direction, let children, _):
-            if children.count >= 2 {
-                for _ in 1..<children.count {
-                    tabContainer.splitController.splitFocusedPane(direction: direction)
-                }
-                let paneIDs = tabContainer.splitController.tree.allPaneIDs
-                for (index, child) in children.enumerated() {
-                    if index < paneIDs.count, case .pane(let conn) = flattenFirstPane(child) {
-                        if case .ssh(let bookmarkId) = conn {
-                            Task { @MainActor [bookmarkStore, config] in
-                                if let bookmark = await bookmarkStore()?.bookmark(for: bookmarkId),
-                                   let pane = tabContainer.splitController.panes[paneIDs[index]] {
-                                    pane.startSSH(bookmark: bookmark, config: config())
-                                }
-                            }
-                        } else if case .local(let dir) = conn {
-                            restoreLocalWorkingDirectory(dir, in: tabContainer, paneID: paneIDs[index])
-                        }
-                    }
+            case .local(let dir):
+                if case .local(let shell, _) = pane.connectionType {
+                    pane.restartShell(shell: shell, environment: pane.shellEnvironment, workingDirectory: dir)
                 }
             }
         }
-    }
-
-    private func flattenFirstPane(_ node: SessionSplitNode) -> SessionSplitNode {
-        switch node {
-        case .pane: return node
-        case .split(_, let children, _):
-            return children.first.map { flattenFirstPane($0) } ?? node
-        }
-    }
-
-    /// Restore a restored local pane's saved working directory. The pane is created in the
-    /// default directory, so restart its shell (keeping its shell + environment) in `dir`.
-    private func restoreLocalWorkingDirectory(_ dir: String, in tabContainer: TabContainerController, paneID: PaneID) {
-        guard let pane = tabContainer.splitController.panes[paneID],
-              case .local(let shell, _) = pane.connectionType else { return }
-        pane.restartShell(shell: shell, environment: pane.shellEnvironment, workingDirectory: dir)
     }
 
     // MARK: - Workspaces

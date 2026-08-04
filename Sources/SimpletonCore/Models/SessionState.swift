@@ -87,6 +87,35 @@ public indirect enum SessionSplitNode: Codable, Equatable {
             try container.encode(ratios, forKey: .ratios)
         }
     }
+
+    /// A leaf of a materialized layout: a freshly assigned pane ID and the connection to restore into it.
+    public struct MaterializedLeaf: Equatable {
+        public let id: PaneID
+        public let connection: PaneConnection
+        public init(id: PaneID, connection: PaneConnection) {
+            self.id = id
+            self.connection = connection
+        }
+    }
+
+    /// Convert this saved layout into a live `SplitNode` — assigning a fresh pane ID to every leaf via
+    /// `makeID` while preserving the exact nesting and split ratios — plus the ordered list of leaves and
+    /// their connections. Pure and side-effect-free so restore logic stays testable without a running UI.
+    public func materialize(makeID: () -> PaneID) -> (tree: SplitNode, leaves: [MaterializedLeaf]) {
+        var leaves: [MaterializedLeaf] = []
+        func build(_ node: SessionSplitNode) -> SplitNode {
+            switch node {
+            case .pane(let conn):
+                let id = makeID()
+                leaves.append(MaterializedLeaf(id: id, connection: conn))
+                return .pane(id)
+            case .split(let direction, let children, let ratios):
+                return .split(direction: direction, children: children.map(build), ratios: ratios)
+            }
+        }
+        let tree = build(self)
+        return (tree, leaves)
+    }
 }
 
 public struct TabState: Codable, Equatable {

@@ -71,6 +71,29 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         onTreeChange?()
     }
 
+    /// Replace the entire tree and pane set at once, then rebuild the view. Used by session
+    /// restore to install an arbitrary (possibly nested) layout declaratively: the caller builds
+    /// the target `SplitNode` with fresh pane IDs and supplies a matching PaneController per leaf.
+    func restore(tree newTree: SplitNode, panes newPanes: [PaneID: PaneController], focusedPaneID newFocus: PaneID) {
+        guard !newPanes.isEmpty else { return }
+
+        // Tear down the panes this tab was created with. Restore replaces them wholesale, so their
+        // throwaway shells must not be left running (`newPanes` uses fresh IDs, so nothing overlaps).
+        let carriedOver = Set(newPanes.keys)
+        for (id, pane) in panes where !carriedOver.contains(id) {
+            pane.terminalView.removeFromSuperview()
+            pane.terminalView.terminate()
+        }
+
+        panes = newPanes
+        tree = newTree
+        focusedPaneID = newPanes[newFocus] != nil ? newFocus : (newPanes.keys.first ?? newFocus)
+        reconcile()
+        setFocus(to: focusedPaneID)
+        NotificationCenter.default.post(name: .simpletonSplitChanged, object: nil)
+        onTreeChange?()
+    }
+
     /// Close a specific pane. If it's the last pane, calls onPaneClose.
     /// Shows a confirmation alert when the pane has a running process.
     func closePane(_ paneID: PaneID) {
