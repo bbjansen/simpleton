@@ -77,10 +77,14 @@ struct ActivityBarButton: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 16))
+                .symbolRenderingMode(.hierarchical)
+                .symbolEffect(.bounce, value: isActive)
                 .foregroundColor(isActive ? .accentColor : .secondary)
                 .frame(width: 32, height: 32)
-                .background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
-                .cornerRadius(6)
+                .background(
+                    isActive ? Color.accentColor.opacity(0.15) : Color.clear,
+                    in: .rect(cornerRadius: 6, style: .continuous)
+                )
         }
         .buttonStyle(.plain)
         .help(label)

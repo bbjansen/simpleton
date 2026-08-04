@@ -257,6 +257,7 @@ struct SidebarRow: View {
 
                 Image(systemName: bookmark.pinned ? "star.fill" : "network")
                     .font(.system(size: 10))
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundColor(bookmark.pinned ? Color.yellow.opacity(0.8) : DT.textMuted)
                     .frame(width: 16)
                 VStack(alignment: .leading, spacing: 1) {

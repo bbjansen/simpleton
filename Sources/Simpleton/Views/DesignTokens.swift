@@ -68,7 +68,9 @@ enum DT {
 
     // MARK: - Animation
 
-    static let hoverAnimation = Animation.easeInOut(duration: 0.2)
+    /// Native-feeling hover/press motion. `.snappy` is the macOS spring (quick, tight, no
+    /// overshoot) and respects Reduce Motion automatically.
+    static let hoverAnimation = Animation.snappy(duration: 0.18)
 
     // MARK: - Banner NSColors (for AppKit PaneController)
 
