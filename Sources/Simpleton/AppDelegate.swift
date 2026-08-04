@@ -581,6 +581,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
             for window in windows {
                 (window.contentViewController as? TabContainerController)?.updateConfig(config)
+                window.alphaValue = config.appearance.windowOpacity
             }
         }
     }

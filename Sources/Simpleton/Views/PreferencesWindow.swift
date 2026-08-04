@@ -281,8 +281,8 @@ struct AppearanceTab: View {
             }
 
             Section {
-                Slider(value: $config.appearance.windowOpacity, in: 0.5...1.0, step: 0.05) {
-                    Text("Opacity: \(config.appearance.windowOpacity, specifier: "%.0f%%")")
+                Slider(value: $config.appearance.windowOpacity, in: 0.3...1.0, step: 0.01) {
+                    Text("Opacity: \(Int((config.appearance.windowOpacity * 100).rounded()))%")
                 }
                 .onChange(of: config.appearance.windowOpacity) { onChanged(config) }
                 Text("Lower values create a translucent terminal window")
