@@ -310,7 +310,14 @@ struct AIPreferencesTab: View {
     private func saveAndTestKey() {
         let key = apiKeyText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
-        _ = AIKeychain.storeAPIKey(key, for: config.provider)
+        guard AIKeychain.storeAPIKey(key, for: config.provider) else {
+            // Surface the failure instead of silently keeping the old key (the old delete+add could
+            // fail this way for items owned by a prior build's signature).
+            keyStatus = .invalid(
+                "Couldn't save the key to the Keychain. Open Keychain Access, delete any "
+                    + "\"com.simpleton.ai\" entry, then try again.")
+            return
+        }
         hasKey = true
         apiKeyText = ""
         validate(using: key)

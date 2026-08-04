@@ -82,14 +82,29 @@ struct OpenAIProvider: AIProviderProtocol {
                         throw AIError.providerError("No response from server")
                     }
                     guard httpResponse.statusCode == 200 else {
-                        // Try to read error body for better message
-                        var errorMsg = "Streaming failed (\(httpResponse.statusCode))"
+                        // Surface the provider's ACTUAL error message (e.g. an OpenAI 403 explaining a
+                        // project-key permission or org-verification requirement) — not just the code.
                         var bodyData = Data()
-                        for try await byte in bytes { bodyData.append(byte); if bodyData.count > 500 { break } }
-                        if let body = String(data: bodyData, encoding: .utf8), body.contains("not found") {
-                            errorMsg = "Model '\(model)' not found. Check Preferences > AI > Model name."
+                        for try await byte in bytes {
+                            bodyData.append(byte)
+                            if bodyData.count > 2048 { break }
                         }
-                        throw AIError.providerError(errorMsg)
+                        let raw = String(data: bodyData, encoding: .utf8) ?? ""
+                        var detail = raw
+                        if let d = raw.data(using: .utf8),
+                            let json = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                            let err = json["error"] as? [String: Any],
+                            let msg = err["message"] as? String
+                        {
+                            detail = msg
+                        }
+                        if httpResponse.statusCode == 404 || detail.localizedCaseInsensitiveContains("not found") {
+                            throw AIError.providerError(
+                                "Model '\(model)' not found. Check Preferences > AI > Model name.")
+                        }
+                        throw AIError.providerError(
+                            "Streaming failed (\(httpResponse.statusCode)) with model '\(model)': "
+                                + (detail.isEmpty ? "no details returned" : detail))
                     }
 
                     for try await line in bytes.lines {
