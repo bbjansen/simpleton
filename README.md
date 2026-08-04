@@ -41,6 +41,23 @@ Electron weight.
 | ⚙️ **Deep preferences** | General, Appearance, Terminal, SSH, Keys, Plugins, AI, Skills, and Profiles — in a resizable window. |
 | 🔄 **Auto-update** | [Sparkle](https://sparkle-project.org)-based update channel (disabled in dev builds). |
 
+## 🔎 A closer look
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/ai-panel.png" alt="AI Assistant panel">
+      <br/>
+      <sub><b>AI copilot</b> — a per-tab assistant with <i>Watch</i> and <i>Autopilot</i> modes that can read your session and run commands, gated by a classifier that blocks destructive actions.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/settings.png" alt="Preferences window">
+      <br/>
+      <sub><b>Preferences</b> — a resizable window covering General, Appearance, Terminal, SSH, Keys, Plugins, AI, Skills, and Profiles.</sub>
+    </td>
+  </tr>
+</table>
+
 ## 🚀 Getting started
 
 ### Requirements
