@@ -47,6 +47,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         try? FileManager.default.createDirectory(at: integrationDir, withIntermediateDirectories: true)
         try? ShellIntegration.zshZshenv.write(
             to: integrationDir.appendingPathComponent(".zshenv"), atomically: true, encoding: .utf8)
+        try? ShellIntegration.bashRcfile.write(
+            to: integrationDir.appendingPathComponent("bash-rcfile"), atomically: true, encoding: .utf8)
 
         // 1. Load config
         loadConfig()

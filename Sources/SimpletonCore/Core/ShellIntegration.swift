@@ -15,6 +15,21 @@ public enum ShellIntegration {
         (shellPath as NSString).lastPathComponent == "zsh"
     }
 
+    /// True if the given shell path is bash.
+    public static func isBash(_ shellPath: String) -> Bool {
+        (shellPath as NSString).lastPathComponent == "bash"
+    }
+
+    /// Shell launch args when integration is enabled. bash is injected via `--rcfile` (there is no
+    /// ZDOTDIR equivalent); zsh and everything else keep the login shell (`-l`) and, for zsh, are
+    /// handled through the environment (ZDOTDIR).
+    public static func launchArgs(shellPath: String, integrationEnabled: Bool, bashRcfilePath: String) -> [String] {
+        if integrationEnabled && isBash(shellPath) {
+            return ["--rcfile", bashRcfilePath]
+        }
+        return ["-l"]
+    }
+
     /// `.zshenv` placed in a Simpleton-owned `ZDOTDIR`. Read for every zsh invocation, so it is
     /// deliberately minimal and guards the interactive-only work.
     public static let zshZshenv = #"""
@@ -34,5 +49,25 @@ public enum ShellIntegration {
           add-zsh-hook preexec __simpleton_preexec 2>/dev/null
           add-zsh-hook precmd __simpleton_precmd 2>/dev/null
         fi
+        """#
+
+    /// bash init file (used via `bash --rcfile`). Replicates login config loading (sourcing the
+    /// first of .bash_profile/.bash_login/.profile, matching `bash -l`, so nothing double-sources),
+    /// then adds OSC 133 via a DEBUG trap (command start) and PROMPT_COMMAND (command end + prompt).
+    public static let bashRcfile = #"""
+        # Simpleton shell integration (bash) — OSC 133 semantic prompts.
+        # Auto-generated; safe to delete (regenerated on launch). Loads your real config first.
+        if [ -f "$HOME/.bash_profile" ]; then source "$HOME/.bash_profile"
+        elif [ -f "$HOME/.bash_login" ]; then source "$HOME/.bash_login"
+        elif [ -f "$HOME/.profile" ]; then source "$HOME/.profile"
+        fi
+
+        __simpleton_preexec() { printf '\e]133;C\a'; }
+        trap '__simpleton_preexec' DEBUG
+        __simpleton_precmd() { local __ec=$?; printf '\e]133;D;%s\a\e]133;A\a' "$__ec"; }
+        case "$PROMPT_COMMAND" in
+          *__simpleton_precmd*) ;;
+          *) PROMPT_COMMAND="__simpleton_precmd${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
+        esac
         """#
 }
