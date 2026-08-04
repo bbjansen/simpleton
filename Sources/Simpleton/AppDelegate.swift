@@ -204,14 +204,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 5. Session restore check
         sessionManager = SessionManager(directory: simpletonDir)
-        let shouldRestore = config.general.restorePreviousSession && sessionManager?.didCrashLastSession() ?? false
 
         // 6. UI launch
-        if shouldRestore, let savedState = sessionManager?.loadSavedState(), !savedState.windows.isEmpty {
-            sessionCoordinator.showRestorePrompt(state: savedState)
-        } else {
-            createNewWindow()
-        }
+        // Session restore is temporarily disabled: the restore prompt runs a blocking modal that
+        // gets in the way of launch/automation, and the restore path isn't end-to-end verified yet.
+        // Always start a fresh window. State is still captured below, so restore can be re-enabled
+        // by reinstating the shouldRestore check against config.general.restorePreviousSession.
+        createNewWindow()
 
         // Set up session state provider
         sessionManager?.setStateProvider { [weak self] in
