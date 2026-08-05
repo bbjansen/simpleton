@@ -1,0 +1,24 @@
+#!/bin/sh
+# Simpleton script plugin — "TUI Launcher".
+#
+# Contract: Simpleton runs this executable and writes one line of JSON context to stdin (it
+# includes the invoked "commandId"). The plugin replies on stdout with newline-delimited JSON
+# actions. Here we emit an `open-pane` action, which opens a new split pane and runs a terminal
+# TUI in it. The command runs in your real shell, so PATH/aliases resolve, and the pane returns
+# to a prompt when the TUI exits.
+#
+# `open-pane` payload:
+#   command : the shell command to run (e.g. "lazygit", "top -o cpu")
+#   mode    : "split-right" (default) | "split-down" | "tab"
+#
+# Requires the "open-pane" permission in plugin.json.
+
+read -r context
+
+case "$context" in
+  *'"commandId":"tui.lazygit"'*) command="lazygit" ;;
+  *'"commandId":"tui.htop"'*)    command="htop" ;;
+  *)                             command="top -o cpu" ;;  # tui.top / default
+esac
+
+printf '{"action":"open-pane","command":"%s","mode":"split-right"}\n' "$command"

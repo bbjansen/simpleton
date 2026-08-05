@@ -100,6 +100,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pluginManager?.commandHandler = { [weak self] commandId in
             self?.pluginManager?.executeCommand(id: commandId)
         }
+        pluginManager?.openPaneHandler = { [weak self] command, mode in
+            self?.openPaneWithCommand(command, mode: mode)
+        }
         pluginManager?.loadAll()
 
         // Load AI config
@@ -700,6 +703,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let tabContainer = window.contentViewController as? TabContainerController
         else { return }
         tabContainer.openSSHConnection(bookmark: bookmark)
+    }
+
+    // MARK: - Open Pane (plugin TUI launcher)
+
+    /// Open a shell command (typically a terminal TUI) in a new pane, driven by a plugin's
+    /// `open-pane` action. `mode`: "split-right" (default), "split-down", or "tab".
+    private func openPaneWithCommand(_ command: String, mode: String) {
+        let candidates = [NSApp.keyWindow, activeWindowController?.window].compactMap { $0 }
+        guard let window = candidates.first(where: { $0.contentViewController is TabContainerController }),
+            let tabContainer = window.contentViewController as? TabContainerController
+        else { return }
+
+        switch mode.lowercased() {
+        case "tab":
+            activeWindowController?.newTab().runCommandInFocusedPane(command)
+        case "split-down", "down":
+            tabContainer.openCommandPane(command: command, direction: .horizontal)
+        default:
+            tabContainer.openCommandPane(command: command, direction: .vertical)
+        }
     }
 
     // MARK: - Onboarding

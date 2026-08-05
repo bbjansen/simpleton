@@ -498,6 +498,46 @@ final class TabContainerController: NSViewController {
         Task { await bookmarkStore?.recordUse(bookmarkId: bookmark.id) }
     }
 
+    // MARK: - Command panes (TUI plugins)
+
+    /// Open a new split pane running the user's shell, then run `command` in it (e.g. a TUI like
+    /// lazygit). The command runs in the real shell so PATH/aliases resolve, and the pane drops
+    /// back to a prompt when the TUI exits.
+    func openCommandPane(command: String, direction: SplitDirection) {
+        let previousFactory = splitController.paneFactory
+        splitController.paneFactory = { [weak self] paneID in
+            guard let self = self else {
+                return PaneController(
+                    id: paneID, frame: .zero,
+                    connectionType: .local(shell: "/bin/zsh", workingDirectory: NSHomeDirectory()))
+            }
+            let cwd = self.splitController.panes[self.splitController.focusedPaneID]?.currentDirectory
+            let pane = self.createPane(id: paneID, inheritedWorkingDirectory: cwd)
+            self.runCommand(command, in: pane)
+            return pane
+        }
+        splitController.splitFocusedPane(direction: direction)
+        splitController.paneFactory = previousFactory
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.splitController.setFocus(to: self.splitController.focusedPaneID)
+        }
+    }
+
+    /// Run `command` in the focused pane's shell (used for the initial pane of a new tab).
+    func runCommandInFocusedPane(_ command: String) {
+        guard let pane = splitController.panes[splitController.focusedPaneID] else { return }
+        runCommand(command, in: pane)
+    }
+
+    private func runCommand(_ command: String, in pane: PaneController) {
+        // Give the freshly-started shell a moment before feeding it the command.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak pane] in
+            guard let pane = pane else { return }
+            pane.terminalView.send(data: Array((command + "\n").utf8)[...])
+        }
+    }
+
     private func createSSHPane(id: PaneID, bookmark: Bookmark) -> PaneController {
         let pane = PaneController(
             id: id, frame: NSRect(x: 0, y: 0, width: 400, height: 300),

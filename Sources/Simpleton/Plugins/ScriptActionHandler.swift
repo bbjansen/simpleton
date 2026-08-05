@@ -8,7 +8,7 @@ final class ScriptActionHandler {
     /// Handle a script action. Returns true if the action was processed.
     func handle(
         action: ScriptAction, plugin: ScriptPlugin, pasteHandler: ((String) -> Void)?,
-        commandHandler: ((String) -> Void)?
+        commandHandler: ((String) -> Void)?, openPaneHandler: ((String, String) -> Void)?
     ) -> Bool {
         // Permission check
         guard plugin.grantedPermissions.contains(action.type) else {
@@ -34,6 +34,13 @@ final class ScriptActionHandler {
                 let value = action.payload["value"] as? String
             {
                 setenv(key, value, 1)
+            }
+            return true
+        case "open-pane":
+            // Launch a shell command (typically a terminal TUI like lazygit) in a new pane.
+            // `mode` is "split-right" (default), "split-down", or "tab".
+            if let command = action.payload["command"] as? String {
+                openPaneHandler?(command, action.payload["mode"] as? String ?? "split-right")
             }
             return true
         default:

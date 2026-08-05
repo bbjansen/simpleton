@@ -37,6 +37,10 @@ final class PluginManager {
     /// Command handler — set by AppDelegate to run a command by ID.
     var commandHandler: ((String) -> Void)?
 
+    /// Open-pane handler — set by AppDelegate to launch a shell command (e.g. a TUI like lazygit)
+    /// in a new pane. `mode` is "split-right" (default), "split-down", or "tab".
+    var openPaneHandler: ((_ command: String, _ mode: String) -> Void)?
+
     init(baseDirectory: URL) {
         self.baseDirectory = baseDirectory
     }
@@ -67,7 +71,8 @@ final class PluginManager {
                         action: action,
                         plugin: plugin,
                         pasteHandler: self.pasteHandler,
-                        commandHandler: self.commandHandler
+                        commandHandler: self.commandHandler,
+                        openPaneHandler: self.openPaneHandler
                     )
                 }
             }
@@ -102,7 +107,8 @@ final class PluginManager {
                             action: action,
                             plugin: plugin,
                             pasteHandler: self.pasteHandler,
-                            commandHandler: self.commandHandler
+                            commandHandler: self.commandHandler,
+                            openPaneHandler: self.openPaneHandler
                         )
                     }
                 }

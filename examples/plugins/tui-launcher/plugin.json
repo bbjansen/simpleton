@@ -1,0 +1,13 @@
+{
+  "name": "TUI Launcher",
+  "version": "1.0.0",
+  "description": "Launch terminal TUIs (top, lazygit, htop) in a new pane via the Command Palette.",
+  "author": "Simpleton",
+  "entrypoint": "run",
+  "permissions": ["open-pane"],
+  "commands": [
+    { "id": "tui.top", "title": "TUI: System Monitor (top)" },
+    { "id": "tui.lazygit", "title": "TUI: lazygit" },
+    { "id": "tui.htop", "title": "TUI: htop" }
+  ]
+}
