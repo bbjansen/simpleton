@@ -36,14 +36,9 @@ final class QuickConnectPanel {
             newPanel.isOpaque = false
             newPanel.hasShadow = true
             newPanel.becomesKeyOnlyIfNeeded = false
-
-            // Strong shadow for Spotlight/Raycast feel
-            if let shadow = NSShadow() as NSShadow? {
-                shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
-                shadow.shadowBlurRadius = 40
-                shadow.shadowOffset = NSSize(width: 0, height: -10)
-                newPanel.setValue(shadow, forKey: "shadow")
-            }
+            // NOTE: no `setValue(_, forKey: "shadow")` — NSWindow isn't KVC-compliant for "shadow",
+            // so it raised NSUnknownKeyException (swallowed by AppKit's run loop) and silently
+            // aborted the panel. Shadow is already enabled via `hasShadow = true`.
 
             let contentView = QuickConnectContentView(
                 bookmarkStore: bookmarkStore,
@@ -57,6 +52,12 @@ final class QuickConnectPanel {
             )
             newPanel.contentView = NSHostingView(rootView: contentView)
             self.panel = newPanel
+            // Dismiss when the panel loses focus (user clicks away).
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.didResignKeyNotification, object: newPanel, queue: .main
+            ) { [weak self] _ in
+                self?.dismiss()
+            }
         }
 
         guard let panel = panel else { return }
@@ -71,13 +72,23 @@ final class QuickConnectPanel {
             panel.center()
         }
 
+        panel.alphaValue = 1
         panel.makeKeyAndOrderFront(nil)
     }
 
     func dismiss() {
-        // orderOut hides the panel without deallocating it, preventing use-after-free
-        // in AppKit window animation blocks during close.
-        panel?.orderOut(nil)
+        // Fade out, then orderOut (hides without deallocating). Guard on isVisible so the
+        // resign-key observer can't re-enter.
+        guard let panel = panel, panel.isVisible else { return }
+        NSAnimationContext.runAnimationGroup(
+            { ctx in
+                ctx.duration = 0.15
+                panel.animator().alphaValue = 0
+            },
+            completionHandler: { [weak panel] in
+                panel?.orderOut(nil)
+                panel?.alphaValue = 1
+            })
     }
 
     var isVisible: Bool {
