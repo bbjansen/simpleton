@@ -120,8 +120,14 @@ struct CommandPaletteContentView: View {
                 Image(systemName: "command")
                     .foregroundColor(DT.textMuted)
                     .font(.system(size: 14, weight: .medium))
-                AutoFocusTextField(text: $query, placeholder: "Type a command...", onSubmit: selectCurrent)
-                    .font(.system(size: 18))
+                AutoFocusTextField(
+                    text: $query, placeholder: "Type a command...",
+                    onSubmit: selectCurrent,
+                    onMoveUp: { if selectedIndex > 0 { selectedIndex -= 1 } },
+                    onMoveDown: { if selectedIndex < filtered.count - 1 { selectedIndex += 1 } },
+                    onCancel: onDismiss
+                )
+                .font(.system(size: 18))
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
@@ -174,15 +180,6 @@ struct CommandPaletteContentView: View {
         }
         .onChange(of: query) { selectedIndex = 0 }
         .onExitCommand { onDismiss() }
-        .background(
-            KeyEventHandler(
-                onUpArrow: {
-                    if selectedIndex > 0 { selectedIndex -= 1 }
-                },
-                onDownArrow: {
-                    if selectedIndex < filtered.count - 1 { selectedIndex += 1 }
-                }
-            ))
     }
 
     private func footerHint(keys: String, label: String) -> some View {

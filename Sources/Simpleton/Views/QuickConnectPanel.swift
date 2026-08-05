@@ -115,9 +115,15 @@ struct QuickConnectContentView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(DT.textMuted)
                     .font(.system(size: 15, weight: .medium))
-                AutoFocusTextField(text: $query, placeholder: "Quick connect...", onSubmit: selectCurrent)
-                    .font(.system(size: 18))
-                    .onChange(of: query) { search() }
+                AutoFocusTextField(
+                    text: $query, placeholder: "Quick connect...",
+                    onSubmit: selectCurrent,
+                    onMoveUp: { moveSelection(-1) },
+                    onMoveDown: { moveSelection(1) },
+                    onCancel: onDismiss
+                )
+                .font(.system(size: 18))
+                .onChange(of: query) { search() }
 
                 Text("\u{2318}K")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -192,11 +198,6 @@ struct QuickConnectContentView: View {
             }
         }
         .onExitCommand { onDismiss() }
-        .background(
-            KeyEventHandler(
-                onUpArrow: { moveSelection(-1) },
-                onDownArrow: { moveSelection(1) }
-            ))
     }
 
     private func footerHint(keys: String, label: String) -> some View {
@@ -301,6 +302,9 @@ struct AutoFocusTextField: NSViewRepresentable {
     @Binding var text: String
     var placeholder: String
     var onSubmit: () -> Void
+    var onMoveUp: (() -> Void)? = nil
+    var onMoveDown: (() -> Void)? = nil
+    var onCancel: (() -> Void)? = nil
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
@@ -309,7 +313,7 @@ struct AutoFocusTextField: NSViewRepresentable {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = NSFont.systemFont(ofSize: 18, weight: .light)
-        field.textColor = .white
+        field.textColor = .labelColor
         field.delegate = context.coordinator
         // Auto-focus after a brief delay to ensure the panel is key
         Task { @MainActor in
@@ -337,45 +341,23 @@ struct AutoFocusTextField: NSViewRepresentable {
                 parent.text = field.stringValue
             }
         }
+        // The search field is first responder, so arrow / enter / escape arrive here as field-editor
+        // commands. Route them to list-navigation callbacks — a sibling key view never sees them.
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)):
                 parent.onSubmit()
                 return true
+            case #selector(NSResponder.moveUp(_:)):
+                if let up = parent.onMoveUp { up(); return true }
+            case #selector(NSResponder.moveDown(_:)):
+                if let down = parent.onMoveDown { down(); return true }
+            case #selector(NSResponder.cancelOperation(_:)):
+                if let cancel = parent.onCancel { cancel(); return true }
+            default:
+                break
             }
             return false
-        }
-    }
-}
-
-/// Captures arrow key events in SwiftUI for list navigation.
-struct KeyEventHandler: NSViewRepresentable {
-    let onUpArrow: () -> Void
-    let onDownArrow: () -> Void
-
-    func makeNSView(context: Context) -> KeyCaptureView {
-        let view = KeyCaptureView()
-        view.onUpArrow = onUpArrow
-        view.onDownArrow = onDownArrow
-        return view
-    }
-
-    func updateNSView(_ nsView: KeyCaptureView, context: Context) {
-        nsView.onUpArrow = onUpArrow
-        nsView.onDownArrow = onDownArrow
-    }
-
-    class KeyCaptureView: NSView {
-        var onUpArrow: (() -> Void)?
-        var onDownArrow: (() -> Void)?
-
-        override var acceptsFirstResponder: Bool { true }
-
-        override func keyDown(with event: NSEvent) {
-            switch event.keyCode {
-            case 126: onUpArrow?()  // up arrow
-            case 125: onDownArrow?()  // down arrow
-            default: super.keyDown(with: event)
-            }
         }
     }
 }
