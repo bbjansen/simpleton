@@ -23,7 +23,7 @@ struct AgentExecutionBubble: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(cmd)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(DT.textPrimary)
                         .lineLimit(2)
                     if !explanation.isEmpty {
                         Text(explanation)
@@ -53,15 +53,15 @@ struct AgentExecutionBubble: View {
             if showOutput && !output.isEmpty {
                 Text(output)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(Color(nsColor: NSColor(white: 0.7, alpha: 1)))
+                    .foregroundColor(DT.textSecondary)
                     .padding(8)
-                    .background(Color(nsColor: NSColor(white: 0.05, alpha: 1)))
+                    .background(DT.base)
                     .cornerRadius(6)
                     .textSelection(.enabled)
             }
         }
         .padding(10)
-        .background(Color(nsColor: NSColor(white: 0.1, alpha: 1)))
+        .background(DT.elevated)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -91,7 +91,7 @@ struct AgentExecutionBubble: View {
         case .running: return .purple.opacity(0.5)
         case .done: return .green.opacity(0.3)
         case .failed: return .red.opacity(0.5)
-        case .skipped: return Color(nsColor: NSColor(white: 0.25, alpha: 1))
+        case .skipped: return DT.border
         }
     }
 

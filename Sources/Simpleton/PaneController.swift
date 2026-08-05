@@ -92,9 +92,11 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         // all sides (autoresize margins stay constant), so it tracks resizes cleanly.
         let container = NSView(frame: frame)
         container.wantsLayer = true
-        // Seed the padding color with the terminal well so there's no flash before the theme
-        // applies; ThemeApplier keeps it in sync with the live background afterwards.
-        container.layer?.backgroundColor = (NSColor(hex: "#0B0B0E") ?? .black).cgColor
+        // Seed the padding color to the current appearance so a new pane doesn't flash dark in
+        // Light mode before ThemeApplier sets the exact terminal background.
+        let seedIsLight = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
+        container.layer?.backgroundColor =
+            (seedIsLight ? .white : (NSColor(hex: "#0B0B0E") ?? .black)).cgColor
         container.autoresizingMask = [.width, .height]
         self.paneView = container
         super.init()

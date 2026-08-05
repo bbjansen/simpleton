@@ -29,6 +29,6 @@ struct ChatStatusBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
-        .background(Color(nsColor: NSColor(white: 0.05, alpha: 1)))
+        .background(DT.base)
     }
 }

@@ -6,9 +6,13 @@ import SimpletonCore
 /// Each tab has its own TabContainerController with its own split tree.
 final class WindowController: NSWindowController, NSWindowDelegate {
 
-    private let config: AppConfig
+    private var config: AppConfig
     private let theme: Theme
     private var tabContainer: TabContainerController
+
+    /// Keep the window's config current so tabs opened *after* a settings change (e.g. switching to
+    /// Light) inherit the new appearance instead of the config captured at window creation.
+    func updateConfig(_ newConfig: AppConfig) { config = newConfig }
 
     /// Set these after init to propagate to all TabContainerControllers.
     var bookmarkStore: BookmarkStore? {

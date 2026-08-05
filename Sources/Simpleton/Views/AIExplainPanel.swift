@@ -133,7 +133,7 @@ struct AIExplainContentView: View {
             }
         }
         .frame(width: 450, height: 350)
-        .background(Color(nsColor: NSColor(white: 0.1, alpha: 1)))
+        .background(DT.surface)
         .onAppear { fetchExplanation() }
     }
 

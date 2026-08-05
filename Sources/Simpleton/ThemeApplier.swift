@@ -5,9 +5,20 @@ import SwiftTerm
 
 enum ThemeApplier {
 
-    /// Apply a Theme's colors and font settings to a TerminalView.
+    /// Apply the terminal palette + font settings to a TerminalView.
+    ///
+    /// The palette is derived from the CURRENT appearance mode (`config`), NOT the passed `theme` —
+    /// that `theme` is captured when a window/tab is created and goes stale after an appearance
+    /// change, which made new Light-mode tabs render with the dark palette (black terminal).
     static func apply(theme: Theme, config: AppConfig, to terminalView: TerminalView) {
-        let colors = theme.colors
+        let isLight: Bool = {
+            switch config.appearance.appearanceMode.lowercased() {
+            case "light": return true
+            case "auto": return NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
+            default: return false
+            }
+        }()
+        let colors = isLight ? ThemeColors.light : ThemeColors.dark
 
         // Font
         if let font = NSFont(name: config.appearance.fontFamily, size: CGFloat(config.appearance.fontSize)) {
@@ -31,13 +42,6 @@ enum ThemeApplier {
         // selection) so the terminal matches the focus border and sidebar highlight.
         let accent = AccentPalette.nsColor(config.appearance.accentColor)
         terminalView.caretColor = accent
-        let isLight: Bool = {
-            switch config.appearance.appearanceMode.lowercased() {
-            case "light": return true
-            case "auto": return NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
-            default: return false
-            }
-        }()
         terminalView.selectedTextBackgroundColor = accent.withAlphaComponent(isLight ? 0.22 : 0.32)
 
         // ANSI colors (0-15) — build full 16-color palette and install at once

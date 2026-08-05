@@ -43,7 +43,7 @@ struct SkillPickerSheet: View {
         .frame(width: 300, height: 380)
         .background(DT.surface)
         .cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DT.border, lineWidth: 1))
     }
 
     @ViewBuilder

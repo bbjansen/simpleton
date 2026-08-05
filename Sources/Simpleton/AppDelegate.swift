@@ -587,6 +587,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // container's `appConfig()` closure. Push the just-stored config into every tab's
         // container so those closures return fresh values after a Preferences change.
         for wc in windowControllers {
+            wc.updateConfig(config)  // so tabs opened later inherit the current appearance
             let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
             for window in windows {
                 window.appearance = AppTheme.nsAppearance(for: config.appearance.appearanceMode)
