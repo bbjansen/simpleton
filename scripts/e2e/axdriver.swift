@@ -198,6 +198,24 @@ case "menu":
     let menuBar = menuBarRef as! AXUIElement
     guard let item = findTitle(menuBar, args[3]) else { err("menu item not found: \(args[3])"); exit(1) }
     exit(AXUIElementPerformAction(item, kAXPressAction as CFString) == .success ? 0 : 1)
+case "resize":
+    // resize <pid> <w> <h> [x] [y]  — set the front window's size (and optional top-left position,
+    // AX coords: 0,0 = top-left of the main display) via AX. Handy for large, consistent screenshots.
+    guard args.count > 4, let w = Double(args[3]), let h = Double(args[4]) else { exit(64) }
+    guard let win = (attr(app, kAXWindowsAttribute as String) as? [AXUIElement])?.first else {
+        err("no window")
+        exit(1)
+    }
+    if args.count > 6, let x = Double(args[5]), let y = Double(args[6]) {
+        var pos = CGPoint(x: x, y: y)
+        if let p = AXValueCreate(.cgPoint, &pos) {
+            AXUIElementSetAttributeValue(win, kAXPositionAttribute as CFString, p)
+        }
+    }
+    var size = CGSize(width: w, height: h)
+    if let s = AXValueCreate(.cgSize, &size) {
+        AXUIElementSetAttributeValue(win, kAXSizeAttribute as CFString, s)
+    }
 default:
     err("unknown command: \(args[1])")
     exit(64)
