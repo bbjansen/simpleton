@@ -698,9 +698,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func connectToBookmark(_ bookmark: Bookmark, in targetWindow: NSWindow? = nil) {
         // Use the provided window, falling back to the key window. Skip windows
         // that aren't terminal windows (e.g. floating panels).
-        let candidates = [targetWindow, NSApp.keyWindow].compactMap { $0 }
-        guard let window = candidates.first(where: { $0.contentViewController is TabContainerController }),
-            let tabContainer = window.contentViewController as? TabContainerController
+        // The key window is often a floating panel (Quick Connect / palette) with no
+        // contentViewController, so prefer mainWindow (stays the terminal under a panel), then the
+        // captured target, then any terminal front-to-back.
+        let candidates =
+            [NSApp.mainWindow, targetWindow, NSApp.keyWindow].compactMap { $0 }
+            + NSApp.orderedWindows
+        guard
+            let tabContainer = candidates.compactMap({ $0.contentViewController as? TabContainerController })
+                .first
         else { return }
         tabContainer.openSSHConnection(bookmark: bookmark)
     }
