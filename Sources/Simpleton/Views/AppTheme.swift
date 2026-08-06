@@ -54,7 +54,10 @@ final class ThemeSettings: ObservableObject {
     @Published var accentID: String = "indigo"
     /// The active whole-app theme. Publishing it re-renders every chrome island that observes this.
     @Published var theme: AppearanceTheme = ThemePalette.dark
-    var accent: Color { AccentPalette.color(accentID) }
+    /// The resolved accent — a colored theme's own accent, or the chosen accent for neutral themes.
+    /// Reads `AppTheme.accentNSColor` (set by `AppTheme.update` before `theme` is published) rather
+    /// than `accentID`, so colored themes tint chrome with their signature accent, not indigo.
+    var accent: Color { Color(nsColor: AppTheme.accentNSColor) }
     var themeID: String { theme.id }
     private init() {}
 }
