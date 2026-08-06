@@ -270,25 +270,34 @@ struct AppearanceTab: View {
     var body: some View {
         Form {
             Section {
-                Picker("Appearance", selection: $config.appearance.appearanceMode) {
+                Picker("Theme", selection: $config.appearance.appearanceMode) {
                     Text("Dark").tag("dark")
                     Text("Light").tag("light")
                     Text("Auto").tag("auto")
-                }
-                .onChange(of: config.appearance.appearanceMode) { onChanged(config) }
-                Picker("Accent color", selection: $config.appearance.accentColor) {
-                    ForEach(AccentPalette.options, id: \.id) { opt in
-                        // A single concatenated Text (colored dot + label) — a menu Picker renders
-                        // this correctly in the collapsed button, unlike an HStack of subviews.
-                        (Text(Image(systemName: "circle.fill")).foregroundColor(AccentPalette.color(opt.id))
-                            + Text("  " + opt.label))
-                            .tag(opt.id)
+                    Divider()
+                    ForEach(ThemePalette.all.filter { $0.id != "dark" && $0.id != "light" }) { th in
+                        Text(th.name).tag(th.id)
                     }
                 }
-                .onChange(of: config.appearance.accentColor) { onChanged(config) }
-                Text("Focus ring, selection, and cursor use this color. “Match System” follows your macOS accent.")
-                    .font(.system(size: 11))
-                    .foregroundColor(DT.textHelp)
+                .onChange(of: config.appearance.appearanceMode) { onChanged(config) }
+
+                if !AppTheme.isColoredThemeID(config.appearance.appearanceMode) {
+                    Picker("Accent color", selection: $config.appearance.accentColor) {
+                        ForEach(AccentPalette.options, id: \.id) { opt in
+                            (Text(Image(systemName: "circle.fill")).foregroundColor(AccentPalette.color(opt.id))
+                                + Text("  " + opt.label))
+                                .tag(opt.id)
+                        }
+                    }
+                    .onChange(of: config.appearance.accentColor) { onChanged(config) }
+                    Text("Focus ring, selection, and cursor use this color. \u{201C}Match System\u{201D} follows your macOS accent.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DT.textHelp)
+                } else {
+                    Text("This theme sets its own accent color.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DT.textHelp)
+                }
             } header: {
                 PrefsSectionHeader(title: "Theme")
             }
