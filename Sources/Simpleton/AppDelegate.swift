@@ -9,16 +9,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowControllers: [WindowController] = []
     private var config: AppConfig = AppConfig()
 
-    /// The active terminal palette, derived from the appearance mode (Dark/Light/Auto) instead of
-    /// a named theme file. Auto resolves against the current system appearance.
+    /// The active terminal palette, derived from the current AppTheme.
     private var theme: Theme {
-        let light: Bool
-        switch config.appearance.appearanceMode.lowercased() {
-        case "light": light = true
-        case "auto": light = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
-        default: light = false
-        }
-        return Theme(name: light ? "Light" : "Dark", colors: light ? .light : .dark)
+        Theme(name: AppTheme.activeTheme.name, colors: AppTheme.activeTheme.terminal)
     }
     private var sshConfigWatcher: SSHConfigWatcher?
     private var bookmarkStore: BookmarkStore?
@@ -593,7 +586,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             wc.updateConfig(config)  // so tabs opened later inherit the current appearance
             let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
             for window in windows {
-                window.appearance = AppTheme.nsAppearance(for: config.appearance.appearanceMode)
+                window.appearance = AppTheme.nsAppearance(
+                    for: config.appearance.appearanceMode, isDark: AppTheme.activeTheme.isDark)
                 (window.contentViewController as? TabContainerController)?.updateConfig(config)
                 window.alphaValue = config.appearance.windowOpacity
             }

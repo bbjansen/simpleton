@@ -90,7 +90,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     /// background color. Only the traffic lights float above a continuous chrome-colored strip — no
     /// fullSize content, so the sidebar/terminal never slide under the traffic lights.
     static func dissolveTitleBar(_ window: NSWindow, mode: String) {
-        window.appearance = AppTheme.nsAppearance(for: mode)
+        window.appearance = AppTheme.nsAppearance(for: mode, isDark: AppTheme.activeTheme.isDark)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         // Chrome-colored titlebar strip that follows light/dark. Dark #131316 / Light #F2F2F4;

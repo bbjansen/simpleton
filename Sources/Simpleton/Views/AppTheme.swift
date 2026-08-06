@@ -114,8 +114,4 @@ enum AppTheme {
         }
     }
 
-    /// Back-compat 1-arg overload (existing call sites use this until a later task migrates them).
-    static func nsAppearance(for mode: String) -> NSAppearance? {
-        nsAppearance(for: mode, isDark: ThemePalette.resolve(mode).isDark)
-    }
 }
