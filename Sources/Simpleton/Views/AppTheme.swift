@@ -52,7 +52,10 @@ enum AccentPalette {
 final class ThemeSettings: ObservableObject {
     static let shared = ThemeSettings()
     @Published var accentID: String = "indigo"
+    /// The active whole-app theme. Publishing it re-renders every chrome island that observes this.
+    @Published var theme: AppearanceTheme = ThemePalette.dark
     var accent: Color { AccentPalette.color(accentID) }
+    var themeID: String { theme.id }
     private init() {}
 }
 
@@ -61,26 +64,58 @@ final class ThemeSettings: ObservableObject {
 /// whenever Settings change so every surface stays consistent.
 enum AppTheme {
     private(set) static var accentNSColor: NSColor = AccentPalette.nsColor("indigo")
+    private(set) static var activeTheme: AppearanceTheme = ThemePalette.dark
 
     /// SwiftUI accent — recomputed from the live NSColor each access so views pick up changes on
     /// their next body evaluation.
     static var accent: Color { Color(nsColor: accentNSColor) }
 
-    static func update(from config: AppConfig) {
-        accentNSColor = AccentPalette.nsColor(config.appearance.accentColor)
-        // Drive the observable so open SwiftUI surfaces (settings, sidebar) re-tint immediately.
-        ThemeSettings.shared.accentID = config.appearance.accentColor
-        // Set the appearance app-wide so EVERY window follows the mode — the terminal windows and
-        // the Settings / panel windows alike (nil = follow the system, for Auto).
-        NSApp.appearance = nsAppearance(for: config.appearance.appearanceMode)
+    /// The set of colored theme ids (everything except the neutral dark/light/auto).
+    static func isColoredThemeID(_ id: String) -> Bool {
+        switch id.lowercased() {
+        case "dark", "light", "auto": return false
+        default: return true
+        }
     }
 
-    /// The NSAppearance for an appearance-mode string. `nil` means "follow the system" (Auto).
-    static func nsAppearance(for mode: String) -> NSAppearance? {
-        switch mode.lowercased() {
-        case "light": return NSAppearance(named: .aqua)
-        case "auto": return nil
-        default: return NSAppearance(named: .darkAqua)
+    static func update(from config: AppConfig) {
+        let mode = config.appearance.appearanceMode.lowercased()
+
+        // Resolve the active theme. `auto` picks dark/light by the live system appearance.
+        let resolved: AppearanceTheme
+        if mode == "auto" {
+            let systemLight =
+                NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
+            resolved = systemLight ? ThemePalette.light : ThemePalette.dark
+        } else {
+            resolved = ThemePalette.resolve(mode)
         }
+        activeTheme = resolved
+        ThemeSettings.shared.theme = resolved
+
+        // Accent: a colored theme carries its own; neutral themes use the accent dropdown.
+        if isColoredThemeID(mode) {
+            accentNSColor = NSColor(hex: resolved.accent) ?? AccentPalette.nsColor("indigo")
+            ThemeSettings.shared.accentID = "indigo"  // dropdown is hidden; keep a valid value
+        } else {
+            accentNSColor = AccentPalette.nsColor(config.appearance.accentColor)
+            ThemeSettings.shared.accentID = config.appearance.accentColor
+        }
+
+        NSApp.appearance = nsAppearance(for: mode, isDark: resolved.isDark)
+    }
+
+    /// The NSAppearance for a theme id. `auto` → nil (follow system); colored/dark → darkAqua by
+    /// `isDark`; light → aqua.
+    static func nsAppearance(for mode: String, isDark: Bool) -> NSAppearance? {
+        switch mode.lowercased() {
+        case "auto": return nil
+        default: return NSAppearance(named: isDark ? .darkAqua : .aqua)
+        }
+    }
+
+    /// Back-compat 1-arg overload (existing call sites use this until a later task migrates them).
+    static func nsAppearance(for mode: String) -> NSAppearance? {
+        nsAppearance(for: mode, isDark: ThemePalette.resolve(mode).isDark)
     }
 }
