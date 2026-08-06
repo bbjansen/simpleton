@@ -39,6 +39,23 @@ extension NSVisualEffectView {
 }
 
 extension View {
+    /// Bold theme-colored macOS glass. A vibrancy blur provides the polished translucent "gloss";
+    /// a dominant theme-color wash on top makes the surface read as *fully* the theme's color, and a
+    /// soft top highlight gives it a glassy sheen. Used for the sidebar and activity bars so every
+    /// theme is visibly, fully its color instead of a neutral system gray. `tint` trades color
+    /// boldness (higher) against visible blur (lower).
+    func themedGlass(_ color: Color, tint: Double = 0.80) -> some View {
+        background {
+            ZStack {
+                VisualEffect(material: .sidebar, blendingMode: .behindWindow)
+                color.opacity(tint)
+                LinearGradient(
+                    colors: [.white.opacity(0.06), .clear, .black.opacity(0.05)],
+                    startPoint: .top, endPoint: .bottom)
+            }
+        }
+    }
+
     /// A modern "glossy card" surface: continuous corners, a hairline that catches light, and a
     /// soft drop shadow for depth. On macOS 26 it upgrades to Liquid Glass automatically.
     func glossyCard(cornerRadius: CGFloat = 12, tint: Color = .clear) -> some View {

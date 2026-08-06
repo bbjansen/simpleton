@@ -89,7 +89,7 @@ struct SidebarView: View {
             .padding(.vertical, 10)
         }
         .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
-        .background(.regularMaterial)  // frosted but legible; opaque window, no desktop leak
+        .themedGlass(DT.surface)  // theme-colored vibrancy — fully the theme's color, glassy sheen
         .onAppear { refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .simpletonBookmarksChanged)) { _ in refresh() }
     }

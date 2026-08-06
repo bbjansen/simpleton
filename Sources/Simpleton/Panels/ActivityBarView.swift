@@ -40,7 +40,7 @@ struct ActivityBarView: View {
         }
         .padding(.vertical, 8)
         .frame(width: 40)
-        .background(.regularMaterial)  // frosted but legible chrome
+        .themedGlass(DT.surface)  // theme-colored vibrancy chrome (matches the sidebar)
         .onDrop(of: [UTType.plainText], isTargeted: nil) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: NSString.self) { item, _ in
