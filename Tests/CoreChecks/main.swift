@@ -30,5 +30,6 @@ runSmartGroupChecks(runner)
 runSplitNodeChecks(runner)
 runThemeChecks(runner)
 runAppearanceThemeChecks(runner)
+runThemePaletteChecks(runner)
 
 exit(runner.finish())
