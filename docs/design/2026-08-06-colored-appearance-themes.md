@@ -76,9 +76,10 @@ Plus neutral `dark`, `light`, and `auto` (auto resolves to `dark`/`light` by sys
 - **Appearance settings tab** (`Views/PreferencesWindow.swift`) — the appearance control becomes a
   single **Theme** picker over `ThemePalette.all` (Dark / Light / Auto, then the colored themes).
   The accent dropdown is shown only when the selected theme is neutral.
-- **`AppDelegate`** — on theme change (config save): `AppTheme.update` → `applyConfigToAllPanes()`
-  (re-applies terminal + window background) → bump the root SwiftUI view's `.id(themeID)` so
-  chrome-consuming views rebuild against the new tokens.
+- **`AppDelegate`** — on theme change (config save): `AppTheme.update` (which republishes
+  `ThemeSettings.theme`) → `applyConfigToAllPanes()` re-applies the terminal palette and window
+  background / appearance. Observing SwiftUI islands re-render off the published theme. There is **no
+  single SwiftUI root** to `.id` — the app is AppKit-first (see Live switching).
 
 ## Data flow
 
@@ -96,12 +97,22 @@ On a user change in Settings, the Appearance tab writes `config.appearanceMode`;
 
 ## Live switching mechanism
 
-- **SwiftUI chrome:** the root content view carries `.id(themeSettings.themeID)`; changing the id
-  rebuilds the subtree, which re-reads the now-theme-driven `DesignTokens`. Views already observing
-  `ThemeSettings` (accent) update regardless.
-- **AppKit surfaces** (terminal colors, window `backgroundColor`, split borders): re-applied
-  imperatively through the existing `applyConfigToAllPanes()` + `WindowController.dissolveTitleBar`
-  path.
+The app is **AppKit-first** — there is no single SwiftUI root. The chrome is ~a dozen SwiftUI islands
+hosted in `NSHostingView`/`NSHostingController` (the two activity bars, the sidebar via
+`SidebarHostController`, each built-in panel, the AI chat, preferences); the terminal is a SwiftTerm
+`NSView`. Today dark↔light refreshes only because `NSApp.appearance` flips and every island
+re-renders — but colored themes are all `darkAqua`, so that trigger never fires. Therefore:
+
+- **`DesignTokens` reads `ThemeSettings.shared.theme.chrome`** and `ThemeSettings` gains
+  `@Published var theme`, so a switch publishes a change.
+- **Every chrome island root observes `ThemeSettings`** so the published change re-evaluates its body
+  and re-reads `DesignTokens`. Most already do (ActivityBarView, SidebarView, PaneIndicatorBar, the
+  Skills/Profiles/Snippets/FileBrowser views); the plan adds
+  `@ObservedObject var themeSettings = ThemeSettings.shared` to the few that don't (Environment,
+  Processes, History, Notes, SSH-tunnels, Connections panel views) — a one-line touch each.
+- **AppKit surfaces** (terminal palette, window `backgroundColor`, split/pane borders): re-applied
+  imperatively via the existing `applyConfigToAllPanes()` → `ThemeApplier` / `window.appearance` /
+  `WindowController.dissolveTitleBar` path.
 
 ## Error handling
 
