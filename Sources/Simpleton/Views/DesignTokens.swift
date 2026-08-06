@@ -1,69 +1,61 @@
 import AppKit
 // Sources/Simpleton/Views/DesignTokens.swift
+import SimpletonCore
 import SwiftUI
 
 /// Centralized design tokens for the Simpleton premium dark theme.
 enum DT {
 
-    // MARK: - Base Colors (dynamic — adapt to Light / Dark / Auto appearance)
+    // MARK: - Base Colors (theme-driven)
 
-    /// A color that resolves to `light` or `dark` based on the view's macOS appearance, so the
-    /// whole SwiftUI chrome follows Dark / Light / Auto without per-view branching.
-    private static func dyn(
-        _ lr: Double, _ lg: Double, _ lb: Double, _ dr: Double, _ dg: Double, _ db: Double
-    ) -> Color {
-        Color(
-            nsColor: NSColor(name: nil) { appearance in
-                let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-                return isDark
-                    ? NSColor(srgbRed: dr, green: dg, blue: db, alpha: 1)
-                    : NSColor(srgbRed: lr, green: lg, blue: lb, alpha: 1)
-            })
-    }
+    /// Resolve a chrome hex to a SwiftUI Color, falling back to magenta only if a preset is malformed
+    /// (guarded against by the ThemePalette CoreChecks integrity test).
+    private static func c(_ hex: String) -> Color { Color(hex: hex) ?? Color(red: 1, green: 0, blue: 1) }
+    private static var chrome: ChromeColors { ThemeSettings.shared.theme.chrome }
 
-    /// Deep neutral base background — window/chrome. Dark #0E0E11 / Light #F2F2F4
-    static let base = dyn(0.949, 0.949, 0.957, 0.055, 0.055, 0.067)
-    /// Chrome surface — sidebar / tab bar. Dark #131316 / Light #F7F7F9
-    static let surface = dyn(0.969, 0.969, 0.976, 0.075, 0.075, 0.086)
-    /// Elevated surface — popovers / cards. Dark #191A1E / Light #FFFFFF
-    static let elevated = dyn(1.0, 1.0, 1.0, 0.098, 0.102, 0.118)
-    /// Hover fill. Dark #1D1E22 / Light #ECECEF
-    static let hover = dyn(0.925, 0.925, 0.937, 0.114, 0.118, 0.133)
-    /// Selected-row fill — one step past hover. Dark #232429 / Light #E1E1E7
-    static let selected = dyn(0.882, 0.882, 0.906, 0.137, 0.141, 0.161)
-    /// Thin hairline border. Dark #26262B / Light #D6D6DC
-    static let border = dyn(0.839, 0.839, 0.863, 0.149, 0.149, 0.169)
-    /// Subtle border for panels. Dark #1E1E22 / Light #E5E5EA
-    static let panelBorder = dyn(0.898, 0.898, 0.918, 0.118, 0.118, 0.133)
+    /// Deep neutral base background — window/chrome.
+    static var base: Color { c(chrome.base) }
+    /// Chrome surface — sidebar / tab bar.
+    static var surface: Color { c(chrome.surface) }
+    /// Elevated surface — popovers / cards.
+    static var elevated: Color { c(chrome.elevated) }
+    /// Hover fill.
+    static var hover: Color { c(chrome.hover) }
+    /// Selected-row fill — one step past hover.
+    static var selected: Color { c(chrome.selected) }
+    /// Thin hairline border.
+    static var border: Color { c(chrome.border) }
+    /// Subtle border for panels.
+    static var panelBorder: Color { c(chrome.panelBorder) }
 
     // MARK: - Text Colors
 
-    /// Primary text — off-white on dark, near-black on light. Dark #F5F6F6 / Light #1D1D1F
-    static let textPrimary = dyn(0.114, 0.114, 0.122, 0.961, 0.965, 0.965)
-    /// Secondary text. Dark #C7CBD1 / Light #3C3C43
-    static let textSecondary = dyn(0.235, 0.235, 0.263, 0.780, 0.796, 0.820)
-    /// Tertiary text / captions. Dark #8A8F98 / Light #6E6E76
-    static let textTertiary = dyn(0.431, 0.431, 0.463, 0.541, 0.561, 0.596)
-    /// Muted text / section headers. Dark #62666D / Light #8A8A92
-    static let textMuted = dyn(0.541, 0.541, 0.573, 0.384, 0.400, 0.427)
-    /// Very muted text / footers. Dark #4A4D54 / Light #AEAEB6
-    static let textFaint = dyn(0.682, 0.682, 0.714, 0.290, 0.302, 0.329)
-    /// Help text in preferences. Dark #6A6E76 / Light #6E6E76
-    static let textHelp = dyn(0.431, 0.431, 0.463, 0.416, 0.431, 0.463)
+    /// Primary text — off-white on dark, near-black on light.
+    static var textPrimary: Color { c(chrome.textPrimary) }
+    /// Secondary text.
+    static var textSecondary: Color { c(chrome.textSecondary) }
+    /// Tertiary text / captions.
+    static var textTertiary: Color { c(chrome.textTertiary) }
+    /// Muted text / section headers.
+    static var textMuted: Color { c(chrome.textMuted) }
+    /// Very muted text / footers.
+    static var textFaint: Color { c(chrome.textFaint) }
+    /// Help text in preferences.
+    static var textHelp: Color { c(chrome.textHelp) }
 
     // MARK: - Accent (single signature — focus, selection, cursor)
 
-    /// The one signature accent: Linear indigo (#5E6AD2). Used ONLY for focus rings,
-    /// selection, and the cursor — everything else stays grayscale or semantic.
-    static let accent = Color(red: 0.369, green: 0.416, blue: 0.824)
-    /// Brighter accent for hover / pressed states (#828FFF).
-    static let accentHover = Color(red: 0.510, green: 0.561, blue: 1.000)
+    /// The active theme's accent color. Used ONLY for focus rings, selection, and the cursor —
+    /// everything else stays grayscale or semantic.
+    static var accent: Color { AppTheme.accent }
+    /// Accent with reduced opacity for hover / pressed states.
+    static var accentHover: Color { AppTheme.accent.opacity(0.82) }
     /// AppKit variant of the signature accent (layer borders, carets).
-    static let accentNSColor = NSColor(red: 0.369, green: 0.416, blue: 0.824, alpha: 1)
+    static var accentNSColor: NSColor { AppTheme.accentNSColor }
 
     // MARK: - Semantic status + legacy accents
 
-    static let accentIndigo = accent
+    static var accentIndigo: Color { accent }
     static let accentGreen = Color(red: 0.300, green: 0.800, blue: 0.500)
     static let accentAmber = Color(red: 0.950, green: 0.700, blue: 0.200)
     static let accentRed = Color(red: 0.950, green: 0.350, blue: 0.350)
