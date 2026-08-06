@@ -559,9 +559,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func applyThemeToAllPanes(_ theme: Theme) {
         for wc in windowControllers {
-            guard let tabContainer = wc.window?.contentViewController as? TabContainerController else { continue }
-            for pane in tabContainer.splitController.panes.values {
-                ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
+            let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
+            for window in windows {
+                guard let tabContainer = window.contentViewController as? TabContainerController else { continue }
+                for pane in tabContainer.splitController.panes.values {
+                    ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
+                }
             }
         }
     }
@@ -590,6 +593,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     for: config.appearance.appearanceMode, isDark: AppTheme.activeTheme.isDark)
                 (window.contentViewController as? TabContainerController)?.updateConfig(config)
                 window.alphaValue = config.appearance.windowOpacity
+                window.backgroundColor = NSColor(hex: AppTheme.activeTheme.chrome.surface) ?? window.backgroundColor
             }
         }
     }

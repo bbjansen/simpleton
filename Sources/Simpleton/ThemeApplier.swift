@@ -5,11 +5,9 @@ import SwiftTerm
 
 enum ThemeApplier {
 
-    /// Apply the terminal palette + font settings to a TerminalView.
-    ///
-    /// The palette is derived from the CURRENT appearance mode (`config`), NOT the passed `theme` —
-    /// that `theme` is captured when a window/tab is created and goes stale after an appearance
-    /// change, which made new Light-mode tabs render with the dark palette (black terminal).
+    /// Apply the terminal palette + font to a TerminalView. The palette comes from the app's active
+    /// theme (`AppTheme.activeTheme`) — neutral Dark/Light or a colored theme — not from the passed
+    /// `theme` parameter (kept for source-compat) or the appearance mode.
     static func apply(theme: Theme, config: AppConfig, to terminalView: TerminalView) {
         // Palette comes from the app's active theme (neutral dark/light or a colored theme).
         let active = AppTheme.activeTheme

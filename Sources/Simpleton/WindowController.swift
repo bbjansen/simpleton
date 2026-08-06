@@ -93,13 +93,10 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         window.appearance = AppTheme.nsAppearance(for: mode, isDark: AppTheme.activeTheme.isDark)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        // Chrome-colored titlebar strip that follows light/dark. Dark #131316 / Light #F2F2F4;
-        // frames the terminal well below it (chrome lighter/darker than content, per Zed).
-        window.backgroundColor = NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-                ? NSColor(srgbRed: 0.075, green: 0.075, blue: 0.086, alpha: 1)
-                : NSColor(srgbRed: 0.949, green: 0.949, blue: 0.957, alpha: 1)
-        }
+        // Chrome-colored titlebar strip — uses the active theme's chrome surface so colored themes
+        // stay seamless with the sidebar (DT.surface). Neutral dark: #131316 / light: #F2F2F4.
+        window.backgroundColor = NSColor(hex: AppTheme.activeTheme.chrome.surface)
+            ?? NSColor(srgbRed: 0.075, green: 0.075, blue: 0.086, alpha: 1)
     }
 
     // MARK: - Public API
