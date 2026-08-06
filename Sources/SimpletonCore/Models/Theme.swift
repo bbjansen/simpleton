@@ -74,6 +74,54 @@ extension ThemeColors {
     )
 }
 
+/// UI-chrome colors for a whole-app theme — the tokens `DesignTokens` renders (sidebar, panels,
+/// borders, text tiers). Stored as `#RRGGBB` hex, mirroring `ThemeColors`.
+public struct ChromeColors: Codable, Equatable {
+    public var base: String
+    public var surface: String
+    public var elevated: String
+    public var hover: String
+    public var selected: String
+    public var border: String
+    public var panelBorder: String
+    public var textPrimary: String
+    public var textSecondary: String
+    public var textTertiary: String
+    public var textMuted: String
+    public var textFaint: String
+    public var textHelp: String
+
+    public init(
+        base: String, surface: String, elevated: String, hover: String, selected: String,
+        border: String, panelBorder: String, textPrimary: String, textSecondary: String,
+        textTertiary: String, textMuted: String, textFaint: String, textHelp: String
+    ) {
+        self.base = base; self.surface = surface; self.elevated = elevated
+        self.hover = hover; self.selected = selected; self.border = border
+        self.panelBorder = panelBorder; self.textPrimary = textPrimary
+        self.textSecondary = textSecondary; self.textTertiary = textTertiary
+        self.textMuted = textMuted; self.textFaint = textFaint; self.textHelp = textHelp
+    }
+}
+
+/// A whole-app appearance theme: terminal palette + UI chrome + accent, all in one value.
+public struct AppearanceTheme: Codable, Equatable, Identifiable {
+    public let id: String
+    public let name: String
+    public let isDark: Bool
+    public var terminal: ThemeColors
+    public var chrome: ChromeColors
+    public var accent: String  // #RRGGBB
+
+    public init(
+        id: String, name: String, isDark: Bool,
+        terminal: ThemeColors, chrome: ChromeColors, accent: String
+    ) {
+        self.id = id; self.name = name; self.isDark = isDark
+        self.terminal = terminal; self.chrome = chrome; self.accent = accent
+    }
+}
+
 public struct Theme: Codable, Equatable {
     public var name: String
     public var colors: ThemeColors

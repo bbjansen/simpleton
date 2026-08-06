@@ -29,5 +29,6 @@ runSessionStateChecks(runner)
 runSmartGroupChecks(runner)
 runSplitNodeChecks(runner)
 runThemeChecks(runner)
+runAppearanceThemeChecks(runner)
 
 exit(runner.finish())
