@@ -11,14 +11,10 @@ enum ThemeApplier {
     /// that `theme` is captured when a window/tab is created and goes stale after an appearance
     /// change, which made new Light-mode tabs render with the dark palette (black terminal).
     static func apply(theme: Theme, config: AppConfig, to terminalView: TerminalView) {
-        let isLight: Bool = {
-            switch config.appearance.appearanceMode.lowercased() {
-            case "light": return true
-            case "auto": return NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua
-            default: return false
-            }
-        }()
-        let colors = isLight ? ThemeColors.light : ThemeColors.dark
+        // Palette comes from the app's active theme (neutral dark/light or a colored theme).
+        let active = AppTheme.activeTheme
+        let colors = active.terminal
+        let isLight = !active.isDark
 
         // Font
         if let font = NSFont(name: config.appearance.fontFamily, size: CGFloat(config.appearance.fontSize)) {
@@ -38,9 +34,8 @@ enum ThemeApplier {
         if let fg = NSColor(hex: colors.foreground) {
             terminalView.nativeForegroundColor = fg
         }
-        // Caret + selection follow the signature accent (overriding the palette's own cursor/
-        // selection) so the terminal matches the focus border and sidebar highlight.
-        let accent = AccentPalette.nsColor(config.appearance.accentColor)
+        // Caret + selection follow the active theme's accent (matches focus border + sidebar).
+        let accent = AppTheme.accentNSColor
         terminalView.caretColor = accent
         terminalView.selectedTextBackgroundColor = accent.withAlphaComponent(isLight ? 0.22 : 0.32)
 
