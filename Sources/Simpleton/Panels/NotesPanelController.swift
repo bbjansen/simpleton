@@ -4,6 +4,8 @@ import SimpletonCore
 import SwiftUI
 
 struct NotesPanelView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     let appSupportDir: URL
     let currentPaneProvider: () -> PaneController?
 

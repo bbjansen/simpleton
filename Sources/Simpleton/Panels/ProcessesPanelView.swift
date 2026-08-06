@@ -11,6 +11,8 @@ struct ProcessEntry: Identifiable {
 }
 
 struct ProcessesPanelView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     @State private var processes: [ProcessEntry] = []
     @State private var timer: Timer? = nil
 

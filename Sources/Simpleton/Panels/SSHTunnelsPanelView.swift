@@ -12,6 +12,8 @@ struct TunnelEntry: Identifiable {
 }
 
 struct SSHTunnelsPanelView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     let tabContainerProvider: () -> TabContainerController?
     let bookmarkStore: BookmarkStore?
 

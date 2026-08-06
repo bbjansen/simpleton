@@ -3,6 +3,8 @@ import AppKit
 import SwiftUI
 
 struct HistoryPanelView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
     let shellProvider: () -> String
     let onInsert: (String) -> Void
 
