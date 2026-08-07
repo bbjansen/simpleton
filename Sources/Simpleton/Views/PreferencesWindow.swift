@@ -181,10 +181,12 @@ struct PreferencesView: View {
                     }
                     .padding(24)
                 }
+                .scrollContentBackground(.hidden)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(minWidth: 720, maxWidth: .infinity, minHeight: 460, maxHeight: .infinity)
+        .background(DT.base)
         .tint(themeSettings.accent)
     }
 }

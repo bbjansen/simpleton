@@ -22,6 +22,7 @@ final class TabContainerController: NSViewController {
     private var contentSplit: NSSplitView?
     private var leftBarHost: NSHostingView<ActivityBarView>?
     private var rightBarHost: NSHostingView<ActivityBarView>?
+    private var backdropTint: NSView?
     private var leftPanelVC: NSViewController?
     private var leftPanelID: String?
     private var rightPanelVC: NSViewController?
@@ -209,6 +210,22 @@ final class TabContainerController: NSViewController {
             backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
 
+        // Theme-color wash over the backdrop so transparent chrome — the side panels and any gaps —
+        // reads as the active theme's color instead of neutral vibrancy. Sits behind the split, so it
+        // never intercepts events. Refreshed on a live theme change via updateConfig.
+        let tint = NSView()
+        tint.wantsLayer = true
+        tint.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(tint)
+        NSLayoutConstraint.activate([
+            tint.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            tint.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            tint.topAnchor.constraint(equalTo: container.topAnchor),
+            tint.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        self.backdropTint = tint
+        applyBackdropTint()
+
         // Central NSSplitView: [leftPanel?] | terminal | [rightPanel?]
         let split = NSSplitView(frame: frame)
         split.isVertical = true
@@ -393,7 +410,16 @@ final class TabContainerController: NSViewController {
 
     /// Push a fresh app config into this container so cached panels — which read
     /// `appConfig()` lazily — observe changes made in Preferences.
-    func updateConfig(_ newConfig: AppConfig) { self.config = newConfig }
+    func updateConfig(_ newConfig: AppConfig) {
+        self.config = newConfig
+        applyBackdropTint()  // retint the side-panel backdrop on a live theme change
+    }
+
+    /// Paint the backdrop with the active theme's surface so transparent side panels read as the theme.
+    private func applyBackdropTint() {
+        backdropTint?.layer?.backgroundColor =
+            NSColor(hex: AppTheme.activeTheme.chrome.surface)?.withAlphaComponent(0.85).cgColor
+    }
 
     private func makeContext() -> PanelContext {
         PanelContext(

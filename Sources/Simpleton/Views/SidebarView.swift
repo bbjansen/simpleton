@@ -41,7 +41,7 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(.ultraThinMaterial, in: .rect(cornerRadius: DT.radiusCard, style: .continuous))
+            .background(DT.elevated, in: .rect(cornerRadius: DT.radiusCard, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DT.radiusCard, style: .continuous)
                     .strokeBorder(.white.opacity(0.08), lineWidth: 1)
