@@ -54,10 +54,19 @@ final class PreferencesWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "Preferences"
+        window.title = "Preferences"  // kept (title hidden) so the live-retint loop can find this window
         window.isReleasedWhenClosed = false
-        // No hardcoded appearance — follow the app-wide appearance (NSApp.appearance) so Settings
-        // matches Dark / Light / Auto like every other window.
+        // Dissolved, themed titlebar to match the app chrome: transparent titlebar + hidden title over
+        // a themed-surface strip, so the traffic lights float on the theme color and the whole Settings
+        // window reads as one themed surface (the nav uses themedGlass, the forms are themed). Kept
+        // opaque — unlike the main window's optional translucency — so the settings strip never leaks
+        // the desktop, and the content stays below the titlebar so no control sits in the drag region.
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.appearance = AppTheme.nsAppearance(
+            for: config.appearance.appearanceMode, isDark: AppTheme.activeTheme.isDark)
+        window.backgroundColor =
+            NSColor(hex: AppTheme.activeTheme.chrome.surface) ?? window.backgroundColor
         window.contentMinSize = NSSize(width: 720, height: 460)
         window.contentView = NSHostingView(rootView: prefsView)
         window.center()
@@ -146,7 +155,7 @@ struct PreferencesView: View {
             }
             .padding(12)
             .frame(minWidth: 160, idealWidth: 190, maxWidth: 240)
-            .background(DT.surface)
+            .themedGlass(DT.surface)  // same glass as the main sidebar (picks up gradients too)
 
             // Content — Skills and Profiles tabs manage their own scroll/split layout so
             // they must live outside the outer ScrollView.

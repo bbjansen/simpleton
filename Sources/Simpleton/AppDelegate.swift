@@ -606,9 +606,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 tab.container.updateConfig(config)
             }
         }
-        // The Preferences window isn't in windowControllers — retint it in the same pass.
+        // The Preferences window isn't in windowControllers — retint it (appearance + the dissolved
+        // titlebar strip's background) in the same pass so its chrome flips on a live switch too.
         for window in NSApp.windows where window.title == "Preferences" {
             window.appearance = nsAppearance
+            window.backgroundColor = surface ?? window.backgroundColor
         }
         // Force every window's chrome to repaint on the NEXT runloop — AFTER SwiftUI has processed
         // the @Published theme change. For a same-appearance switch (e.g. Nord→Dracula) the body
