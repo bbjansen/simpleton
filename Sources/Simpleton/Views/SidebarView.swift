@@ -13,7 +13,6 @@ struct SidebarView: View {
     @State private var recent: [Bookmark] = []
     @State private var sshConfigEntries: [SSHConfigEntry] = []
     @State private var smartGroups: [SmartGroup] = []
-    @State private var searchQuery = ""
     @ObservedObject private var themeSettings = ThemeSettings.shared
 
     private var hasNoConnections: Bool {
@@ -22,50 +21,20 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(DT.textMuted)
-                    .font(.system(size: 11, weight: .medium))
-                TextField("Search connections...", text: $searchQuery)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                if !searchQuery.isEmpty {
-                    Button(action: { searchQuery = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(DT.textFaint)
-                            .font(.system(size: 10))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(DT.elevated, in: .rect(cornerRadius: DT.radiusCard, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DT.radiusCard, style: .continuous)
-                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-            )
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-
-            // Add Connection — a prominent action pinned above the connection lists (incl. SSH Config).
-            addConnectionButton
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
-
-            Rectangle()
-                .fill(DT.border.opacity(0.5))
-                .frame(height: 0.5)
-
-            if !searchQuery.isEmpty {
-                searchResults
-            } else if hasNoConnections {
+            if hasNoConnections {
                 emptyState
             } else {
                 normalSidebar
             }
 
+            Rectangle()
+                .fill(DT.border.opacity(0.5))
+                .frame(height: 0.5)
+
+            // Add Connection — pinned at the bottom of the sidebar.
+            addConnectionButton
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
         }
         .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
         .themedGlass(DT.surface)  // theme-colored vibrancy — fully the theme's color, glassy sheen
@@ -77,7 +46,7 @@ struct SidebarView: View {
         pinned + recent
     }
 
-    // Ghost-style "Add Connection" action, hoisted so it can sit at the top of the sidebar.
+    // Ghost-style "Add Connection" action, pinned at the bottom of the sidebar.
     private var addConnectionButton: some View {
         Button(action: onNewConnection) {
             HStack(spacing: 6) {
@@ -177,27 +146,6 @@ struct SidebarView: View {
         .environment(\.defaultMinListRowHeight, 34)
     }
 
-    private var searchResults: some View {
-        let q = searchQuery.lowercased()
-        let matchingBookmarks = allBookmarks.filter {
-            $0.name.lowercased().contains(q) || $0.host.lowercased().contains(q)
-        }
-        let matchingSSH = sshConfigEntries.filter {
-            $0.hostAlias.lowercased().contains(q) || ($0.hostname?.lowercased().contains(q) ?? false)
-        }
-        return List {
-            ForEach(matchingBookmarks) { bookmark in
-                SidebarRow(bookmark: bookmark, onConnect: onConnect)
-            }
-            ForEach(matchingSSH, id: \.hostAlias) { entry in
-                SSHConfigRow(entry: entry, onConnect: connectSSHConfigEntry)
-            }
-        }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .tint(themeSettings.accent)
-        .environment(\.defaultMinListRowHeight, 34)
-    }
 
     private func connectSSHConfigEntry(_ entry: SSHConfigEntry) {
         let bookmark = entry.toBookmark()
