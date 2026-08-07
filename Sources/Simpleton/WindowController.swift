@@ -68,6 +68,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         window.contentViewController = tabContainer
         window.alphaValue = config.appearance.windowOpacity
         window.delegate = self
+        centerTrafficLights(in: window)
 
         // Wire close-pane to close window when last pane closes
         tabContainer.splitController.onPaneClose = { [weak self] _ in
@@ -104,6 +105,28 @@ final class WindowController: NSWindowController, NSWindowDelegate {
             ? .clear
             : (NSColor(hex: AppTheme.activeTheme.chrome.surface)
                 ?? NSColor(srgbRed: 0.075, green: 0.075, blue: 0.086, alpha: 1))
+    }
+
+    /// The header is a 46px full-size-content strip, but AppKit positions the traffic lights for the
+    /// stock ~28px titlebar, so they ride high and clip the window's top edge. Nudge the three
+    /// standard buttons down so their centerline matches the header's. AppKit re-lays them out on
+    /// resize / key changes, so this is re-applied from the matching delegate hooks.
+    static let headerHeight: CGFloat = 46
+    func centerTrafficLights(in window: NSWindow?) {
+        guard let window,
+            let close = window.standardWindowButton(.closeButton),
+            let miniaturize = window.standardWindowButton(.miniaturizeButton),
+            let zoom = window.standardWindowButton(.zoomButton),
+            let titlebar = close.superview
+        else { return }
+        let buttonHeight = close.frame.height
+        // The titlebar container is not flipped (origin bottom-left) and its top edge sits at the
+        // window's top. We want each button's center `headerHeight/2` down from that top edge, so in
+        // the container's coordinates the button origin is: containerTop - headerHeight/2 - btnH/2.
+        let targetY = titlebar.bounds.height - Self.headerHeight / 2 - buttonHeight / 2
+        for button in [close, miniaturize, zoom] {
+            button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: targetY))
+        }
     }
 
     // MARK: - Public API
@@ -147,6 +170,7 @@ final class WindowController: NSWindowController, NSWindowDelegate {
 
         self.window?.addTabbedWindow(newWindow, ordered: .above)
         newWindow.makeKeyAndOrderFront(nil)
+        centerTrafficLights(in: newWindow)
 
         // Focus the new tab's terminal
         newTabContainer.splitController.setFocus(to: newTabContainer.splitController.focusedPaneID)
@@ -158,6 +182,18 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // Notify AppDelegate to remove this from tracked windows
         NotificationCenter.default.post(name: .simpletonWindowClosed, object: self)
+    }
+
+    // AppKit re-lays the traffic lights back to their stock position on resize and when the window
+    // (re)gains key, so re-center them from these hooks to keep them aligned with the header.
+    func windowDidResize(_ notification: Notification) {
+        centerTrafficLights(in: notification.object as? NSWindow)
+    }
+    func windowDidBecomeKey(_ notification: Notification) {
+        centerTrafficLights(in: notification.object as? NSWindow)
+    }
+    func windowDidExitFullScreen(_ notification: Notification) {
+        centerTrafficLights(in: notification.object as? NSWindow)
     }
 }
 
