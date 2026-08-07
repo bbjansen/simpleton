@@ -227,10 +227,70 @@ public enum ThemePalette {
             textMuted: "#8A94A6", textFaint: "#6B7488", textHelp: "#B4BECC"),
         accent: "#94A3B8")
 
+    // MARK: - Gradient (mixed-hue) themes — the chrome washes with a two-color blend
+
+    /// Warm orange → pink blend.
+    public static let sunset = AppearanceTheme(
+        id: "sunset", name: "Sunset", isDark: true,
+        terminal: ThemeColors(
+            background: "#241318", foreground: "#F7E3E8", cursor: "#FFD166", selection: "#4A2733",
+            black: "#38222A", red: "#FF6E8A", green: "#8CD98C", yellow: "#FFC55C",
+            blue: "#7AA8E8", magenta: "#F58BC0", cyan: "#7BD6D0", white: "#E8D0D8",
+            brightBlack: "#8A5A68", brightRed: "#FF8AA6", brightGreen: "#AEEBAE",
+            brightYellow: "#FFD98A", brightBlue: "#A0C4F0", brightMagenta: "#FFA8D4",
+            brightCyan: "#9CE8E2", brightWhite: "#FFFFFF",
+            splitBorder: "#9F2D45", sidebar: "#D24A4E", tabBar: "#D24A4E"),
+        chrome: ChromeColors(
+            base: "#6E1F2E", surface: "#D24A4E", elevated: "#C94D5E", hover: "#D45A6A",
+            selected: "#E86A88", border: "#D45C6E", panelBorder: "#7A2436",
+            textPrimary: "#FFFFFF", textSecondary: "#FBDDE4", textTertiary: "#F2B4C0",
+            textMuted: "#DC8E9C", textFaint: "#BC6C7C", textHelp: "#F2B4C0"),
+        accent: "#FFD166",
+        gradient: ["#EA580C", "#DB2777"])
+
+    /// Deep ruby → orange blend.
+    public static let ember = AppearanceTheme(
+        id: "ember", name: "Ember", isDark: true,
+        terminal: ThemeColors(
+            background: "#241209", foreground: "#F7E6DB", cursor: "#FCD34D", selection: "#4A2A14",
+            black: "#38220E", red: "#FF7A6E", green: "#C4D96B", yellow: "#FBBF24",
+            blue: "#6BB8E0", magenta: "#E89AC4", cyan: "#6ED1C4", white: "#E8D8C8",
+            brightBlack: "#8A6048", brightRed: "#FF9A8A", brightGreen: "#DCEB86",
+            brightYellow: "#FFD54A", brightBlue: "#8CD0F0", brightMagenta: "#FFB8DC",
+            brightCyan: "#8CE8DC", brightWhite: "#FFFFFF",
+            splitBorder: "#9F1239", sidebar: "#C43A28", tabBar: "#C43A28"),
+        chrome: ChromeColors(
+            base: "#5E1418", surface: "#C43A28", elevated: "#B83A20", hover: "#D14A24",
+            selected: "#F0641E", border: "#C85030", panelBorder: "#6E1E14",
+            textPrimary: "#FFFFFF", textSecondary: "#FBDDD0", textTertiary: "#F2B8A0",
+            textMuted: "#DC9078", textFaint: "#BC6C58", textHelp: "#F2B8A0"),
+        accent: "#FCD34D",
+        gradient: ["#9F1239", "#EA580C"])
+
+    /// Blue → violet nebula blend.
+    public static let nebula = AppearanceTheme(
+        id: "nebula", name: "Nebula", isDark: true,
+        terminal: ThemeColors(
+            background: "#14132E", foreground: "#E0E0F8", cursor: "#A5B4FC", selection: "#2E2A5E",
+            black: "#22204A", red: "#FF7A9C", green: "#7AE0A0", yellow: "#F0D284",
+            blue: "#818CF8", magenta: "#C4A0FF", cyan: "#7DD3FC", white: "#CFCFF0",
+            brightBlack: "#5450A0", brightRed: "#FF9AB8", brightGreen: "#9CF0BE",
+            brightYellow: "#FFE49E", brightBlue: "#A5B4FC", brightMagenta: "#D8BCFF",
+            brightCyan: "#A4E8FF", brightWhite: "#FFFFFF",
+            splitBorder: "#3730A3", sidebar: "#4A44C0", tabBar: "#4A44C0"),
+        chrome: ChromeColors(
+            base: "#2A1A6E", surface: "#4A44C0", elevated: "#4038A8", hover: "#5044C8",
+            selected: "#6D5AE8", border: "#5A4EBE", panelBorder: "#2E2480",
+            textPrimary: "#FFFFFF", textSecondary: "#DDD9FA", textTertiary: "#B4AEF0",
+            textMuted: "#8B84DC", textFaint: "#6B64BE", textHelp: "#B4AEF0"),
+        accent: "#A5B4FC",
+        gradient: ["#1D4ED8", "#7C3AED"])
+
     public static let all: [AppearanceTheme] =
         [
             dark, light, grape, tangerine, emerald, sapphire, ruby,
             teal, indigo, crimson, magenta, gold, slate,
+            sunset, ember, nebula,
         ]
 
     /// Resolve a theme id to its preset (case-insensitive). Unknown ids — and `auto`, which the

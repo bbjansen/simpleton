@@ -48,6 +48,33 @@ struct ThemedDivider: View {
     }
 }
 
+extension ThemeSettings {
+    /// The chrome gradient colors for the active theme (top→bottom stops), or nil for a solid theme.
+    var chromeGradientColors: [Color]? {
+        guard let stops = theme.gradient, stops.count >= 2 else { return nil }
+        let colors = stops.compactMap { Color(hex: $0) }
+        return colors.count >= 2 ? colors : nil
+    }
+}
+
+/// The theme-color wash under the chrome vibrancy: a diagonal gradient blend when the active theme
+/// defines one, otherwise the flat surface color. Read from `ThemeSettings.shared` at render time, so
+/// it flips with the theme (its host views observe ThemeSettings and re-render on a switch).
+private struct ThemeWash: View {
+    let color: Color
+    let opacity: Double
+    var body: some View {
+        Group {
+            if let colors = ThemeSettings.shared.chromeGradientColors {
+                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            } else {
+                color
+            }
+        }
+        .opacity(opacity)
+    }
+}
+
 extension View {
     /// Bold theme-colored macOS glass. A vibrancy blur provides the polished translucent "gloss";
     /// a dominant theme-color wash on top makes the surface read as *fully* the theme's color, and a
@@ -58,7 +85,7 @@ extension View {
         background {
             ZStack {
                 VisualEffect(material: .sidebar, blendingMode: .behindWindow)
-                color.opacity(tint ?? ThemeSettings.shared.chromeOpacity)
+                ThemeWash(color: color, opacity: tint ?? ThemeSettings.shared.chromeOpacity)
                 LinearGradient(
                     colors: [.white.opacity(0.10), .clear, .black.opacity(0.07)],
                     startPoint: .top, endPoint: .bottom)
@@ -77,7 +104,7 @@ extension View {
             ZStack {
                 VisualEffect(material: .sidebar, blendingMode: .behindWindow)
                 // Denser color than the rails' chromeOpacity so the bar is unmistakably one surface.
-                color.opacity(min(1.0, ThemeSettings.shared.chromeOpacity + 0.22))
+                ThemeWash(color: color, opacity: min(1.0, ThemeSettings.shared.chromeOpacity + 0.22))
                 LinearGradient(
                     colors: [.clear, .black.opacity(0.06)],
                     startPoint: .top, endPoint: .bottom)

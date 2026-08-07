@@ -112,13 +112,18 @@ public struct AppearanceTheme: Codable, Equatable, Identifiable {
     public var terminal: ThemeColors
     public var chrome: ChromeColors
     public var accent: String  // #RRGGBB
+    /// Optional chrome gradient stops (#RRGGBB, top→bottom). When set, the sidebar/header/panels
+    /// wash with this blend instead of the flat `chrome.surface`. Nil for solid themes.
+    public var gradient: [String]?
 
     public init(
         id: String, name: String, isDark: Bool,
-        terminal: ThemeColors, chrome: ChromeColors, accent: String
+        terminal: ThemeColors, chrome: ChromeColors, accent: String,
+        gradient: [String]? = nil
     ) {
         self.id = id; self.name = name; self.isDark = isDark
         self.terminal = terminal; self.chrome = chrome; self.accent = accent
+        self.gradient = gradient
     }
 }
 
