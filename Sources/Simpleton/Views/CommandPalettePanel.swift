@@ -16,9 +16,13 @@ final class CommandPalettePanel {
 
     private var panel: NSPanel?
     private var actions: [PaletteAction] = []
+    /// The window that was key when the palette opened — restored as key before an action runs so
+    /// window-targeting commands resolve the terminal, not the palette.
+    private var parentWindow: NSWindow?
 
     func show(relativeTo window: NSWindow?, actions: [PaletteAction]) {
         self.actions = actions
+        self.parentWindow = window
 
         // Create the panel once and reuse it; update content view with fresh actions each show
         if panel == nil {
@@ -56,7 +60,14 @@ final class CommandPalettePanel {
         let contentView = CommandPaletteContentView(
             actions: actions,
             onSelect: { [weak self] action in
-                self?.dismiss()
+                // Order the panel out *synchronously* first, so key focus returns to the terminal
+                // window before the action runs. The async fade in dismiss() left the palette as the
+                // key window, so window-targeting commands (Split, New Tab, Close Pane, Toggle
+                // Sidebar) resolved no active window and silently no-op'd — only the connection
+                // commands, which open their own panels, appeared to work.
+                self?.panel?.orderOut(nil)
+                self?.panel?.alphaValue = 1
+                self?.parentWindow?.makeKey()
                 action.action()
             },
             onDismiss: { [weak self] in
