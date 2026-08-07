@@ -524,6 +524,6 @@ struct PrefsSectionHeader: View {
         Text(title.uppercased())
             .font(.system(size: 11, weight: .semibold))
             .tracking(1.0)
-            .foregroundColor(DT.textTertiary)
+            .foregroundColor(DT.textPrimary)
     }
 }

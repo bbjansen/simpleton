@@ -28,7 +28,7 @@ struct GitPanelView: View {
                 Text("GIT")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundColor(DT.textMuted)
+                    .foregroundColor(DT.textPrimary)
                 Spacer()
                 Button {
                     Task { await refresh() }
@@ -92,7 +92,7 @@ struct GitPanelView: View {
                 Text("STATUS")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundColor(DT.textMuted)
+                    .foregroundColor(DT.textPrimary)
             }
             if !status.commits.isEmpty {
                 Section {
@@ -107,7 +107,7 @@ struct GitPanelView: View {
                     Text("RECENT COMMITS")
                         .font(.system(size: 9, weight: .semibold))
                         .tracking(1.5)
-                        .foregroundColor(DT.textMuted)
+                        .foregroundColor(DT.textPrimary)
                 }
             }
         }

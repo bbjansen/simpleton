@@ -25,7 +25,7 @@ struct SSHTunnelsPanelView: View {
                 Text("SSH TUNNELS")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundColor(DT.textMuted)
+                    .foregroundColor(DT.textPrimary)
                 Spacer()
                 Button {
                     loadTunnels()

@@ -194,7 +194,7 @@ struct SkillsPanelView: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title.uppercased())
             .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(DT.textMuted)
+            .foregroundColor(DT.textPrimary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 2)
     }

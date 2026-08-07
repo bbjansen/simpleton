@@ -22,7 +22,7 @@ struct ProcessesPanelView: View {
                 Text("PROCESSES")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundColor(DT.textMuted)
+                    .foregroundColor(DT.textPrimary)
                 Spacer()
                 Button {
                     Task { await load() }

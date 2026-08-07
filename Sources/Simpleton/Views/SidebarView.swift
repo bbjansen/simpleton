@@ -189,7 +189,7 @@ struct SidebarSectionHeader: View {
         Text(title.uppercased())
             .font(.system(size: 9, weight: .semibold))
             .tracking(1.5)
-            .foregroundColor(DT.textMuted)
+            .foregroundColor(DT.textPrimary)
             .padding(.bottom, 2)
     }
 }

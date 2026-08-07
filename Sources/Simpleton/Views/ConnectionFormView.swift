@@ -270,6 +270,6 @@ struct FormSectionHeader: View {
         Text(title.uppercased())
             .font(.system(size: 11, weight: .semibold))
             .tracking(1.2)
-            .foregroundColor(DT.textTertiary)
+            .foregroundColor(DT.textPrimary)
     }
 }
