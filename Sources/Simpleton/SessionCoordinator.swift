@@ -271,8 +271,10 @@ final class SessionCoordinator {
         // PanelRegistry/PluginManager are @MainActor; this method only runs on the main thread
         // (menu action / e2e main-queue), so read them under assumeIsolated.
         let (profileID, enabledPlugins): (String?, [String]?) = MainActor.assumeIsolated {
-            (panelRegistry()?.activeProfile.id.uuidString,
-                pluginManager()?.scriptPlugins.filter(\.isEnabled).map(\.name))
+            (
+                panelRegistry()?.activeProfile.id.uuidString,
+                pluginManager()?.scriptPlugins.filter(\.isEnabled).map(\.name)
+            )
         }
         let workspace = Workspace(
             name: name, window: windowState,

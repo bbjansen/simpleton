@@ -146,7 +146,6 @@ struct SidebarView: View {
         .environment(\.defaultMinListRowHeight, 34)
     }
 
-
     private func connectSSHConfigEntry(_ entry: SSHConfigEntry) {
         let bookmark = entry.toBookmark()
         onConnect(bookmark)

@@ -582,7 +582,8 @@ final class TabContainerController: NSViewController {
         if let stops = AppTheme.activeTheme.gradient,
             stops.count >= 2,
             case let cgColors = stops.compactMap({ NSColor(hex: $0)?.withAlphaComponent(alpha).cgColor }),
-            cgColors.count >= 2 {
+            cgColors.count >= 2
+        {
             // Gradient theme: host a CAGradientLayer that mirrors the SwiftUI blend
             // (LinearGradient .topLeading → .bottomTrailing). In the tint view's non-flipped layer
             // geometry (0,0 = bottom-left) that is start (0,1) top-leading → end (1,0) bottom-trailing.

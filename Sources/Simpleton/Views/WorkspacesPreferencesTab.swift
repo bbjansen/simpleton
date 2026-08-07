@@ -128,7 +128,9 @@ struct WorkspacesPreferencesTab: View {
                 "Opening a workspace replaces the current window",
                 isOn: Binding(
                     get: { config.general.workspaceOpenReplacesWindow },
-                    set: { config.general.workspaceOpenReplacesWindow = $0; onChanged(config) }
+                    set: {
+                        config.general.workspaceOpenReplacesWindow = $0; onChanged(config)
+                    }
                 )
             )
             .font(.system(size: 11))
@@ -139,7 +141,9 @@ struct WorkspacesPreferencesTab: View {
                 "Keep the active workspace in sync with changes",
                 isOn: Binding(
                     get: { config.general.autoSyncActiveWorkspace },
-                    set: { config.general.autoSyncActiveWorkspace = $0; onChanged(config) }
+                    set: {
+                        config.general.autoSyncActiveWorkspace = $0; onChanged(config)
+                    }
                 )
             )
             .font(.system(size: 11))
@@ -394,8 +398,11 @@ struct WorkspaceEditor: View {
                                     isOn: Binding(
                                         get: { enabledPlugins.contains(plugin.name) },
                                         set: { on in
-                                            if on { enabledPlugins.insert(plugin.name) }
-                                            else { enabledPlugins.remove(plugin.name) }
+                                            if on {
+                                                enabledPlugins.insert(plugin.name)
+                                            } else {
+                                                enabledPlugins.remove(plugin.name)
+                                            }
                                         }
                                     )
                                 )
@@ -451,9 +458,10 @@ struct WorkspaceEditor: View {
                     "Applying a workspace swaps its full preferences (theme, font, cursor, SSH), AI "
                         + "config, panel profile, enabled plugins, and restores its saved window layout. "
                         + "\u{201C}Don't change\u{201D} leaves that facet as-is. \u{201C}Update layout\u{201D} "
-                        + "re-captures the current window's panes without touching the saved settings.")
-                    .font(.system(size: 11))
-                    .foregroundColor(DT.textHelp)
+                        + "re-captures the current window's panes without touching the saved settings."
+                )
+                .font(.system(size: 11))
+                .foregroundColor(DT.textHelp)
             }
             .padding(16)
         }
@@ -481,7 +489,9 @@ struct WorkspaceEditor: View {
         }
     }
 
-    private func fieldGroup<Content: View>(_ label: String, @ViewBuilder content: () -> Content)
+    private func fieldGroup<Content: View>(
+        _ label: String, @ViewBuilder content: () -> Content
+    )
         -> some View
     {
         VStack(alignment: .leading, spacing: 6) {

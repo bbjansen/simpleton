@@ -179,7 +179,8 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         // When translucent, go non-opaque + clear so the chrome frost reveals the desktop.
         let translucent = translucency > 0.001
         window.isOpaque = !translucent
-        window.backgroundColor = translucent
+        window.backgroundColor =
+            translucent
             ? .clear
             : (NSColor(hex: AppTheme.activeTheme.chrome.surface)
                 ?? NSColor(srgbRed: 0.075, green: 0.075, blue: 0.086, alpha: 1))

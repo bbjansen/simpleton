@@ -187,7 +187,8 @@ struct HeaderIconButton: View {
                 .frame(width: 30, height: 30)
                 .background(
                     hovered ? DT.hover : Color.clear,
-                    in: .rect(cornerRadius: 7, style: .continuous))
+                    in: .rect(cornerRadius: 7, style: .continuous)
+                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

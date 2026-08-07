@@ -84,7 +84,8 @@ private struct TabPill: View {
                     .frame(width: 15, height: 15)
                     .background(
                         hovered ? DT.selected : Color.clear,
-                        in: .rect(cornerRadius: 4, style: .continuous))
+                        in: .rect(cornerRadius: 4, style: .continuous)
+                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -132,7 +133,8 @@ private struct NewTabButton: View {
                 .frame(width: 25, height: 25)
                 .background(
                     hovered ? DT.hover : Color.clear,
-                    in: .rect(cornerRadius: 7, style: .continuous))
+                    in: .rect(cornerRadius: 7, style: .continuous)
+                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

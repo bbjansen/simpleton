@@ -333,9 +333,11 @@ struct AppearanceTab: View {
                         }
                     }
                     .onChange(of: config.appearance.accentColor) { onChanged(config) }
-                    Text("Focus ring, selection, and cursor use this color. \u{201C}Match System\u{201D} follows your macOS accent.")
-                        .font(.system(size: 11))
-                        .foregroundColor(DT.textHelp)
+                    Text(
+                        "Focus ring, selection, and cursor use this color. \u{201C}Match System\u{201D} follows your macOS accent."
+                    )
+                    .font(.system(size: 11))
+                    .foregroundColor(DT.textHelp)
                 } else {
                     Text("This theme sets its own accent color.")
                         .font(.system(size: 11))
