@@ -10,6 +10,7 @@ import SwiftUI
 struct HeaderBarView: View {
     @ObservedObject var registry: PanelRegistry
     @ObservedObject private var themeSettings = ThemeSettings.shared
+    @ObservedObject private var workspaceStore = WorkspaceStore.shared
     @ObservedObject var model: HeaderModel
 
     /// Route a no-argument AppDelegate menu selector through the responder chain.
@@ -29,7 +30,7 @@ struct HeaderBarView: View {
                 // Clear the traffic lights (they are hidden in full screen, so collapse the reservation).
                 Color.clear.frame(width: model.isFullScreen ? 6 : 70)
 
-                profileSwitcher
+                workspaceSwitcher
 
                 Spacer(minLength: 10)
                 if showOmnibox {
@@ -61,31 +62,41 @@ struct HeaderBarView: View {
             alignment: .bottom)
     }
 
-    // MARK: - Left: profile / workspace switcher
+    // MARK: - Left: workspace switcher
 
-    private var profileSwitcher: some View {
+    /// Picks the active workspace — one choice swaps theme + accent + panel profile + plugins + layout
+    /// (AppDelegate.applyWorkspace does the work; we just post the name). Same visual chrome as the
+    /// old profile switcher: accent icon + label + chevron over the hover pill.
+    private var workspaceSwitcher: some View {
         Menu {
             Section("Workspaces") {
-                ForEach(registry.profiles) { profile in
-                    Button {
-                        registry.activateProfile(profile)
-                    } label: {
-                        if profile.id == registry.activeProfile.id {
-                            Label(profile.name, systemImage: "checkmark")
-                        } else {
-                            Text(profile.name)
+                if workspaceStore.names.isEmpty {
+                    Text("No workspaces yet").disabled(true)
+                } else {
+                    ForEach(workspaceStore.names, id: \.self) { name in
+                        Button {
+                            NotificationCenter.default.post(name: .simpletonOpenWorkspace, object: name)
+                        } label: {
+                            if name == workspaceStore.activeName {
+                                Label(name, systemImage: "checkmark")
+                            } else {
+                                Text(name)
+                            }
                         }
                     }
                 }
             }
             Divider()
+            Button("Save Current as Workspace…") {
+                NotificationCenter.default.post(name: .simpletonSaveWorkspaceRequested, object: nil)
+            }
             Button("Manage Workspaces…") { fire("showPreferences") }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "square.grid.2x2.fill")
                     .font(.system(size: 11))
                     .foregroundColor(themeSettings.accent)
-                Text(registry.activeProfile.name)
+                Text(workspaceStore.activeName ?? "Workspace")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(DT.textPrimary)
                     .lineLimit(1)

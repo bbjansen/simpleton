@@ -218,7 +218,12 @@ final class SessionCoordinator {
     // MARK: - Workspaces
 
     func saveWorkspace() {
-        guard let window = NSApp.keyWindow else { return }
+        // Save the active *terminal* window. From the header/menu the key window is a terminal, but
+        // from the Settings → Workspaces editor the key window is the Settings sheet — so fall back to
+        // the first tracked terminal window rather than capturing nothing.
+        let target =
+            NSApp.keyWindow?.activeTabContainer != nil ? NSApp.keyWindow : windowControllers().first?.window
+        guard let window = target else { return }
         let alert = NSAlert()
         alert.messageText = "Save Workspace"
         alert.informativeText = "Enter a name for this workspace:"

@@ -86,6 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Initialize workspace manager
         let workspacesDir = simpletonDir.appendingPathComponent("workspaces")
         workspaceManager = WorkspaceManager(directory: workspacesDir)
+        WorkspaceStore.shared.names = workspaceManager?.listWorkspaces() ?? []
 
         // Initialize plugin manager
         pluginManager = PluginManager(baseDirectory: simpletonDir)
@@ -178,7 +179,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         commandPalettePanel = CommandPalettePanel()
         preferencesController = PreferencesWindowController(
             config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore,
-            panelRegistry: panelRegistry,
+            panelRegistry: panelRegistry, workspaceManager: workspaceManager,
             onConfigChanged: { [weak self] newConfig in
                 self?.config = newConfig
                 self?.saveConfig(newConfig)
@@ -302,6 +303,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(showPreferences),
             name: .openAIPreferences,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleOpenWorkspace(_:)),
+            name: .simpletonOpenWorkspace,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSaveWorkspaceRequested),
+            name: .simpletonSaveWorkspaceRequested,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWorkspacesChanged),
+            name: .simpletonWorkspacesChanged,
             object: nil
         )
     }
@@ -868,6 +887,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         sessionCoordinator.saveWorkspace()
     }
 
+    /// Re-read the saved-workspace list into the observable store (drives the header dropdown and the
+    /// Settings tab). Call after any save/delete.
+    private func refreshWorkspaceStore() {
+        WorkspaceStore.shared.names = workspaceManager?.listWorkspaces() ?? []
+    }
+
+    /// `.simpletonOpenWorkspace` (object = the workspace name) — apply that workspace's whole setup.
+    @objc private func handleOpenWorkspace(_ note: Notification) {
+        guard let name = note.object as? String else { return }
+        applyWorkspace(name: name)
+    }
+
+    /// `.simpletonSaveWorkspaceRequested` — prompt for a name and save the current window. The save
+    /// runs as an async naming sheet, so refresh shortly after here as a fallback; the definitive
+    /// refresh is `.simpletonWorkspacesChanged`, which the save path can post once it lands.
+    @objc private func handleSaveWorkspaceRequested() {
+        saveWorkspace()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.refreshWorkspaceStore()
+        }
+    }
+
+    /// `.simpletonWorkspacesChanged` — the saved set changed (Settings edit/delete, or a completed
+    /// save) — re-read the list.
+    @objc private func handleWorkspacesChanged() {
+        refreshWorkspaceStore()
+    }
+
     @objc private func openWorkspace(_ sender: NSMenuItem) {
         guard let name = sender.representedObject as? String else { return }
         applyWorkspace(name: name)
@@ -878,6 +925,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// layout-only workspace (saved before this feature) still just restores its panes.
     func applyWorkspace(name: String) {
         guard let ws = workspaceManager?.load(name: name) else { return }
+        WorkspaceStore.shared.activeName = name
 
         // 1. Theme + accent → persist + repaint every open pane, so the whole app takes the look.
         var appearanceChanged = false
@@ -941,4 +989,10 @@ extension Notification.Name {
     static let simpletonSplitChanged = Notification.Name("simpletonSplitChanged")
     static let simpletonShowNewConnection = Notification.Name("simpletonShowNewConnection")
     static let openAIPreferences = Notification.Name("simpletonOpenAIPreferences")
+    /// Open a workspace by name (object = the workspace name String).
+    static let simpletonOpenWorkspace = Notification.Name("simpletonOpenWorkspace")
+    /// Prompt to save the current window as a workspace.
+    static let simpletonSaveWorkspaceRequested = Notification.Name("simpletonSaveWorkspaceRequested")
+    /// The saved-workspaces set changed (created / renamed / deleted) — re-read the list.
+    static let simpletonWorkspacesChanged = Notification.Name("simpletonWorkspacesChanged")
 }

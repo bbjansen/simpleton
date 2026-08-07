@@ -15,10 +15,12 @@ final class PreferencesWindowController {
     private var onAIConfigChanged: ((AIConfig) -> Void)?
     private var skillStore: SkillStore?
     private var panelRegistry: PanelRegistry?
+    private var workspaceManager: WorkspaceManager?
 
     init(
         config: AppConfig, pluginManager: PluginManager? = nil, aiConfig: AIConfig = AIConfig(),
         skillStore: SkillStore? = nil, panelRegistry: PanelRegistry? = nil,
+        workspaceManager: WorkspaceManager? = nil,
         onConfigChanged: @escaping (AppConfig) -> Void, onAIConfigChanged: ((AIConfig) -> Void)? = nil
     ) {
         self.config = config
@@ -26,6 +28,7 @@ final class PreferencesWindowController {
         self.aiConfig = aiConfig
         self.skillStore = skillStore
         self.panelRegistry = panelRegistry
+        self.workspaceManager = workspaceManager
         self.onConfigChanged = onConfigChanged
         self.onAIConfigChanged = onAIConfigChanged
     }
@@ -38,7 +41,7 @@ final class PreferencesWindowController {
 
         let prefsView = PreferencesView(
             config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore,
-            panelRegistry: panelRegistry,
+            panelRegistry: panelRegistry, workspaceManager: workspaceManager,
             onChanged: { [weak self] newConfig in
                 self?.config = newConfig
                 self?.onConfigChanged?(newConfig)
@@ -102,6 +105,7 @@ struct PreferencesView: View {
     @State var aiConfig: AIConfig
     let skillStore: SkillStore?
     let panelRegistry: PanelRegistry?
+    let workspaceManager: WorkspaceManager?
     let onChanged: (AppConfig) -> Void
     let onAIConfigChanged: (AIConfig) -> Void
 
@@ -123,6 +127,9 @@ struct PreferencesView: View {
         t.append((7, "Skills", "bolt"))
         if panelRegistry != nil {
             t.append((8, "Profiles", "person.crop.rectangle.stack"))
+        }
+        if workspaceManager != nil, panelRegistry != nil, pluginManager != nil {
+            t.append((9, "Workspaces", "rectangle.3.group"))
         }
         return t
     }
@@ -164,6 +171,11 @@ struct PreferencesView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if selectedTab == 8, let registry = panelRegistry {
                 ProfilesPreferencesTab(registry: registry)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if selectedTab == 9, let manager = workspaceManager, let registry = panelRegistry,
+                let pm = pluginManager
+            {
+                WorkspacesPreferencesTab(manager: manager, registry: registry, pluginManager: pm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
