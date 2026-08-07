@@ -29,7 +29,7 @@ func runThemePaletteChecks(_ t: TestRunner) {
                 t.expect(isHex6(hex), "\(th.id): '\(hex)' is not #RRGGBB")
             }
         }
-        t.expectEqual(ThemePalette.all.count, 7, "seven presets")
+        t.expectEqual(ThemePalette.all.count, 13, "two neutral + eleven colored presets")
         t.expect(!ThemePalette.dark.isDark == false, "dark.isDark")
         t.expect(ThemePalette.light.isDark == false, "light.isDark == false")
     }
