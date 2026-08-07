@@ -337,6 +337,15 @@ struct AppearanceTab: View {
                 Text("Lower values create a translucent terminal window")
                     .font(.system(size: 11))
                     .foregroundColor(DT.textHelp)
+
+                Slider(value: $config.appearance.chromeTranslucency, in: 0.0...0.6, step: 0.01) {
+                    Text("Chrome translucency: \(Int((config.appearance.chromeTranslucency * 100).rounded()))%")
+                }
+                .onChange(of: config.appearance.chromeTranslucency) { onChanged(config) }
+                Text("Frosts the sidebar, panels and header so the desktop shows through the theme color")
+                    .font(.system(size: 11))
+                    .foregroundColor(DT.textHelp)
+
                 Toggle("Thin strokes (non-Retina)", isOn: $config.appearance.thinStrokes)
                     .onChange(of: config.appearance.thinStrokes) { onChanged(config) }
             } header: {

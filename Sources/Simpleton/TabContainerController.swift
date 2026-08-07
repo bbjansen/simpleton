@@ -471,8 +471,10 @@ final class TabContainerController: NSViewController {
 
     /// Paint the backdrop with the active theme's surface so transparent side panels read as the theme.
     private func applyBackdropTint() {
+        // Fade the theme-color wash as translucency rises so the desktop shows through the frost.
+        let alpha = 0.85 - min(max(config.appearance.chromeTranslucency, 0), 0.6)
         backdropTint?.layer?.backgroundColor =
-            NSColor(hex: AppTheme.activeTheme.chrome.surface)?.withAlphaComponent(0.85).cgColor
+            NSColor(hex: AppTheme.activeTheme.chrome.surface)?.withAlphaComponent(alpha).cgColor
     }
 
     private func makeContext() -> PanelContext {

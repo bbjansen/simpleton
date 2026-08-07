@@ -587,6 +587,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // container so those closures return fresh values after a Preferences change.
         let nsAppearance = AppTheme.nsAppearance(
             for: config.appearance.appearanceMode, isDark: AppTheme.activeTheme.isDark)
+        // When the user asks for translucency the window must be non-opaque so the behind-window
+        // vibrancy in the chrome can reveal the desktop. The terminal keeps its own opaque background.
+        let translucent = config.appearance.chromeTranslucency > 0.001
+        let surface = NSColor(hex: AppTheme.activeTheme.chrome.surface)
         for wc in windowControllers {
             wc.updateConfig(config)  // so tabs opened later inherit the current appearance
             let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
@@ -594,7 +598,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.appearance = nsAppearance
                 (window.contentViewController as? TabContainerController)?.updateConfig(config)
                 window.alphaValue = config.appearance.windowOpacity
-                window.backgroundColor = NSColor(hex: AppTheme.activeTheme.chrome.surface) ?? window.backgroundColor
+                window.isOpaque = !translucent
+                window.backgroundColor = translucent ? .clear : (surface ?? window.backgroundColor)
             }
         }
         // The Preferences window isn't in windowControllers — retint it in the same pass.

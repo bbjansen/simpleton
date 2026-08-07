@@ -44,11 +44,11 @@ extension View {
     /// soft top highlight gives it a glassy sheen. Used for the sidebar and activity bars so every
     /// theme is visibly, fully its color instead of a neutral system gray. `tint` trades color
     /// boldness (higher) against visible blur (lower).
-    func themedGlass(_ color: Color, tint: Double = 0.94) -> some View {
+    func themedGlass(_ color: Color, tint: Double? = nil) -> some View {
         background {
             ZStack {
                 VisualEffect(material: .sidebar, blendingMode: .behindWindow)
-                color.opacity(tint)
+                color.opacity(tint ?? ThemeSettings.shared.chromeOpacity)
                 LinearGradient(
                     colors: [.white.opacity(0.10), .clear, .black.opacity(0.07)],
                     startPoint: .top, endPoint: .bottom)

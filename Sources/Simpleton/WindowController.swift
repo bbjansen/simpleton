@@ -57,7 +57,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         window.minSize = NSSize(width: 400, height: 300)
         window.tabbingMode = .preferred
         window.tabbingIdentifier = "com.simpleton.terminal"
-        WindowController.dissolveTitleBar(window, mode: config.appearance.appearanceMode)
+        WindowController.dissolveTitleBar(
+            window, mode: config.appearance.appearanceMode,
+            translucency: config.appearance.chromeTranslucency)
 
         self.tabContainer = TabContainerController(config: config, theme: theme)
 
@@ -89,14 +91,19 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     /// mode, hide the title text, and make the titlebar strip transparent so it takes the window's
     /// background color. Only the traffic lights float above a continuous chrome-colored strip — no
     /// fullSize content, so the sidebar/terminal never slide under the traffic lights.
-    static func dissolveTitleBar(_ window: NSWindow, mode: String) {
+    static func dissolveTitleBar(_ window: NSWindow, mode: String, translucency: Double = 0) {
         window.appearance = AppTheme.nsAppearance(for: mode, isDark: AppTheme.activeTheme.isDark)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         // Chrome-colored titlebar strip — uses the active theme's chrome surface so colored themes
         // stay seamless with the sidebar (DT.surface). Neutral dark: #131316 / light: #F2F2F4.
-        window.backgroundColor = NSColor(hex: AppTheme.activeTheme.chrome.surface)
-            ?? NSColor(srgbRed: 0.075, green: 0.075, blue: 0.086, alpha: 1)
+        // When translucent, go non-opaque + clear so the chrome frost reveals the desktop.
+        let translucent = translucency > 0.001
+        window.isOpaque = !translucent
+        window.backgroundColor = translucent
+            ? .clear
+            : (NSColor(hex: AppTheme.activeTheme.chrome.surface)
+                ?? NSColor(srgbRed: 0.075, green: 0.075, blue: 0.086, alpha: 1))
     }
 
     // MARK: - Public API
@@ -128,7 +135,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         newWindow.title = "Simpleton"
         newWindow.tabbingMode = .preferred
         newWindow.tabbingIdentifier = "com.simpleton.terminal"
-        WindowController.dissolveTitleBar(newWindow, mode: config.appearance.appearanceMode)
+        WindowController.dissolveTitleBar(
+            newWindow, mode: config.appearance.appearanceMode,
+            translucency: config.appearance.chromeTranslucency)
         newWindow.contentViewController = newTabContainer
         newWindow.alphaValue = config.appearance.windowOpacity
 
