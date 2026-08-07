@@ -230,23 +230,26 @@ final class SessionCoordinator {
 
         alert.beginSheetModal(for: window) { [weak self] response in
             guard response == .alertFirstButtonReturn, !input.stringValue.isEmpty else { return }
-            let name = input.stringValue
+            self?.saveWorkspaceState(name: input.stringValue, from: window)
+        }
+    }
 
-            guard let self,
-                let tabContainer = window.activeTabContainer
-            else { return }
-
-            let frame = WindowFrame(
-                x: Double(window.frame.origin.x),
-                y: Double(window.frame.origin.y),
-                width: Double(window.frame.width),
-                height: Double(window.frame.height)
-            )
-            let splitTree = self.captureTree(from: tabContainer.splitController)
-            let tab = TabState(title: window.title, splitTree: splitTree)
-            let windowState = WindowState(frame: frame, tabs: [tab])
-            let workspace = Workspace(name: name, window: windowState)
-            try? self.workspaceManager()?.save(workspace: workspace)
+    /// Capture `window`'s active tab into a named workspace and persist it. Shared by the interactive
+    /// Save Workspace flow and the headless workspace e2e. Returns whether the save succeeded.
+    @discardableResult
+    func saveWorkspaceState(name: String, from window: NSWindow) -> Bool {
+        guard let tabContainer = window.activeTabContainer else { return false }
+        let frame = WindowFrame(
+            x: Double(window.frame.origin.x), y: Double(window.frame.origin.y),
+            width: Double(window.frame.width), height: Double(window.frame.height))
+        let splitTree = captureTree(from: tabContainer.splitController)
+        let tab = TabState(title: window.title, splitTree: splitTree)
+        let windowState = WindowState(frame: frame, tabs: [tab])
+        do {
+            try workspaceManager()?.save(workspace: Workspace(name: name, window: windowState))
+            return true
+        } catch {
+            return false
         }
     }
 

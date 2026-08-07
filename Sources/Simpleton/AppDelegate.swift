@@ -256,6 +256,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 7. Import wizard check
         showOnboardingIfNeeded()
 
+        // Headless workspace end-to-end check (set SIMPLETON_WORKSPACE_E2E to run): split the launch
+        // window, save it as a workspace, reopen it, and assert the split layout round-tripped — logs
+        // "SIMP-WSE2E RESULT PASS/FAIL …" then quits. A no-op unless the env var is set.
+        if ProcessInfo.processInfo.environment["SIMPLETON_WORKSPACE_E2E"] != nil {
+            runWorkspaceE2E()
+        }
+
         let menuResult = MenuBarBuilder.build(target: self, workspacesMenuDelegate: self)
         self.workspacesMenu = menuResult.workspacesMenu
 
@@ -782,6 +789,63 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showOnboardingIfNeeded() {
         onboardingCoordinator.showOnboardingIfNeeded()
+    }
+
+    // MARK: - Workspace end-to-end check
+
+    /// Headless e2e for Workspaces: split the launch window into two panes, capture+save it as a
+    /// workspace, reopen it (real WorkspaceManager load + SessionCoordinator restore), and assert a
+    /// fresh window came back with the two-pane split at the saved size. Timing-based (the split +
+    /// restore rebuild views), so it uses generous delays. Logs one `SIMP-WSE2E RESULT …` line, cleans
+    /// up the temp workspace, and quits. Gated behind SIMPLETON_WORKSPACE_E2E.
+    private func runWorkspaceE2E() {
+        NSLog("SIMP-WSE2E starting")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self = self, let originalWC = self.windowControllers.first,
+                let win = originalWC.window
+            else {
+                NSLog("SIMP-WSE2E RESULT FAIL: no launch window")
+                NSApp.terminate(nil)
+                return
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            // Use a realistic frame (headless launch lands at the 400px minimum, where a 2-pane split
+            // clamps the restore to the content minimum and the frame can't round-trip exactly).
+            win.setFrame(NSRect(x: 120, y: 120, width: 1000, height: 700), display: true)
+            win.makeKeyAndOrderFront(nil)
+            let initialPanes = originalWC.activeSplitController.panes.count
+            // Split directly on the window's split controller (not the keyWindow-based splitRight(),
+            // which doesn't resolve for a headlessly-launched app).
+            originalWC.activeSplitController.splitFocusedPane(direction: .vertical)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                let splitPanes = originalWC.activeSplitController.panes.count
+                let saved = self.sessionCoordinator.saveWorkspaceState(name: "__e2e__", from: win)
+                let savedSize = win.frame.size
+                let wcCountBefore = self.windowControllers.count
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self.sessionCoordinator.openWorkspace(name: "__e2e__")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        let restoredWC = self.windowControllers.last
+                        let restoredPanes = restoredWC?.activeSplitController.panes.count ?? 0
+                        let restoredSize = restoredWC?.window?.frame.size ?? .zero
+                        let newWindow = self.windowControllers.count == wcCountBefore + 1
+                        let frameOK =
+                            abs(restoredSize.width - savedSize.width) < 3
+                            && abs(restoredSize.height - savedSize.height) < 3
+                        let pass =
+                            saved && initialPanes == 1 && splitPanes == 2 && newWindow
+                            && restoredPanes == 2 && frameOK
+                        NSLog(
+                            "SIMP-WSE2E RESULT \(pass ? "PASS" : "FAIL"): saved=\(saved) "
+                                + "initialPanes=\(initialPanes) splitPanes=\(splitPanes) "
+                                + "newWindow=\(newWindow) restoredPanes=\(restoredPanes) "
+                                + "frameOK=\(frameOK) savedSize=\(savedSize) restoredSize=\(restoredSize)")
+                        self.workspaceManager?.delete(name: "__e2e__")
+                        NSApp.terminate(nil)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Updates
