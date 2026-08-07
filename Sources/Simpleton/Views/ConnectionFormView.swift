@@ -176,7 +176,7 @@ struct ConnectionFormView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .themedGroupedForm()
 
             Rectangle()
                 .fill(DT.border.opacity(0.5))

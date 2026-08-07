@@ -80,7 +80,7 @@ struct PluginsPreferencesTab: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
         .onAppear { refresh() }
     }
 

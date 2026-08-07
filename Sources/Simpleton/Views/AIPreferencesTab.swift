@@ -42,7 +42,7 @@ struct AIPreferencesTab: View {
                 privacySection
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
         .onAppear {
             refreshKeyStatus()
             autoLoadModels()

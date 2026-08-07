@@ -261,7 +261,7 @@ struct GeneralTab: View {
                 PrefsSectionHeader(title: "Terminal")
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 }
 
@@ -352,7 +352,19 @@ struct AppearanceTab: View {
                 PrefsSectionHeader(title: "Window")
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
+    }
+}
+
+extension View {
+    /// A grouped Form themed for the active appearance: hides the system list chrome (so the sheet
+    /// takes the theme's base color) and tints every section card with the theme's elevated surface
+    /// instead of the neutral system gray — so the Settings form colors with the rest of the app.
+    func themedGroupedForm() -> some View {
+        self
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .listRowBackground(DT.elevated)
     }
 }
 
@@ -408,7 +420,7 @@ struct TerminalTab: View {
                 PrefsSectionHeader(title: "Behavior")
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 }
 
@@ -471,7 +483,7 @@ struct SSHPrefsTab: View {
                 PrefsSectionHeader(title: "Forwarding")
             }
         }
-        .formStyle(.grouped)
+        .themedGroupedForm()
     }
 }
 
