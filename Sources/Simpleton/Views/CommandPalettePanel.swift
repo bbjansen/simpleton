@@ -97,6 +97,7 @@ final class CommandPalettePanel {
 }
 
 struct CommandPaletteContentView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared  // re-render on live theme change
     let actions: [PaletteAction]
     let onSelect: (PaletteAction) -> Void
     let onDismiss: () -> Void

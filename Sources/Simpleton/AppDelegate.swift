@@ -585,23 +585,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Panels are cached globally by PanelRegistry and read their config lazily via the
         // container's `appConfig()` closure. Push the just-stored config into every tab's
         // container so those closures return fresh values after a Preferences change.
+        let nsAppearance = AppTheme.nsAppearance(
+            for: config.appearance.appearanceMode, isDark: AppTheme.activeTheme.isDark)
         for wc in windowControllers {
             wc.updateConfig(config)  // so tabs opened later inherit the current appearance
             let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
             for window in windows {
-                window.appearance = AppTheme.nsAppearance(
-                    for: config.appearance.appearanceMode, isDark: AppTheme.activeTheme.isDark)
+                window.appearance = nsAppearance
                 (window.contentViewController as? TabContainerController)?.updateConfig(config)
                 window.alphaValue = config.appearance.windowOpacity
                 window.backgroundColor = NSColor(hex: AppTheme.activeTheme.chrome.surface) ?? window.backgroundColor
-                forceAppearanceRepaint(window)
             }
         }
-        // The Preferences window isn't in windowControllers — repaint it too so its chrome and the
-        // switch you just made both update live instead of on the next focus.
+        // The Preferences window isn't in windowControllers — retint it in the same pass.
         for window in NSApp.windows where window.title == "Preferences" {
-            window.appearance = AppTheme.nsAppearance(
-                for: config.appearance.appearanceMode, isDark: AppTheme.activeTheme.isDark)
+            window.appearance = nsAppearance
+        }
+        // Force every window's chrome to repaint on the NEXT runloop — AFTER SwiftUI has processed
+        // the @Published theme change. For a same-appearance switch (e.g. Nord→Dracula) the body
+        // re-eval is async; a synchronous repaint here composites the PRE-update body, leaving the
+        // fresh render deferred on any non-key window until it next became key (the "panels don't
+        // change until I click them" bug). Data: forceAppearanceRepaint fired before SidebarView.body.
+        DispatchQueue.main.async { [weak self] in self?.repaintChromeOnAllWindows() }
+    }
+
+    private func repaintChromeOnAllWindows() {
+        for wc in windowControllers {
+            let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
+            for window in windows { forceAppearanceRepaint(window) }
+        }
+        for window in NSApp.windows where window.title == "Preferences" {
             forceAppearanceRepaint(window)
         }
     }

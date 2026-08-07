@@ -63,6 +63,7 @@ final class AIExplainPanel {
 }
 
 struct AIExplainContentView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared  // re-render on live theme change
     let title: String
     let aiService: AIService
     let system: String

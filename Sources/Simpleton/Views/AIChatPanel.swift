@@ -25,6 +25,7 @@ enum AgentUIMessage: Identifiable {
 
 /// SwiftUI view for the AI Chat Panel.
 struct AIChatPanelView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared  // re-render this right-hand panel on live theme change
     let aiService: AIService
     let contextProvider: () -> AIContext
     let onInsertCommand: (String) -> Void

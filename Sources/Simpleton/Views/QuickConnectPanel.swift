@@ -99,6 +99,7 @@ final class QuickConnectPanel {
 // MARK: - SwiftUI Content
 
 struct QuickConnectContentView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared  // re-render on live theme change
     let bookmarkStore: BookmarkStore
     let onSelect: (Bookmark) -> Void
     let onDismiss: () -> Void
