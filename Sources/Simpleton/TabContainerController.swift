@@ -22,6 +22,12 @@ final class TabContainerController: NSViewController {
     private var contentSplit: NSSplitView?
     private var leftBarHost: NSHostingView<ActivityBarView>?
     private var rightBarHost: NSHostingView<ActivityBarView>?
+    private var headerHost: NSHostingView<HeaderBarView>?
+    private let headerModel = HeaderModel()
+    /// The content area (backdrop + tint + split + activity bars) that sits *below* the header.
+    private var contentContainer: NSView?
+    private var outerView: NSView?
+    private var containerTopConstraint: NSLayoutConstraint?
     private var backdropTint: NSView?
     private var leftPanelVC: NSViewController?
     private var leftPanelID: String?
@@ -36,7 +42,10 @@ final class TabContainerController: NSViewController {
     var panelRegistry: PanelRegistry? {
         didSet {
             subscribeToRegistry()
-            if isViewLoaded { rebuildActivityBars() }
+            if isViewLoaded {
+                rebuildActivityBars()
+                installHeaderIfNeeded()
+            }
         }
     }
 
@@ -250,7 +259,53 @@ final class TabContainerController: NSViewController {
             ])
         }
 
-        self.view = container
+        // Wrap the content in an outer view with the Slack-style header on top. The inner `container`
+        // (backdrop + tint + split + activity bars) is pinned *below* the header, so all the layout
+        // above is unchanged — it simply starts under the header strip.
+        contentContainer = container
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        let outer = NSView(frame: frame)
+        outer.autoresizingMask = [.width, .height]
+        outer.addSubview(container)
+        outerView = outer
+
+        // Pin the content to the top for now. `installHeaderIfNeeded()` swaps this to `header.bottom`
+        // once the panel registry arrives (it's assigned after the view loads).
+        let topC = container.topAnchor.constraint(equalTo: outer.topAnchor)
+        containerTopConstraint = topC
+        NSLayoutConstraint.activate([
+            container.leadingAnchor.constraint(equalTo: outer.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: outer.trailingAnchor),
+            topC,
+            container.bottomAnchor.constraint(equalTo: outer.bottomAnchor),
+        ])
+
+        self.view = outer
+        installHeaderIfNeeded()
+    }
+
+    /// Build and pin the Slack-style header above the content. Idempotent; needs the panel registry
+    /// (for the workspace switcher), which is assigned after `loadView`, so this is also called from
+    /// the `panelRegistry` didSet.
+    private func installHeaderIfNeeded() {
+        guard headerHost == nil, let outer = outerView, let container = contentContainer,
+            let registry = panelRegistry
+        else { return }
+        let header = NSHostingView(rootView: HeaderBarView(registry: registry, model: headerModel))
+        header.translatesAutoresizingMaskIntoConstraints = false
+        outer.addSubview(header)
+        headerHost = header
+        containerTopConstraint?.isActive = false
+        let newTop = container.topAnchor.constraint(equalTo: header.bottomAnchor)
+        containerTopConstraint = newTop
+        NSLayoutConstraint.activate([
+            header.leadingAnchor.constraint(equalTo: outer.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: outer.trailingAnchor),
+            header.topAnchor.constraint(equalTo: outer.topAnchor),
+            header.heightAnchor.constraint(equalToConstant: 46),
+            newTop,
+        ])
     }
 
     override func viewDidAppear() {
@@ -307,8 +362,7 @@ final class TabContainerController: NSViewController {
     }
 
     private func rebuildActivityBars() {
-        guard let registry = panelRegistry else { return }
-        let container = view
+        guard let registry = panelRegistry, let container = contentContainer else { return }
         leftBarHost?.removeFromSuperview()
         rightBarHost?.removeFromSuperview()
         leftBarHost = nil
