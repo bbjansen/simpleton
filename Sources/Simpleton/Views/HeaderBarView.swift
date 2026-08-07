@@ -17,26 +17,43 @@ struct HeaderBarView: View {
         NSApp.sendAction(Selector((selector)), to: nil, from: nil)
     }
 
+    /// Below this window width the center omnibox is crowded by the switcher + action cluster, so it
+    /// collapses to a single search icon (which still opens the palette). ~820px keeps a comfortable
+    /// omnibox at typical widths while decluttering narrow windows.
+    private static let omniboxBreakpoint: CGFloat = 820
+
     var body: some View {
-        HStack(spacing: 8) {
-            // Clear the traffic lights (they are hidden in full screen, so collapse the reservation).
-            Color.clear.frame(width: model.isFullScreen ? 6 : 70)
+        GeometryReader { geo in
+            let showOmnibox = geo.size.width >= Self.omniboxBreakpoint
+            HStack(spacing: 8) {
+                // Clear the traffic lights (they are hidden in full screen, so collapse the reservation).
+                Color.clear.frame(width: model.isFullScreen ? 6 : 70)
 
-            profileSwitcher
+                profileSwitcher
 
-            Spacer(minLength: 10)
-            omnibox
-            Spacer(minLength: 10)
+                Spacer(minLength: 10)
+                if showOmnibox {
+                    omnibox
+                    Spacer(minLength: 10)
+                }
 
-            HeaderIconButton(icon: "plus", help: "New Tab  ⌘T") { fire("newTab") }
-            HeaderIconButton(icon: "rectangle.split.2x1", help: "Split Right  ⌘D") { fire("splitRight") }
-            HeaderIconButton(icon: "bolt.fill", help: "Quick Connect  ⌘K") { fire("showQuickConnect") }
-            HeaderIconButton(icon: "sparkles", help: "AI Assistant  ⇧⌘A") {
-                NotificationCenter.default.post(name: .simpletonToggleAIChat, object: nil)
+                if !showOmnibox {
+                    // Collapsed omnibox — a single magnifying-glass button that still opens the palette.
+                    HeaderIconButton(icon: "magnifyingglass", help: "Search / Command Palette  ⇧⌘P") {
+                        fire("showCommandPalette")
+                    }
+                }
+                HeaderIconButton(icon: "plus", help: "New Tab  ⌘T") { fire("newTab") }
+                HeaderIconButton(icon: "rectangle.split.2x1", help: "Split Right  ⌘D") { fire("splitRight") }
+                HeaderIconButton(icon: "bolt.fill", help: "Quick Connect  ⌘K") { fire("showQuickConnect") }
+                HeaderIconButton(icon: "sparkles", help: "AI Assistant  ⇧⌘A") {
+                    NotificationCenter.default.post(name: .simpletonToggleAIChat, object: nil)
+                }
+                overflowMenu
             }
-            overflowMenu
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(.horizontal, 10)
         .frame(height: 46)
         .themedHeader(DT.surface)
         .overlay(
