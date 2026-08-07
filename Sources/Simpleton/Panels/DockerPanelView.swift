@@ -19,6 +19,7 @@ enum DockerPanelState {
 }
 
 struct DockerPanelView: View {
+    @ObservedObject private var themeSettings = ThemeSettings.shared
     @State private var state: DockerPanelState = .loading
     @State private var logSheetContainer: DockerContainer? = nil
     @State private var logLines: [String] = []
@@ -30,18 +31,19 @@ struct DockerPanelView: View {
                 Text("DOCKER")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(DT.textMuted)
                 Spacer()
                 Button {
                     Task { await refresh() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .foregroundColor(DT.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            Divider()
+            ThemedDivider()
             switch state {
             case .loading:
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -69,6 +71,7 @@ struct DockerPanelView: View {
             DockerLogSheet(container: container, logLines: logLines)
                 .frame(width: 600, height: 400)
         }
+        .themedGlass(DT.surface)
         .onAppear {
             Task { await refresh() }
             timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
@@ -93,25 +96,28 @@ struct DockerPanelView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Circle()
-                            .fill(container.isRunning ? Color.green : Color.secondary)
+                            .fill(container.isRunning ? DT.accentGreen : DT.textFaint)
                             .frame(width: 8, height: 8)
                         Text(container.name)
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(.semibold)
+                            .foregroundColor(DT.textPrimary)
                         Spacer()
                         containerActions(container)
                     }
                     Text(container.image)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(DT.textTertiary)
                     if !container.ports.isEmpty {
                         Text(container.ports)
                             .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(DT.textTertiary)
                     }
                 }
+                .listRowBackground(Color.clear)
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
     }
 
@@ -122,16 +128,16 @@ struct DockerPanelView: View {
                 Task { await toggleContainer(container) }
             } label: {
                 Image(systemName: container.isRunning ? "stop.fill" : "play.fill")
+                    .foregroundColor(container.isRunning ? DT.accentRed : DT.accentGreen)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(container.isRunning ? Color.red : Color.green)
             Button {
                 Task { await showLogs(for: container) }
             } label: {
                 Image(systemName: "text.alignleft")
+                    .foregroundColor(DT.textSecondary)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color.secondary)
         }
     }
 
@@ -233,22 +239,27 @@ struct DockerLogSheet: View {
             HStack {
                 Text("Logs — \(container.name)")
                     .font(.headline)
+                    .foregroundColor(DT.textPrimary)
                 Spacer()
                 Button("Close") { dismiss() }
+                    .tint(DT.accent)
             }
             .padding()
-            Divider()
+            ThemedDivider()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(logLines.indices, id: \.self) { i in
                         Text(logLines[i])
                             .font(.system(.caption2, design: .monospaced))
+                            .foregroundColor(DT.textSecondary)
                             .textSelection(.enabled)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 1)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
         }
+        .background(DT.surface)
     }
 }

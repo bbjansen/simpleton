@@ -142,12 +142,13 @@ struct SkillsPanelView: View {
         VStack(spacing: 0) {
             // Search
             HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundColor(.secondary).font(.system(size: 11))
+                Image(systemName: "magnifyingglass").foregroundColor(DT.textMuted).font(.system(size: 11))
                 TextField("Search skills…", text: $vm.query).font(.system(size: 11))
+                    .foregroundColor(DT.textPrimary)
             }
             .padding(8)
 
-            Divider()
+            ThemedDivider()
 
             // Skill list
             ScrollView {
@@ -162,7 +163,7 @@ struct SkillsPanelView: View {
                     }
                     if vm.filteredBuiltIn.isEmpty && vm.filteredUser.isEmpty {
                         Text("No skills found")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DT.textMuted)
                             .font(.system(size: 11))
                             .padding()
                     }
@@ -173,16 +174,17 @@ struct SkillsPanelView: View {
 
             // Param form + run button
             if let skill = vm.selectedSkill {
-                Divider()
+                ThemedDivider()
                 skillRunForm(skill: skill)
             }
 
             // Output
             if !vm.outputLines.isEmpty || vm.isRunning || vm.errorMessage != nil {
-                Divider()
+                ThemedDivider()
                 outputView
             }
         }
+        .themedGlass(DT.surface)
         .onReceive(NotificationCenter.default.publisher(for: .simpletonActivateSkillPicker)) { _ in
             // Best-effort: clear the query to show all skills when picker is activated
             vm.query = ""
@@ -192,7 +194,7 @@ struct SkillsPanelView: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title.uppercased())
             .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(.secondary)
+            .foregroundColor(DT.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 2)
     }
@@ -202,13 +204,14 @@ struct SkillsPanelView: View {
             HStack(spacing: 8) {
                 Image(systemName: skill.icon)
                     .font(.system(size: 12))
-                    .foregroundColor(.purple)
+                    .foregroundColor(themeSettings.accent)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(skill.name).font(.system(size: 11)).lineLimit(1)
+                        .foregroundColor(DT.textPrimary)
                     Text("/\(skill.slug)")
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DT.textTertiary)
                 }
                 Spacer()
             }
@@ -222,13 +225,13 @@ struct SkillsPanelView: View {
     @ViewBuilder
     private func skillRunForm(skill: Skill) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(skill.name).font(.system(size: 11, weight: .semibold))
+            Text(skill.name).font(.system(size: 11, weight: .semibold)).foregroundColor(DT.textPrimary)
             if !skill.description.isEmpty {
-                Text(skill.description).font(.system(size: 10)).foregroundColor(.secondary)
+                Text(skill.description).font(.system(size: 10)).foregroundColor(DT.textTertiary)
             }
             ForEach(skill.parameters) { param in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(param.label).font(.system(size: 10)).foregroundColor(.secondary)
+                    Text(param.label).font(.system(size: 10)).foregroundColor(DT.textMuted)
                     TextField(
                         param.placeholder ?? param.name,
                         text: Binding(
@@ -237,6 +240,7 @@ struct SkillsPanelView: View {
                         )
                     )
                     .font(.system(size: 11))
+                    .foregroundColor(DT.textPrimary)
                 }
             }
             HStack {
@@ -250,6 +254,7 @@ struct SkillsPanelView: View {
                     }
                     .font(.system(size: 11))
                     .buttonStyle(.borderedProminent)
+                    .tint(DT.accent)
                     .disabled(aiService == nil)
                 }
             }
@@ -263,16 +268,16 @@ struct SkillsPanelView: View {
                 ForEach(Array(vm.outputLines.enumerated()), id: \.offset) { _, line in
                     Text(line)
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.primary)
+                        .foregroundColor(DT.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if let err = vm.errorMessage {
-                    Text(err).font(.system(size: 10)).foregroundColor(.red)
+                    Text(err).font(.system(size: 10)).foregroundColor(DT.accentRed)
                 }
                 if vm.isRunning {
                     HStack(spacing: 4) {
                         ProgressView().scaleEffect(0.5)
-                        Text("Running…").font(.system(size: 10)).foregroundColor(.secondary)
+                        Text("Running…").font(.system(size: 10)).foregroundColor(DT.textMuted)
                     }
                 }
             }

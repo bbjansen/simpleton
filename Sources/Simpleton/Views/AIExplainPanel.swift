@@ -79,19 +79,20 @@ struct AIExplainContentView: View {
             // Header
             HStack {
                 Image(systemName: "sparkles")
-                    .foregroundColor(.purple)
+                    .foregroundColor(themeSettings.accent)
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(DT.textPrimary)
                 Spacer()
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DT.textTertiary)
                 }
                 .buttonStyle(.plain)
             }
             .padding(12)
 
-            Divider()
+            ThemedDivider()
 
             // Content
             ScrollView {
@@ -101,17 +102,18 @@ struct AIExplainContentView: View {
                             .scaleEffect(0.7)
                         Text("Thinking...")
                             .font(.system(size: 12))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DT.textMuted)
                     }
                     .padding()
                 } else if let error = error {
                     Text(error)
                         .font(.system(size: 12))
-                        .foregroundColor(.red)
+                        .foregroundColor(DT.accentRed)
                         .padding()
                 } else {
                     Text(makeAttributed(response))
                         .font(.system(size: 12))
+                        .foregroundColor(DT.textPrimary)
                         .textSelection(.enabled)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -120,7 +122,7 @@ struct AIExplainContentView: View {
 
             // Footer
             if !response.isEmpty {
-                Divider()
+                ThemedDivider()
                 HStack {
                     Button("Copy") {
                         NSPasteboard.general.clearContents()
@@ -128,6 +130,7 @@ struct AIExplainContentView: View {
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 11))
+                    .foregroundColor(themeSettings.accent)
                     Spacer()
                 }
                 .padding(8)

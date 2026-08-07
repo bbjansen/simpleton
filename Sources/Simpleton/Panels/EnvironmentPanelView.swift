@@ -26,16 +26,18 @@ struct EnvironmentPanelView: View {
             HStack {
                 TextField("Filter…", text: $query)
                     .textFieldStyle(.plain)
+                    .foregroundColor(DT.textPrimary)
                 Button {
                     Task { await refresh() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .foregroundColor(DT.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .disabled(isLoading)
             }
             .padding(8)
-            Divider()
+            ThemedDivider()
             if isSSH {
                 PanelEmptyStateView(
                     icon: "exclamationmark.triangle",
@@ -56,11 +58,13 @@ struct EnvironmentPanelView: View {
                         Text(entry.key)
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(.semibold)
+                            .foregroundColor(DT.textPrimary)
                         Text(entry.value)
                             .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(DT.textTertiary)
                             .lineLimit(1)
                     }
+                    .listRowBackground(Color.clear)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         NSPasteboard.general.clearContents()
@@ -68,8 +72,10 @@ struct EnvironmentPanelView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
+        .themedGlass(DT.surface)
         .onAppear {
             let pane = currentPaneProvider()
             if case .ssh = pane?.connectionType { isSSH = true; return }

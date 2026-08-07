@@ -111,7 +111,7 @@ struct ConnectionFormView: View {
                                 ))
                             Button(action: { removeJumpHost(id: row.id) }) {
                                 Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red.opacity(0.7))
+                                    .foregroundColor(DT.accentRed.opacity(0.8))
                             }
                             .buttonStyle(.plain)
                         }
@@ -132,15 +132,15 @@ struct ConnectionFormView: View {
                         HStack {
                             Text(pf.direction == .local ? "L" : "R")
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(pf.direction == .local ? DT.accentBlue : .orange)
+                                .foregroundColor(pf.direction == .local ? DT.accentBlue : DT.accentAmber)
                                 .frame(width: 16)
                             Text("\(pf.localPort):\(pf.remoteHost):\(pf.remotePort)")
                                 .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(.primary)
+                                .foregroundColor(DT.textPrimary)
                             Spacer()
                             Button(action: { bookmark.portForwards.remove(at: index) }) {
                                 Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red.opacity(0.7))
+                                    .foregroundColor(DT.accentRed.opacity(0.8))
                             }
                             .buttonStyle(.plain)
                         }

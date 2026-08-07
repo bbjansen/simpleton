@@ -253,7 +253,7 @@ struct QuickConnectRow: View {
         HStack(spacing: 10) {
             Image(systemName: bookmark.pinned ? "star.fill" : "network")
                 .font(.system(size: 11))
-                .foregroundColor(bookmark.pinned ? Color.yellow.opacity(0.8) : DT.textMuted)
+                .foregroundColor(bookmark.pinned ? DT.accentAmber : DT.textMuted)
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {

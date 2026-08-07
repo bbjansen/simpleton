@@ -35,24 +35,27 @@ struct SnippetsPanelView: View {
         VStack(spacing: 0) {
             // Search + add
             HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundColor(.secondary).font(.system(size: 11))
+                Image(systemName: "magnifyingglass").foregroundColor(DT.textMuted).font(.system(size: 11))
                 TextField("Search snippets…", text: $query).font(.system(size: 11))
+                    .foregroundColor(DT.textPrimary)
                 Button(action: { isAdding.toggle() }) {
                     Image(systemName: "plus").font(.system(size: 12))
+                        .foregroundColor(DT.textSecondary)
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.secondary)
             }
             .padding(8)
 
-            Divider()
+            ThemedDivider()
 
             // Add form
             if isAdding {
                 VStack(alignment: .leading, spacing: 6) {
                     TextField("Name", text: $newName).font(.system(size: 11))
+                        .foregroundColor(DT.textPrimary)
                     TextField("Command (use {param} for placeholders)", text: $newCommand)
                         .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(DT.textPrimary)
                     HStack {
                         Spacer()
                         Button("Cancel") {
@@ -61,12 +64,13 @@ struct SnippetsPanelView: View {
                         .font(.system(size: 11))
                         Button("Add") { addSnippet() }
                             .font(.system(size: 11))
+                            .tint(DT.accent)
                             .disabled(newName.isEmpty || newCommand.isEmpty)
                     }
                 }
                 .padding(8)
-                .background(DT.surface)
-                Divider()
+                .background(DT.elevated)
+                ThemedDivider()
             }
 
             // List
@@ -77,7 +81,7 @@ struct SnippetsPanelView: View {
                     }
                     if filtered.isEmpty {
                         Text(store.snippets.isEmpty ? "No snippets yet" : "No results")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DT.textMuted)
                             .font(.system(size: 11))
                             .padding()
                     }
@@ -91,13 +95,13 @@ struct SnippetsPanelView: View {
             {
                 let placeholders = extractPlaceholders(snippet.command)
                 if !placeholders.isEmpty {
-                    Divider()
+                    ThemedDivider()
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(placeholders, id: \.self) { ph in
                             HStack {
                                 Text(ph)
                                     .font(.system(size: 10))
-                                    .foregroundColor(.purple)
+                                    .foregroundColor(themeSettings.accent)
                                     .frame(width: 60, alignment: .leading)
                                 TextField(
                                     ph,
@@ -107,6 +111,7 @@ struct SnippetsPanelView: View {
                                     )
                                 )
                                 .font(.system(size: 11))
+                                .foregroundColor(DT.textPrimary)
                             }
                         }
                         Button("Insert") {
@@ -114,20 +119,23 @@ struct SnippetsPanelView: View {
                         }
                         .font(.system(size: 11))
                         .buttonStyle(.borderedProminent)
+                        .tint(DT.accent)
                     }
                     .padding(8)
                 }
             }
         }
+        .themedGlass(DT.surface)
     }
 
     private func snippetRow(_ snippet: Snippet) -> some View {
         Button(action: { selectSnippet(snippet) }) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(snippet.name).font(.system(size: 11)).lineLimit(1)
+                    .foregroundColor(DT.textPrimary)
                 Text(snippet.command)
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(DT.textTertiary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

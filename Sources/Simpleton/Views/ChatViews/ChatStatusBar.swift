@@ -10,7 +10,7 @@ struct ChatStatusBar: View {
             if stepNumber > 0 {
                 Text("Step \(stepNumber)")
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(DT.textSecondary)
             }
             Spacer()
             Button(action: { unlimitedTurns.toggle() }) {
@@ -20,7 +20,7 @@ struct ChatStatusBar: View {
                     Text(unlimitedTurns ? "Unlimited" : "25 turns")
                         .font(.system(size: 9))
                 }
-                .foregroundColor(unlimitedTurns ? .orange : .secondary)
+                .foregroundColor(unlimitedTurns ? DT.accentAmber : DT.textSecondary)
             }
             .buttonStyle(.plain)
             .help(

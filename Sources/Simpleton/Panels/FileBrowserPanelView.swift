@@ -39,18 +39,18 @@ struct FileBrowserPanelView: View {
                         }
                         .buttonStyle(.plain)
                         .font(.caption)
-                        .foregroundStyle(themeSettings.accent)
+                        .foregroundColor(themeSettings.accent)
                         if url.path != breadcrumbs.last?.path {
                             Text(">")
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundColor(DT.textTertiary)
                         }
                     }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
             }
-            Divider()
+            ThemedDivider()
             if entries.isEmpty {
                 PanelEmptyStateView(
                     icon: "folder",
@@ -61,12 +61,14 @@ struct FileBrowserPanelView: View {
                 List(entries) { entry in
                     HStack(spacing: 6) {
                         Image(systemName: entry.isDirectory ? "folder.fill" : "doc")
-                            .foregroundStyle(entry.isDirectory ? themeSettings.accent : Color.secondary)
+                            .foregroundColor(entry.isDirectory ? themeSettings.accent : DT.textTertiary)
                         Text(entry.name)
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(entry.isDirectory ? .semibold : .regular)
+                            .foregroundColor(DT.textPrimary)
                             .lineLimit(1)
                     }
+                    .listRowBackground(Color.clear)
                     .contentShape(Rectangle())
                     .simultaneousGesture(
                         TapGesture(count: 2).onEnded {
@@ -78,8 +80,10 @@ struct FileBrowserPanelView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
+        .themedGlass(DT.surface)
         .onAppear { syncCWD() }
     }
 

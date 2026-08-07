@@ -38,6 +38,16 @@ extension NSVisualEffectView {
     }
 }
 
+/// A hairline divider tinted from the theme's border token, so panel section rules match the
+/// themed chrome instead of the system separator gray.
+struct ThemedDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(DT.border.opacity(0.6))
+            .frame(height: 1)
+    }
+}
+
 extension View {
     /// Bold theme-colored macOS glass. A vibrancy blur provides the polished translucent "gloss";
     /// a dominant theme-color wash on top makes the surface read as *fully* the theme's color, and a

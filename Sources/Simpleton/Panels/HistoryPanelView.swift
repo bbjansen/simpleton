@@ -19,8 +19,9 @@ struct HistoryPanelView: View {
         VStack(spacing: 0) {
             TextField("Filter history…", text: $query)
                 .textFieldStyle(.plain)
+                .foregroundColor(DT.textPrimary)
                 .padding(8)
-            Divider()
+            ThemedDivider()
             if entries.isEmpty {
                 PanelEmptyStateView(
                     icon: "clock",
@@ -31,13 +32,17 @@ struct HistoryPanelView: View {
                 List(filtered, id: \.self) { entry in
                     Text(entry)
                         .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(DT.textSecondary)
                         .lineLimit(1)
+                        .listRowBackground(Color.clear)
                         .contentShape(Rectangle())
                         .onTapGesture { onInsert(entry) }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
+        .themedGlass(DT.surface)
         .onAppear { loadHistory() }
     }
 

@@ -15,10 +15,11 @@ struct PaneIndicatorBar: View {
                     Button(action: { conversation.targetPaneID = paneID }) {
                         HStack(spacing: 3) {
                             Circle()
-                                .fill(isFocused ? Color.green : Color.secondary.opacity(0.4))
+                                .fill(isFocused ? DT.accentGreen : DT.textFaint.opacity(0.6))
                                 .frame(width: 6, height: 6)
                             Text(label)
                                 .font(.system(size: 9))
+                                .foregroundColor(DT.textSecondary)
                                 .lineLimit(1)
                         }
                         .padding(.horizontal, 6)

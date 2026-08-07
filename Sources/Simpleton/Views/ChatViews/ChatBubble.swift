@@ -10,10 +10,10 @@ struct ChatBubble: View {
             HStack {
                 Image(systemName: message.role == "user" ? "person.circle" : "sparkles")
                     .font(.system(size: 10))
-                    .foregroundColor(message.role == "user" ? .blue : .purple)
+                    .foregroundColor(message.role == "user" ? DT.accentBlue : DT.accent)
                 Text(message.role == "user" ? "You" : "AI")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(DT.textSecondary)
             }
 
             // Parse content for inline code blocks
@@ -37,7 +37,7 @@ struct ChatBubble: View {
                                 .font(.system(size: 9))
                         }
                         .padding(6)
-                        .background(Color.purple.opacity(0.1))
+                        .background(DT.accent.opacity(0.1))
                         .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
@@ -45,7 +45,7 @@ struct ChatBubble: View {
             }
         }
         .padding(8)
-        .background(message.role == "user" ? Color.blue.opacity(0.05) : Color.clear)
+        .background(message.role == "user" ? DT.accentBlue.opacity(0.05) : Color.clear)
         .cornerRadius(8)
     }
 

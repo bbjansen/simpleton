@@ -22,18 +22,19 @@ struct ProcessesPanelView: View {
                 Text("PROCESSES")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(DT.textMuted)
                 Spacer()
                 Button {
                     Task { await load() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .foregroundColor(DT.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            Divider()
+            ThemedDivider()
             if processes.isEmpty {
                 PanelEmptyStateView(
                     icon: "cpu",
@@ -46,12 +47,13 @@ struct ProcessesPanelView: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(proc.command)
                                 .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(DT.textPrimary)
                                 .lineLimit(1)
                             Text(
                                 "PID \(proc.pid)  CPU \(String(format: "%.1f", proc.cpu))%  MEM \(String(format: "%.1f", proc.mem))%"
                             )
                             .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(DT.textTertiary)
                         }
                         Spacer()
                         Button {
@@ -64,14 +66,17 @@ struct ProcessesPanelView: View {
                             Task { await load() }
                         } label: {
                             Image(systemName: "xmark.circle")
-                                .foregroundStyle(.red)
+                                .foregroundColor(DT.accentRed)
                         }
                         .buttonStyle(.plain)
                     }
+                    .listRowBackground(Color.clear)
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
+        .themedGlass(DT.surface)
         .onAppear {
             Task { await load() }
             timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in

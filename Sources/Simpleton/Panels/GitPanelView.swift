@@ -19,6 +19,7 @@ enum GitPanelState {
 struct GitPanelView: View {
     let currentPaneProvider: () -> PaneController?
 
+    @ObservedObject private var themeSettings = ThemeSettings.shared
     @State private var state: GitPanelState = .loading
 
     var body: some View {
@@ -27,18 +28,19 @@ struct GitPanelView: View {
                 Text("GIT")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(DT.textMuted)
                 Spacer()
                 Button {
                     Task { await refresh() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .foregroundColor(DT.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            Divider()
+            ThemedDivider()
             switch state {
             case .loading:
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -60,6 +62,7 @@ struct GitPanelView: View {
                 gitContent(status)
             }
         }
+        .themedGlass(DT.surface)
         .onAppear { Task { await refresh() } }
     }
 
@@ -69,38 +72,47 @@ struct GitPanelView: View {
             Section {
                 HStack {
                     Image(systemName: "arrow.triangle.branch")
+                        .foregroundColor(DT.textSecondary)
                     Text(status.branch)
                         .font(.system(.caption, design: .monospaced))
                         .fontWeight(.semibold)
+                        .foregroundColor(DT.textPrimary)
                 }
+                .listRowBackground(Color.clear)
                 HStack(spacing: 16) {
                     Label("\(status.stagedCount) staged", systemImage: "plus.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(.green)
+                        .foregroundColor(DT.accentGreen)
                     Label("\(status.unstagedCount) unstaged", systemImage: "pencil.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundColor(DT.accentAmber)
                 }
+                .listRowBackground(Color.clear)
             } header: {
                 Text("STATUS")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
+                    .foregroundColor(DT.textMuted)
             }
             if !status.commits.isEmpty {
                 Section {
                     ForEach(status.commits, id: \.self) { commit in
                         Text(commit)
                             .font(.system(.caption2, design: .monospaced))
+                            .foregroundColor(DT.textSecondary)
                             .lineLimit(1)
+                            .listRowBackground(Color.clear)
                     }
                 } header: {
                     Text("RECENT COMMITS")
                         .font(.system(size: 9, weight: .semibold))
                         .tracking(1.5)
+                        .foregroundColor(DT.textMuted)
                 }
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     @MainActor

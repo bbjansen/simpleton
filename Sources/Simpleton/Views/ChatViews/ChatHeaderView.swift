@@ -10,7 +10,7 @@ struct ChatHeaderView: View {
     var body: some View {
         HStack {
             Image(systemName: "sparkles")
-                .foregroundColor(.purple)
+                .foregroundColor(DT.accent)
             Text("AI Assistant")
                 .font(.system(size: 13, weight: .semibold))
             Spacer()
@@ -25,10 +25,10 @@ struct ChatHeaderView: View {
                     Text("Watch")
                         .font(.system(size: 10, weight: .medium))
                 }
-                .foregroundColor(watchActive ? .white : .secondary)
+                .foregroundColor(watchActive ? .white : DT.textSecondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(watchActive ? Color.blue : Color.clear)
+                .background(watchActive ? DT.accentBlue : Color.clear)
                 .cornerRadius(4)
             }
             .buttonStyle(.plain)
@@ -46,7 +46,7 @@ struct ChatHeaderView: View {
             }) {
                 Text(autopilotLabel)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(autopilotMode == .off ? .secondary : .white)
+                    .foregroundColor(autopilotMode == .off ? DT.textSecondary : .white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(autopilotBackground)
@@ -65,7 +65,7 @@ struct ChatHeaderView: View {
             if let dismiss = onDismiss {
                 Button(action: dismiss) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DT.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -85,8 +85,8 @@ struct ChatHeaderView: View {
     private var autopilotBackground: Color {
         switch autopilotMode {
         case .off: return .clear
-        case .safe: return .yellow.opacity(0.7)
-        case .full: return .orange
+        case .safe: return DT.accentAmber.opacity(0.7)
+        case .full: return DT.accentAmber
         }
     }
 }

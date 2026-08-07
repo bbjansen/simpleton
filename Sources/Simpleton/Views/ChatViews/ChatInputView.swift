@@ -17,7 +17,7 @@ struct ChatInputView: View {
             Button(action: { showSkillPicker.toggle() }) {
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 12))
-                    .foregroundColor(.yellow)
+                    .foregroundColor(DT.accentAmber)
             }
             .buttonStyle(.plain)
             .popover(isPresented: $showSkillPicker, arrowEdge: .top) {
@@ -39,13 +39,13 @@ struct ChatInputView: View {
             if isStreaming {
                 Button(action: onCancel) {
                     Image(systemName: "stop.circle.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(DT.accentRed)
                 }
                 .buttonStyle(.plain)
             } else {
                 Button(action: onSend) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .foregroundColor(input.isEmpty ? .secondary : .purple)
+                        .foregroundColor(input.isEmpty ? DT.textSecondary : DT.accent)
                 }
                 .buttonStyle(.plain)
                 .disabled(input.isEmpty)

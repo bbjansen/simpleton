@@ -25,18 +25,19 @@ struct SSHTunnelsPanelView: View {
                 Text("SSH TUNNELS")
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(DT.textMuted)
                 Spacer()
                 Button {
                     loadTunnels()
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .foregroundColor(DT.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            Divider()
+            ThemedDivider()
             if tunnels.isEmpty {
                 PanelEmptyStateView(
                     icon: "network",
@@ -48,10 +49,12 @@ struct SSHTunnelsPanelView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("localhost:\(tunnel.localPort) → \(tunnel.remoteHost):\(tunnel.remotePort)")
                             .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(DT.textPrimary)
                         Text(tunnel.paneName)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(DT.textTertiary)
                     }
+                    .listRowBackground(Color.clear)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         NSPasteboard.general.clearContents()
@@ -59,8 +62,10 @@ struct SSHTunnelsPanelView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
+        .themedGlass(DT.surface)
         .onAppear { loadTunnels() }
         .onReceive(NotificationCenter.default.publisher(for: .simpletonWindowClosed)) { _ in
             loadTunnels()

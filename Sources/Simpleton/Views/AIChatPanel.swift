@@ -72,7 +72,7 @@ struct AIChatPanelView: View {
                 onDismiss: onDismiss
             )
 
-            Divider()
+            ThemedDivider()
 
             // Autopilot warning banner
             if autopilotMode != .off {
@@ -134,7 +134,7 @@ struct AIChatPanelView: View {
                 )
                 .padding(12)
 
-                Divider()
+                ThemedDivider()
             }
 
             // Messages + agent bubbles
@@ -201,7 +201,7 @@ struct AIChatPanelView: View {
                 }
             }
 
-            Divider()
+            ThemedDivider()
 
             // Input
             ChatInputView(

@@ -28,7 +28,7 @@ struct AgentExecutionBubble: View {
                     if !explanation.isEmpty {
                         Text(explanation)
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DT.textSecondary)
                     }
                 }
                 Spacer()
@@ -36,7 +36,7 @@ struct AgentExecutionBubble: View {
                     Button(action: { showOutput.toggle() }) {
                         Text(showOutput ? "Hide" : "Output")
                             .font(.system(size: 9))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DT.textSecondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -44,9 +44,9 @@ struct AgentExecutionBubble: View {
 
             if case .waitingApproval = status {
                 HStack(spacing: 8) {
-                    approvalButton("Allow", color: .green, action: onAllow)
-                    approvalButton("Skip", color: .orange, action: onSkip)
-                    approvalButton("Stop", color: .red, action: onStop)
+                    approvalButton("Allow", color: DT.accentGreen, action: onAllow)
+                    approvalButton("Skip", color: DT.accentAmber, action: onSkip)
+                    approvalButton("Stop", color: DT.accentRed, action: onStop)
                 }
             }
 
@@ -73,24 +73,24 @@ struct AgentExecutionBubble: View {
     private var statusIcon: some View {
         switch status {
         case .waitingApproval:
-            Image(systemName: "questionmark.circle.fill").foregroundColor(.orange)
+            Image(systemName: "questionmark.circle.fill").foregroundColor(DT.accentAmber)
         case .running:
             ProgressView().scaleEffect(0.6).frame(width: 16, height: 16)
         case .done:
-            Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+            Image(systemName: "checkmark.circle.fill").foregroundColor(DT.accentGreen)
         case .failed:
-            Image(systemName: "xmark.circle.fill").foregroundColor(.red)
+            Image(systemName: "xmark.circle.fill").foregroundColor(DT.accentRed)
         case .skipped:
-            Image(systemName: "forward.circle.fill").foregroundColor(.secondary)
+            Image(systemName: "forward.circle.fill").foregroundColor(DT.textSecondary)
         }
     }
 
     private var statusBorderColor: Color {
         switch status {
-        case .waitingApproval: return .orange.opacity(0.5)
-        case .running: return .purple.opacity(0.5)
-        case .done: return .green.opacity(0.3)
-        case .failed: return .red.opacity(0.5)
+        case .waitingApproval: return DT.accentAmber.opacity(0.5)
+        case .running: return DT.accent.opacity(0.5)
+        case .done: return DT.accentGreen.opacity(0.3)
+        case .failed: return DT.accentRed.opacity(0.5)
         case .skipped: return DT.border
         }
     }

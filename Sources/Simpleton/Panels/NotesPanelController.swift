@@ -37,24 +37,29 @@ struct NotesPanelView: View {
             HStack {
                 Text("Notes")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(DT.textMuted)
                 Spacer()
                 if let c = cwd {
                     Text(URL(fileURLWithPath: c).lastPathComponent)
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DT.textTertiary)
                         .lineLimit(1)
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            Divider()
+            ThemedDivider()
             TextEditor(text: $text)
                 .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(DT.textPrimary)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 4)
+                .padding(.top, 4)
                 .onChange(of: text) { newText in
                     savePublisher.send((url: noteFile, text: newText))
                 }
         }
+        .themedGlass(DT.surface)
         .onAppear {
             setupSaveTimer()
             refreshCwd()
