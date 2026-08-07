@@ -46,6 +46,42 @@ final class WorkspaceManager {
         return file.workspace
     }
 
+    /// Rename a workspace: load it, save it under the new name (carrying the full setup + layout), and
+    /// delete the old file. No-op if the source doesn't exist or the names are equal. Returns success.
+    @discardableResult
+    func rename(from oldName: String, to newName: String) -> Bool {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != oldName, var ws = load(name: oldName) else { return false }
+        ws.name = trimmed
+        do {
+            try save(workspace: ws)
+        } catch {
+            return false
+        }
+        // Only remove the old file if the new name maps to a different file — otherwise the sanitized
+        // filenames collide (e.g. "My WS" vs "my-ws") and deleting would remove what we just wrote.
+        if sanitizeFilename(oldName) != sanitizeFilename(trimmed) {
+            delete(name: oldName)
+        }
+        return true
+    }
+
+    /// Duplicate a workspace under "<name> copy" (carrying its full setup + layout). Returns the new
+    /// name, or nil if the source doesn't exist.
+    @discardableResult
+    func duplicate(name: String) -> String? {
+        guard var ws = load(name: name) else { return nil }
+        let copyName = "\(name) copy"
+        ws.name = copyName
+        ws.savedAt = Date()
+        do {
+            try save(workspace: ws)
+        } catch {
+            return nil
+        }
+        return copyName
+    }
+
     /// Delete a workspace by name.
     func delete(name: String) {
         let filename = sanitizeFilename(name) + ".json"

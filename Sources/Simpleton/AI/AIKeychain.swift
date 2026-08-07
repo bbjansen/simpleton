@@ -1,6 +1,7 @@
 // Sources/Simpleton/AI/AIKeychain.swift
 import Foundation
 import Security
+import SimpletonCore
 
 /// Keychain storage for AI API keys. Separate from SSH KeychainManager.
 enum AIKeychain {

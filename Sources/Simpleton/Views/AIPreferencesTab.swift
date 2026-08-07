@@ -1,5 +1,6 @@
 import AppKit
 // Sources/Simpleton/Views/AIPreferencesTab.swift
+import SimpletonCore
 import SwiftUI
 
 struct AIPreferencesTab: View {

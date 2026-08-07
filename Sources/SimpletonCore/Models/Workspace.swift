@@ -19,10 +19,21 @@ public struct Workspace: Codable, Equatable {
     /// The plugin ids enabled in this workspace. Nil = don't change plugin enablement.
     public var enabledPlugins: [String]?
 
+    /// The full app preferences captured with this workspace (theme, font, cursor, SSH, general).
+    /// Applied wholesale on open — carrying much more than the legacy appearanceMode/accent fields,
+    /// which remain as a fallback for older workspace files that predate this. Nil = fall back to the
+    /// legacy appearance fields. NOTE: the global workspace-management fields
+    /// (general.defaultWorkspace / workspaceOpenReplacesWindow / autoSyncActiveWorkspace) are blanked
+    /// out here at capture time so opening a workspace never rewrites those app-wide settings.
+    public var preferences: AppConfig?
+    /// The AI provider/model configuration captured with this workspace. Nil = don't change AI config.
+    public var aiConfig: AIConfig?
+
     public init(
         name: String, savedAt: Date = Date(), window: WindowState,
         appearanceMode: String? = nil, accentColor: String? = nil,
-        panelProfileID: String? = nil, enabledPlugins: [String]? = nil
+        panelProfileID: String? = nil, enabledPlugins: [String]? = nil,
+        preferences: AppConfig? = nil, aiConfig: AIConfig? = nil
     ) {
         self.name = name
         self.savedAt = savedAt
@@ -31,6 +42,8 @@ public struct Workspace: Codable, Equatable {
         self.accentColor = accentColor
         self.panelProfileID = panelProfileID
         self.enabledPlugins = enabledPlugins
+        self.preferences = preferences
+        self.aiConfig = aiConfig
     }
 }
 
@@ -41,6 +54,7 @@ public struct WorkspaceFile: Codable {
     private enum CodingKeys: String, CodingKey {
         case version, name, savedAt, window
         case appearanceMode, accentColor, panelProfileID, enabledPlugins
+        case preferences, aiConfig
     }
 
     public init(version: Int = 1, workspace: Workspace) {
@@ -59,10 +73,14 @@ public struct WorkspaceFile: Codable {
         let accentColor = try container.decodeIfPresent(String.self, forKey: .accentColor)
         let panelProfileID = try container.decodeIfPresent(String.self, forKey: .panelProfileID)
         let enabledPlugins = try container.decodeIfPresent([String].self, forKey: .enabledPlugins)
+        // Deeper setup — optional, so files written before this feature (no preferences/aiConfig) still load.
+        let preferences = try container.decodeIfPresent(AppConfig.self, forKey: .preferences)
+        let aiConfig = try container.decodeIfPresent(AIConfig.self, forKey: .aiConfig)
         workspace = Workspace(
             name: name, savedAt: savedAt, window: window,
             appearanceMode: appearanceMode, accentColor: accentColor,
-            panelProfileID: panelProfileID, enabledPlugins: enabledPlugins)
+            panelProfileID: panelProfileID, enabledPlugins: enabledPlugins,
+            preferences: preferences, aiConfig: aiConfig)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -75,5 +93,7 @@ public struct WorkspaceFile: Codable {
         try container.encodeIfPresent(workspace.accentColor, forKey: .accentColor)
         try container.encodeIfPresent(workspace.panelProfileID, forKey: .panelProfileID)
         try container.encodeIfPresent(workspace.enabledPlugins, forKey: .enabledPlugins)
+        try container.encodeIfPresent(workspace.preferences, forKey: .preferences)
+        try container.encodeIfPresent(workspace.aiConfig, forKey: .aiConfig)
     }
 }

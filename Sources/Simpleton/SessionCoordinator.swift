@@ -7,6 +7,7 @@ final class SessionCoordinator {
 
     private let windowControllers: () -> [WindowController]
     private let config: () -> AppConfig
+    private let aiConfig: () -> AIConfig
     private let theme: () -> Theme
     private let bookmarkStore: () -> BookmarkStore?
     private let sshConfigWatcher: () -> SSHConfigWatcher?
@@ -25,6 +26,7 @@ final class SessionCoordinator {
     init(
         windowControllers: @escaping () -> [WindowController],
         config: @escaping () -> AppConfig,
+        aiConfig: @escaping () -> AIConfig,
         theme: @escaping () -> Theme,
         bookmarkStore: @escaping () -> BookmarkStore?,
         sshConfigWatcher: @escaping () -> SSHConfigWatcher?,
@@ -42,6 +44,7 @@ final class SessionCoordinator {
     ) {
         self.windowControllers = windowControllers
         self.config = config
+        self.aiConfig = aiConfig
         self.theme = theme
         self.bookmarkStore = bookmarkStore
         self.sshConfigWatcher = sshConfigWatcher
@@ -235,21 +238,33 @@ final class SessionCoordinator {
 
         alert.beginSheetModal(for: window) { [weak self] response in
             guard response == .alertFirstButtonReturn, !input.stringValue.isEmpty else { return }
-            self?.saveWorkspaceState(name: input.stringValue, from: window)
+            let ok = self?.saveWorkspaceState(name: input.stringValue, from: window) ?? false
+            // Definitive refresh of the header dropdown + Settings list once the file actually lands
+            // (the naming sheet is async, so this replaces relying solely on a timed fallback).
+            if ok {
+                NotificationCenter.default.post(name: .simpletonWorkspacesChanged, object: nil)
+            }
         }
+    }
+
+    /// Capture just `window`'s active tab as a WindowState (frame + split layout). Used both by the
+    /// full workspace save and by "update layout from current window", which re-captures only the
+    /// layout while preserving a workspace's saved settings. Nil if the window has no active tab.
+    func captureWindowState(from window: NSWindow) -> WindowState? {
+        guard let tabContainer = window.activeTabContainer else { return nil }
+        let frame = WindowFrame(
+            x: Double(window.frame.origin.x), y: Double(window.frame.origin.y),
+            width: Double(window.frame.width), height: Double(window.frame.height))
+        let splitTree = captureTree(from: tabContainer.splitController)
+        let tab = TabState(title: window.title, splitTree: splitTree)
+        return WindowState(frame: frame, tabs: [tab])
     }
 
     /// Capture `window`'s active tab into a named workspace and persist it. Shared by the interactive
     /// Save Workspace flow and the headless workspace e2e. Returns whether the save succeeded.
     @discardableResult
     func saveWorkspaceState(name: String, from window: NSWindow) -> Bool {
-        guard let tabContainer = window.activeTabContainer else { return false }
-        let frame = WindowFrame(
-            x: Double(window.frame.origin.x), y: Double(window.frame.origin.y),
-            width: Double(window.frame.width), height: Double(window.frame.height))
-        let splitTree = captureTree(from: tabContainer.splitController)
-        let tab = TabState(title: window.title, splitTree: splitTree)
-        let windowState = WindowState(frame: frame, tabs: [tab])
+        guard let windowState = captureWindowState(from: window) else { return false }
         // Capture the whole setup — theme, accent, active panel profile, enabled plugins — alongside
         // the layout, so opening this workspace restores the full environment, not just the panes.
         let appearance = config().appearance
@@ -264,13 +279,30 @@ final class SessionCoordinator {
             appearanceMode: appearance.appearanceMode,
             accentColor: appearance.accentColor,
             panelProfileID: profileID,
-            enabledPlugins: enabledPlugins)
+            enabledPlugins: enabledPlugins,
+            // Capture the whole app config + AI config so opening this workspace carries font, cursor,
+            // SSH, terminal — not just theme/accent. Workspace-management fields are blanked below.
+            preferences: Self.capturablePreferences(from: config()),
+            aiConfig: aiConfig())
         do {
             try workspaceManager()?.save(workspace: workspace)
             return true
         } catch {
             return false
         }
+    }
+
+    /// An AppConfig snapshot suitable to store inside a Workspace: the live config with the GLOBAL
+    /// workspace-management fields blanked back to their defaults. Those fields describe how the app
+    /// treats workspaces (default-on-launch, replace-window, auto-sync) and must not travel inside a
+    /// workspace — otherwise opening one would rewrite them (and a captured non-nil defaultWorkspace
+    /// could drive a default-open loop). Shared by save and auto-sync.
+    static func capturablePreferences(from config: AppConfig) -> AppConfig {
+        var prefs = config
+        prefs.general.defaultWorkspace = nil
+        prefs.general.workspaceOpenReplacesWindow = false
+        prefs.general.autoSyncActiveWorkspace = false
+        return prefs
     }
 
     func openWorkspace(name: String) {

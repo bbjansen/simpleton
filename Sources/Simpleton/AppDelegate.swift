@@ -36,6 +36,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingCoordinator: OnboardingCoordinator!
     private var sessionCoordinator: SessionCoordinator!
     private var updateManager: UpdateManager?
+    /// Guard against auto-sync feeding back on itself: set while `applyWorkspace` performs its
+    /// config/profile/plugin writes, so the change hooks those writes trip don't re-save the workspace.
+    private var applyingWorkspace = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Custom in-app tabs replace macOS native window tabbing. Disable automatic tabbing as early
@@ -185,11 +188,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.saveConfig(newConfig)
                 self?.updateManager?.setCheckMode(newConfig.general.checkForUpdates)
                 self?.applyConfigToAllPanes()  // re-apply appearance (font/cursor/theme) to already-open panes
+                self?.autoSyncActiveWorkspaceIfNeeded()  // keep the active workspace's settings in step
             },
             onAIConfigChanged: { [weak self] newAIConfig in
                 self?.aiConfig = newAIConfig
                 self?.aiService?.updateConfig(newAIConfig)
                 self?.saveAIConfig(newAIConfig)
+                self?.autoSyncActiveWorkspaceIfNeeded()
             })
 
         // Coordinators — constructed before the launch sequence (restore / onboarding) below, which use them.
@@ -222,6 +227,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         sessionCoordinator = SessionCoordinator(
             windowControllers: { [weak self] in self?.windowControllers ?? [] },
             config: { [weak self] in self?.config ?? AppConfig() },
+            aiConfig: { [weak self] in self?.aiConfig ?? AIConfig() },
             theme: { [weak self] in self?.theme ?? Theme(name: "default-dark") },
             bookmarkStore: { [weak self] in self?.bookmarkStore },
             sshConfigWatcher: { [weak self] in self?.sshConfigWatcher },
@@ -247,6 +253,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // below, so restore can be re-enabled by reinstating the shouldRestore check against
         // config.general.restorePreviousSession and calling sessionCoordinator.restoreSession(state:).
         createNewWindow()
+
+        // Default workspace on launch: after the initial window exists, if a default workspace is
+        // configured and still exists, apply it. Deferred a tick so the launch window is fully mounted
+        // first (the restore path re-parents views into a live window). Skipped under the headless e2e,
+        // which drives its own workspace flow.
+        if ProcessInfo.processInfo.environment["SIMPLETON_WORKSPACE_E2E"] == nil,
+            let defaultWS = config.general.defaultWorkspace,
+            workspaceManager?.listWorkspaces().contains(defaultWS) == true
+        {
+            DispatchQueue.main.async { [weak self] in self?.applyWorkspace(name: defaultWS) }
+        }
 
         // Set up session state provider
         sessionManager?.setStateProvider { [weak self] in
@@ -321,6 +338,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(handleWorkspacesChanged),
             name: .simpletonWorkspacesChanged,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWorkspaceSetupChanged),
+            name: .simpletonWorkspaceSetupChanged,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUpdateWorkspaceLayout(_:)),
+            name: .simpletonUpdateWorkspaceLayout,
             object: nil
         )
     }
@@ -832,9 +861,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // clamps the restore to the content minimum and the frame can't round-trip exactly).
             win.setFrame(NSRect(x: 120, y: 120, width: 1000, height: 700), display: true)
             win.makeKeyAndOrderFront(nil)
-            // Put the app on a distinctive theme so the workspace captures it and we can verify the
-            // whole setup (not just the layout) re-applies on open.
+            // Put the app on a distinctive theme AND font so the workspace captures the whole setup and
+            // we can verify deeper prefs (not just the layout/theme) re-apply on open.
             self.config.appearance.appearanceMode = "nebula"
+            self.config.appearance.fontFamily = "Courier New"
             let initialPanes = originalWC.activeSplitController.panes.count
             // Split directly on the window's split controller (not the keyWindow-based splitRight(),
             // which doesn't resolve for a headlessly-launched app).
@@ -843,8 +873,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let splitPanes = originalWC.activeSplitController.panes.count
                 let saved = self.sessionCoordinator.saveWorkspaceState(name: "__e2e__", from: win)
                 let savedSize = win.frame.size
-                // Move off the workspace's theme so applying it has an observable effect.
+                // Move off the workspace's theme AND font so applying it has an observable effect.
                 self.config.appearance.appearanceMode = "dark"
+                self.config.appearance.fontFamily = "SF Mono"
                 let wcCountBefore = self.windowControllers.count
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     // Apply the full workspace (settings + layout), not just the layout.
@@ -855,20 +886,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         let restoredSize = restoredWC?.window?.frame.size ?? .zero
                         let newWindow = self.windowControllers.count == wcCountBefore + 1
                         let themeApplied = self.config.appearance.appearanceMode == "nebula"
+                        // Deeper-prefs round-trip: the captured font came back via ws.preferences.
+                        let fontApplied = self.config.appearance.fontFamily == "Courier New"
                         let frameOK =
                             abs(restoredSize.width - savedSize.width) < 3
                             && abs(restoredSize.height - savedSize.height) < 3
-                        let pass =
-                            saved && initialPanes == 1 && splitPanes == 2 && newWindow
-                            && restoredPanes == 2 && frameOK && themeApplied
-                        NSLog(
-                            "SIMP-WSE2E RESULT \(pass ? "PASS" : "FAIL"): saved=\(saved) "
-                                + "initialPanes=\(initialPanes) splitPanes=\(splitPanes) "
-                                + "newWindow=\(newWindow) restoredPanes=\(restoredPanes) "
-                                + "frameOK=\(frameOK) themeApplied=\(themeApplied)(\(self.config.appearance.appearanceMode)) "
-                                + "savedSize=\(savedSize) restoredSize=\(restoredSize)")
-                        self.workspaceManager?.delete(name: "__e2e__")
-                        NSApp.terminate(nil)
+                        // Phase 2 (replace-window): with the replace option on, re-applying the
+                        // workspace REPLACES all existing windows — it opens one new window and closes
+                        // every prior one, so exactly one window must remain (regardless of how many
+                        // there were). Count settled windows after the close animation.
+                        let beforeReplace = self.windowControllers.count
+                        self.config.general.workspaceOpenReplacesWindow = true
+                        self.applyWorkspace(name: "__e2e__")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            let afterReplace = self.windowControllers.count
+                            // Replace collapses to a single (the freshly restored) window.
+                            let replaceOK = beforeReplace >= 1 && afterReplace == 1
+                            self.config.general.workspaceOpenReplacesWindow = false
+                            let pass =
+                                saved && initialPanes == 1 && splitPanes == 2 && newWindow
+                                && restoredPanes == 2 && frameOK && themeApplied && fontApplied
+                                && replaceOK
+                            NSLog(
+                                "SIMP-WSE2E RESULT \(pass ? "PASS" : "FAIL"): saved=\(saved) "
+                                    + "initialPanes=\(initialPanes) splitPanes=\(splitPanes) "
+                                    + "newWindow=\(newWindow) restoredPanes=\(restoredPanes) "
+                                    + "frameOK=\(frameOK) themeApplied=\(themeApplied)(\(self.config.appearance.appearanceMode)) "
+                                    + "fontApplied=\(fontApplied)(\(self.config.appearance.fontFamily)) "
+                                    + "replaceOK=\(replaceOK)(before=\(beforeReplace) after=\(afterReplace)) "
+                                    + "savedSize=\(savedSize) restoredSize=\(restoredSize)")
+                            self.workspaceManager?.delete(name: "__e2e__")
+                            NSApp.terminate(nil)
+                        }
                     }
                 }
             }
@@ -899,6 +948,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         applyWorkspace(name: name)
     }
 
+    /// Re-capture the active terminal window's layout into an existing workspace, keeping all of its
+    /// saved settings (preferences/AI/profile/plugins/theme). Targets the key terminal window, falling
+    /// back to the first tracked terminal (from Settings the key window is the Preferences sheet).
+    /// Broadcasts `.simpletonWorkspacesChanged` so observers refresh.
+    func updateWorkspaceLayout(name: String) {
+        let target =
+            NSApp.keyWindow?.activeTabContainer != nil ? NSApp.keyWindow : windowControllers.first?.window
+        guard let window = target,
+            let windowState = sessionCoordinator.captureWindowState(from: window),
+            var ws = workspaceManager?.load(name: name)
+        else { return }
+        ws.window = windowState
+        ws.savedAt = Date()
+        try? workspaceManager?.save(workspace: ws)
+        NotificationCenter.default.post(name: .simpletonWorkspacesChanged, object: nil)
+    }
+
     /// `.simpletonSaveWorkspaceRequested` — prompt for a name and save the current window. The save
     /// runs as an async naming sheet, so refresh shortly after here as a fallback; the definitive
     /// refresh is `.simpletonWorkspacesChanged`, which the save path can post once it lands.
@@ -915,32 +981,98 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         refreshWorkspaceStore()
     }
 
+    /// `.simpletonWorkspaceSetupChanged` — a setup facet (profile / plugins) changed. Re-sync the
+    /// active workspace if auto-sync is on.
+    @objc private func handleWorkspaceSetupChanged() {
+        autoSyncActiveWorkspaceIfNeeded()
+    }
+
+    /// `.simpletonUpdateWorkspaceLayout` (object = the workspace name) — re-capture the current
+    /// window's layout into that workspace.
+    @objc private func handleUpdateWorkspaceLayout(_ note: Notification) {
+        guard let name = note.object as? String else { return }
+        updateWorkspaceLayout(name: name)
+    }
+
+    /// If auto-sync is enabled and a workspace is active, re-save that workspace's SETTINGS —
+    /// preferences (theme/font/cursor/SSH/…), AI config, active panel profile, enabled plugins — while
+    /// KEEPING its saved layout (`window`) untouched (syncing the layout on every tweak would be too
+    /// churny). Skipped while `applyWorkspace` is running so applying a workspace never re-saves it.
+    private func autoSyncActiveWorkspaceIfNeeded() {
+        guard config.general.autoSyncActiveWorkspace, !applyingWorkspace,
+            let name = WorkspaceStore.shared.activeName,
+            let manager = workspaceManager,
+            var ws = manager.load(name: name)
+        else { return }
+
+        ws.preferences = SessionCoordinator.capturablePreferences(from: config)
+        ws.aiConfig = aiConfig
+        ws.appearanceMode = config.appearance.appearanceMode
+        ws.accentColor = config.appearance.accentColor
+        MainActor.assumeIsolated {
+            ws.panelProfileID = self.panelRegistry?.activeProfile.id.uuidString
+            ws.enabledPlugins = self.pluginManager?.scriptPlugins.filter(\.isEnabled).map(\.name)
+        }
+        try? manager.save(workspace: ws)
+    }
+
     @objc private func openWorkspace(_ sender: NSMenuItem) {
         guard let name = sender.representedObject as? String else { return }
         applyWorkspace(name: name)
     }
 
-    /// Open a workspace: apply its whole setup — theme, accent, panel profile, enabled plugins —
-    /// then restore its saved layout in a fresh window. Nil setup fields are left unchanged, so a
-    /// layout-only workspace (saved before this feature) still just restores its panes.
+    /// Open a workspace: apply its whole setup — full preferences (theme, font, cursor, SSH, general),
+    /// AI config, panel profile, enabled plugins — then restore its saved layout in a window. Nil setup
+    /// fields are left unchanged, so a layout-only workspace (saved before this feature) still just
+    /// restores its panes. When `general.workspaceOpenReplacesWindow` is set, the restored layout
+    /// replaces the current windows instead of adding one.
     func applyWorkspace(name: String) {
         guard let ws = workspaceManager?.load(name: name) else { return }
+        // Applying a workspace must not trigger auto-sync of itself: suppress the sync hook for the
+        // duration of the config/profile/plugin writes this method performs.
+        applyingWorkspace = true
+        defer { applyingWorkspace = false }
         WorkspaceStore.shared.activeName = name
 
-        // 1. Theme + accent → persist + repaint every open pane, so the whole app takes the look.
-        var appearanceChanged = false
-        if let mode = ws.appearanceMode {
-            config.appearance.appearanceMode = mode
-            appearanceChanged = true
-        }
-        if let accent = ws.accentColor {
-            config.appearance.accentColor = accent
-            appearanceChanged = true
-        }
-        if appearanceChanged {
+        // 1. Preferences. Prefer the full captured AppConfig (font/cursor/SSH/terminal + theme); fall
+        //    back to the legacy appearanceMode/accent fields for pre-feature workspace files.
+        if var prefs = ws.preferences {
+            // CRITICAL: preserve the GLOBAL workspace-management fields across the swap. They are
+            // app-wide (default-on-launch, replace-window, auto-sync) and must survive opening any
+            // workspace — otherwise this write would clobber them (and could cause a default-open loop).
+            prefs.general.defaultWorkspace = config.general.defaultWorkspace
+            prefs.general.workspaceOpenReplacesWindow = config.general.workspaceOpenReplacesWindow
+            prefs.general.autoSyncActiveWorkspace = config.general.autoSyncActiveWorkspace
+            config = prefs
             saveConfig(config)
             applyConfigToAllPanes()
+        } else {
+            var appearanceChanged = false
+            if let mode = ws.appearanceMode {
+                config.appearance.appearanceMode = mode
+                appearanceChanged = true
+            }
+            if let accent = ws.accentColor {
+                config.appearance.accentColor = accent
+                appearanceChanged = true
+            }
+            if appearanceChanged {
+                saveConfig(config)
+                applyConfigToAllPanes()
+            }
         }
+
+        // 1b. AI config — swap the provider/model, push it into the live service, and persist.
+        if let ai = ws.aiConfig {
+            aiConfig = ai
+            aiService?.updateConfig(ai)
+            saveAIConfig(ai)
+        }
+
+        // 1c. Keep the Preferences window's cached config/AI in step with this out-of-band change, so
+        //     the next Settings open (or the currently-open one) shows the applied workspace's values
+        //     instead of a stale snapshot that a later edit would persist back over the workspace.
+        preferencesController?.externalConfigDidChange(config: config, aiConfig: aiConfig)
 
         // 2 + 3. Panel profile + enabled plugins. PanelRegistry/PluginManager are @MainActor; this
         // runs on the main thread (menu action / e2e), so touch them under assumeIsolated.
@@ -957,8 +1089,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 4. Restore the saved layout (SessionCoordinator opens it in a new window).
+        // 4. Restore the saved layout. Capture the pre-restore windows first: openWorkspace appends a
+        //    new WindowController, so if "replace" is on we close the *old* ones AFTER the new window
+        //    exists — a window is always present, so the app never quits mid-restore.
+        let previousControllers = windowControllers
         sessionCoordinator.openWorkspace(name: name)
+        if config.general.workspaceOpenReplacesWindow {
+            for wc in previousControllers { wc.window?.close() }
+        }
     }
 }
 
@@ -995,4 +1133,9 @@ extension Notification.Name {
     static let simpletonSaveWorkspaceRequested = Notification.Name("simpletonSaveWorkspaceRequested")
     /// The saved-workspaces set changed (created / renamed / deleted) — re-read the list.
     static let simpletonWorkspacesChanged = Notification.Name("simpletonWorkspacesChanged")
+    /// A facet of the active setup changed (panel profile activated, plugin enablement toggled) —
+    /// AppDelegate re-saves the active workspace's settings if auto-sync is enabled.
+    static let simpletonWorkspaceSetupChanged = Notification.Name("simpletonWorkspaceSetupChanged")
+    /// Re-capture the active window's layout into a workspace by name (object = the workspace name).
+    static let simpletonUpdateWorkspaceLayout = Notification.Name("simpletonUpdateWorkspaceLayout")
 }

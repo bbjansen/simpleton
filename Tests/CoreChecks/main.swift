@@ -23,6 +23,7 @@ await runConfigStoreChecks(runner)
 
 // Models (synchronous)
 runAppConfigChecks(runner)
+runWorkspaceChecks(runner)
 runBookmarkChecks(runner)
 runFrecencyEntryChecks(runner)
 runSessionStateChecks(runner)

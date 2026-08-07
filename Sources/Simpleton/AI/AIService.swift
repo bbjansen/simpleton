@@ -1,5 +1,6 @@
 // Sources/Simpleton/AI/AIService.swift
 import Foundation
+import SimpletonCore
 
 struct AIOptions {
     var maxTokens: Int = 1000

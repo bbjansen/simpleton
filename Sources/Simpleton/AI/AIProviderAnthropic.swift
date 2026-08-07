@@ -1,5 +1,6 @@
 // Sources/Simpleton/AI/AIProviderAnthropic.swift
 import Foundation
+import SimpletonCore
 
 /// Anthropic Messages API provider.
 struct AnthropicProvider: AIProviderProtocol {

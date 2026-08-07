@@ -75,6 +75,9 @@ final class PanelRegistry: ObservableObject {
     /// Activate a profile. Controllers are retained so panels preserve their state across switches.
     func activateProfile(_ profile: PanelProfile) {
         activeProfile = profile
+        // Let the active workspace re-sync its profile choice if auto-sync is on (AppDelegate decides;
+        // it ignores this while it is itself applying a workspace).
+        NotificationCenter.default.post(name: .simpletonWorkspaceSetupChanged, object: nil)
     }
 
     /// Rebind the cached AI Chat panel to a new TabConversation.

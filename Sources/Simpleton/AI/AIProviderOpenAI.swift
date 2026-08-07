@@ -1,5 +1,6 @@
 // Sources/Simpleton/AI/AIProviderOpenAI.swift
 import Foundation
+import SimpletonCore
 
 /// OpenAI Chat Completions API provider. Also used for Ollama and custom endpoints.
 struct OpenAIProvider: AIProviderProtocol {

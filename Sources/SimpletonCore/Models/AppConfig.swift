@@ -40,6 +40,16 @@ public struct GeneralConfig: Codable, Equatable {
     public var termVariable: String
     /// Opt-in: inject OSC 133 shell integration (currently zsh) for exit-status feedback.
     public var shellIntegration: Bool
+    /// Name of the workspace to apply automatically on launch. Nil = none. These three
+    /// workspace-management fields are GLOBAL app settings; they are deliberately blanked out of a
+    /// workspace's captured `preferences` and preserved across the apply-time config swap, so opening
+    /// a workspace never rewrites them (which would otherwise risk a default-open loop).
+    public var defaultWorkspace: String?
+    /// When true, opening a workspace replaces the current window instead of adding a new one.
+    public var workspaceOpenReplacesWindow: Bool
+    /// When true, edits to settings/profile/plugins are re-saved into the active workspace (its
+    /// setup only, not the layout) so it stays in sync as you tweak the environment.
+    public var autoSyncActiveWorkspace: Bool
 
     public init(
         shell: String = "$SHELL",
@@ -50,7 +60,10 @@ public struct GeneralConfig: Codable, Equatable {
         confirmBeforeClosing: Bool = true,
         checkForUpdates: UpdateCheckMode = .automatic,
         termVariable: String = "xterm-256color",
-        shellIntegration: Bool = false
+        shellIntegration: Bool = false,
+        defaultWorkspace: String? = nil,
+        workspaceOpenReplacesWindow: Bool = false,
+        autoSyncActiveWorkspace: Bool = false
     ) {
         self.shell = shell
         self.shellDetection = shellDetection
@@ -61,6 +74,9 @@ public struct GeneralConfig: Codable, Equatable {
         self.checkForUpdates = checkForUpdates
         self.termVariable = termVariable
         self.shellIntegration = shellIntegration
+        self.defaultWorkspace = defaultWorkspace
+        self.workspaceOpenReplacesWindow = workspaceOpenReplacesWindow
+        self.autoSyncActiveWorkspace = autoSyncActiveWorkspace
     }
 
     /// Tolerant decoding: any key missing from an older config.json falls back to its default,
@@ -79,6 +95,11 @@ public struct GeneralConfig: Codable, Equatable {
         checkForUpdates = try c.decodeIfPresent(UpdateCheckMode.self, forKey: .checkForUpdates) ?? d.checkForUpdates
         termVariable = try c.decodeIfPresent(String.self, forKey: .termVariable) ?? d.termVariable
         shellIntegration = try c.decodeIfPresent(Bool.self, forKey: .shellIntegration) ?? d.shellIntegration
+        defaultWorkspace = try c.decodeIfPresent(String.self, forKey: .defaultWorkspace)
+        workspaceOpenReplacesWindow =
+            try c.decodeIfPresent(Bool.self, forKey: .workspaceOpenReplacesWindow) ?? d.workspaceOpenReplacesWindow
+        autoSyncActiveWorkspace =
+            try c.decodeIfPresent(Bool.self, forKey: .autoSyncActiveWorkspace) ?? d.autoSyncActiveWorkspace
     }
 }
 

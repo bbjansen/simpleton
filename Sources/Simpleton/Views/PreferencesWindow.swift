@@ -33,13 +33,21 @@ final class PreferencesWindowController {
         self.onAIConfigChanged = onAIConfigChanged
     }
 
-    func show() {
-        if let window = window {
-            window.makeKeyAndOrderFront(nil)
-            return
-        }
+    /// Sync the controller's cached config/AI config with a change that happened OUTSIDE Preferences
+    /// (e.g. applying a workspace via the menu/header, or the default-workspace-on-launch). Without
+    /// this the cached snapshot goes stale, so the next time Settings opens it would show — and, on the
+    /// first edit, persist back — the pre-workspace values, silently clobbering the applied workspace.
+    /// If the window is currently open, rebuild its content so the live view reflects the new values.
+    func externalConfigDidChange(config: AppConfig, aiConfig: AIConfig) {
+        self.config = config
+        self.aiConfig = aiConfig
+        guard let window = window else { return }
+        window.contentView = NSHostingView(rootView: makePreferencesView())
+    }
 
-        let prefsView = PreferencesView(
+    /// Build the SwiftUI preferences view bound to this controller's current caches + change callbacks.
+    private func makePreferencesView() -> some View {
+        PreferencesView(
             config: config, pluginManager: pluginManager, aiConfig: aiConfig, skillStore: skillStore,
             panelRegistry: panelRegistry, workspaceManager: workspaceManager,
             onChanged: { [weak self] newConfig in
@@ -50,6 +58,15 @@ final class PreferencesWindowController {
                 self?.aiConfig = newAIConfig
                 self?.onAIConfigChanged?(newAIConfig)
             })
+    }
+
+    func show() {
+        if let window = window {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let prefsView = makePreferencesView()
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 920, height: 640),
@@ -175,8 +192,11 @@ struct PreferencesView: View {
             } else if selectedTab == 9, let manager = workspaceManager, let registry = panelRegistry,
                 let pm = pluginManager
             {
-                WorkspacesPreferencesTab(manager: manager, registry: registry, pluginManager: pm)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                WorkspacesPreferencesTab(
+                    manager: manager, registry: registry, pluginManager: pm,
+                    config: $config, onChanged: onChanged
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     Group {

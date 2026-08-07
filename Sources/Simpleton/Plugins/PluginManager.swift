@@ -87,6 +87,9 @@ final class PluginManager {
         var states = Self.persistedEnabledStates()
         states[plugin.name] = enabled
         UserDefaults.standard.set(states, forKey: Self.enabledStatesKey)
+        // Let the active workspace re-sync its plugin set if auto-sync is on (AppDelegate ignores this
+        // while it is itself applying a workspace, so applying never re-saves the workspace).
+        NotificationCenter.default.post(name: .simpletonWorkspaceSetupChanged, object: nil)
     }
 
     private static let enabledStatesKey = "simpletonPluginEnabledStates"
