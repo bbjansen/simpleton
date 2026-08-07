@@ -39,7 +39,12 @@ final class SplitController: NSObject, NSSplitViewDelegate {
         self.tree = .pane(initialPaneController.id)
         self.focusedPaneID = initialPaneController.id
         self.panes = [initialPaneController.id: initialPaneController]
-        self.rootView = initialPaneController.terminalView
+        // Mount the pane's *container* (`paneView`), not the raw `terminalView`. `buildView` (used by
+        // every reconcile after a split) also mounts `paneView`, so if the initial root were the bare
+        // terminalView, the first split would yank terminalView out of its container and reparent the
+        // now-empty container — blanking the original pane. Keeping this consistent means terminalView
+        // always stays nested inside paneView and survives reparenting.
+        self.rootView = initialPaneController.paneView
         super.init()
     }
 
