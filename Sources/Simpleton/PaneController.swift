@@ -117,6 +117,14 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Search Scrollback", action: #selector(contextSearchScrollback(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Clear Scrollback", action: #selector(contextClearScrollback(_:)), keyEquivalent: "")
+        menu.addItem(.separator())
+        // Pane management — act on the right-clicked pane by focusing it first, then invoking the
+        // standard split/close paths so behavior matches the menu bar / palette exactly.
+        menu.addItem(withTitle: "Split Right", action: #selector(contextSplitRight(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Split Down", action: #selector(contextSplitDown(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Close Pane", action: #selector(contextClosePane(_:)), keyEquivalent: "")
+        // Menu targets these @objc handlers on PaneController regardless of first responder.
+        for item in menu.items where item.action != nil { item.target = self }
         terminalView.menu = menu
 
         // Register OSC 133 (semantic prompts) handler for shell integration
@@ -445,6 +453,29 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
     @objc private func contextClearScrollback(_ sender: Any?) {
         // Send escape sequences to clear screen and scrollback buffer
         terminalView.feed(text: "\u{001b}[2J\u{001b}[3J\u{001b}[H")
+    }
+
+    // MARK: - Context: pane management
+
+    /// Make this the focused pane, then run `action` on the next runloop tick so the split path sees
+    /// the updated focus. Splits always operate on the focused pane, so focusing first makes the
+    /// right-clicked pane the one that gets split.
+    private func focusThen(_ action: @escaping () -> Void) {
+        onFocused?(self)
+        DispatchQueue.main.async(execute: action)
+    }
+
+    @objc private func contextSplitRight(_ sender: Any?) {
+        focusThen { NSApp.sendAction(Selector(("splitRight")), to: nil, from: nil) }
+    }
+
+    @objc private func contextSplitDown(_ sender: Any?) {
+        focusThen { NSApp.sendAction(Selector(("splitDown")), to: nil, from: nil) }
+    }
+
+    @objc private func contextClosePane(_ sender: Any?) {
+        // Same path the close-button / ⌘W uses: the tab container confirms + closes by pane id.
+        NotificationCenter.default.post(name: .simpletonPaneCloseRequested, object: id)
     }
 
     // MARK: - Search

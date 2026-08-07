@@ -49,6 +49,11 @@ struct SidebarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
 
+            // Add Connection — a prominent action pinned above the connection lists (incl. SSH Config).
+            addConnectionButton
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+
             Rectangle()
                 .fill(DT.border.opacity(0.5))
                 .frame(height: 0.5)
@@ -61,32 +66,6 @@ struct SidebarView: View {
                 normalSidebar
             }
 
-            Rectangle()
-                .fill(DT.border.opacity(0.5))
-                .frame(height: 0.5)
-
-            // Add connection button — ghost style
-            Button(action: onNewConnection) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 13))
-                    Text("Add Connection")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(DT.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(Color.clear)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DT.radiusCard)
-                        .stroke(DT.border, lineWidth: 1)
-                )
-                .cornerRadius(DT.radiusCard)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(GhostButtonStyle())
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
         }
         .frame(minWidth: 200, idealWidth: 240, maxWidth: 300)
         .themedGlass(DT.surface)  // theme-colored vibrancy — fully the theme's color, glassy sheen
@@ -96,6 +75,29 @@ struct SidebarView: View {
 
     private var allBookmarks: [Bookmark] {
         pinned + recent
+    }
+
+    // Ghost-style "Add Connection" action, hoisted so it can sit at the top of the sidebar.
+    private var addConnectionButton: some View {
+        Button(action: onNewConnection) {
+            HStack(spacing: 6) {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 13))
+                Text("Add Connection")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(DT.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(Color.clear)
+            .overlay(
+                RoundedRectangle(cornerRadius: DT.radiusCard)
+                    .stroke(DT.border, lineWidth: 1)
+            )
+            .cornerRadius(DT.radiusCard)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GhostButtonStyle())
     }
 
     private var emptyState: some View {
