@@ -245,8 +245,23 @@ final class SessionCoordinator {
         let splitTree = captureTree(from: tabContainer.splitController)
         let tab = TabState(title: window.title, splitTree: splitTree)
         let windowState = WindowState(frame: frame, tabs: [tab])
+        // Capture the whole setup — theme, accent, active panel profile, enabled plugins — alongside
+        // the layout, so opening this workspace restores the full environment, not just the panes.
+        let appearance = config().appearance
+        // PanelRegistry/PluginManager are @MainActor; this method only runs on the main thread
+        // (menu action / e2e main-queue), so read them under assumeIsolated.
+        let (profileID, enabledPlugins): (String?, [String]?) = MainActor.assumeIsolated {
+            (panelRegistry()?.activeProfile.id.uuidString,
+                pluginManager()?.scriptPlugins.filter(\.isEnabled).map(\.name))
+        }
+        let workspace = Workspace(
+            name: name, window: windowState,
+            appearanceMode: appearance.appearanceMode,
+            accentColor: appearance.accentColor,
+            panelProfileID: profileID,
+            enabledPlugins: enabledPlugins)
         do {
-            try workspaceManager()?.save(workspace: Workspace(name: name, window: windowState))
+            try workspaceManager()?.save(workspace: workspace)
             return true
         } catch {
             return false

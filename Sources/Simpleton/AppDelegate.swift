@@ -813,6 +813,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // clamps the restore to the content minimum and the frame can't round-trip exactly).
             win.setFrame(NSRect(x: 120, y: 120, width: 1000, height: 700), display: true)
             win.makeKeyAndOrderFront(nil)
+            // Put the app on a distinctive theme so the workspace captures it and we can verify the
+            // whole setup (not just the layout) re-applies on open.
+            self.config.appearance.appearanceMode = "nebula"
             let initialPanes = originalWC.activeSplitController.panes.count
             // Split directly on the window's split controller (not the keyWindow-based splitRight(),
             // which doesn't resolve for a headlessly-launched app).
@@ -821,25 +824,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let splitPanes = originalWC.activeSplitController.panes.count
                 let saved = self.sessionCoordinator.saveWorkspaceState(name: "__e2e__", from: win)
                 let savedSize = win.frame.size
+                // Move off the workspace's theme so applying it has an observable effect.
+                self.config.appearance.appearanceMode = "dark"
                 let wcCountBefore = self.windowControllers.count
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    self.sessionCoordinator.openWorkspace(name: "__e2e__")
+                    // Apply the full workspace (settings + layout), not just the layout.
+                    self.applyWorkspace(name: "__e2e__")
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         let restoredWC = self.windowControllers.last
                         let restoredPanes = restoredWC?.activeSplitController.panes.count ?? 0
                         let restoredSize = restoredWC?.window?.frame.size ?? .zero
                         let newWindow = self.windowControllers.count == wcCountBefore + 1
+                        let themeApplied = self.config.appearance.appearanceMode == "nebula"
                         let frameOK =
                             abs(restoredSize.width - savedSize.width) < 3
                             && abs(restoredSize.height - savedSize.height) < 3
                         let pass =
                             saved && initialPanes == 1 && splitPanes == 2 && newWindow
-                            && restoredPanes == 2 && frameOK
+                            && restoredPanes == 2 && frameOK && themeApplied
                         NSLog(
                             "SIMP-WSE2E RESULT \(pass ? "PASS" : "FAIL"): saved=\(saved) "
                                 + "initialPanes=\(initialPanes) splitPanes=\(splitPanes) "
                                 + "newWindow=\(newWindow) restoredPanes=\(restoredPanes) "
-                                + "frameOK=\(frameOK) savedSize=\(savedSize) restoredSize=\(restoredSize)")
+                                + "frameOK=\(frameOK) themeApplied=\(themeApplied)(\(self.config.appearance.appearanceMode)) "
+                                + "savedSize=\(savedSize) restoredSize=\(restoredSize)")
                         self.workspaceManager?.delete(name: "__e2e__")
                         NSApp.terminate(nil)
                     }
@@ -862,6 +870,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openWorkspace(_ sender: NSMenuItem) {
         guard let name = sender.representedObject as? String else { return }
+        applyWorkspace(name: name)
+    }
+
+    /// Open a workspace: apply its whole setup — theme, accent, panel profile, enabled plugins —
+    /// then restore its saved layout in a fresh window. Nil setup fields are left unchanged, so a
+    /// layout-only workspace (saved before this feature) still just restores its panes.
+    func applyWorkspace(name: String) {
+        guard let ws = workspaceManager?.load(name: name) else { return }
+
+        // 1. Theme + accent → persist + repaint every open pane, so the whole app takes the look.
+        var appearanceChanged = false
+        if let mode = ws.appearanceMode {
+            config.appearance.appearanceMode = mode
+            appearanceChanged = true
+        }
+        if let accent = ws.accentColor {
+            config.appearance.accentColor = accent
+            appearanceChanged = true
+        }
+        if appearanceChanged {
+            saveConfig(config)
+            applyConfigToAllPanes()
+        }
+
+        // 2 + 3. Panel profile + enabled plugins. PanelRegistry/PluginManager are @MainActor; this
+        // runs on the main thread (menu action / e2e), so touch them under assumeIsolated.
+        MainActor.assumeIsolated {
+            if let profileID = ws.panelProfileID,
+                let profile = self.panelRegistry?.profiles.first(where: { $0.id.uuidString == profileID })
+            {
+                self.panelRegistry?.activateProfile(profile)
+            }
+            if let enabled = ws.enabledPlugins, let pm = self.pluginManager {
+                for plugin in pm.scriptPlugins {
+                    pm.setEnabled(enabled.contains(plugin.name), for: plugin)
+                }
+            }
+        }
+
+        // 4. Restore the saved layout (SessionCoordinator opens it in a new window).
         sessionCoordinator.openWorkspace(name: name)
     }
 }
