@@ -34,8 +34,8 @@ func runThemePaletteChecks(_ t: TestRunner) {
         t.expect(ThemePalette.light.isDark == false, "light.isDark == false")
     }
     t.suite("ThemePalette.resolve") {
-        t.expectEqual(ThemePalette.resolve("nord").id, "nord", "nord")
-        t.expectEqual(ThemePalette.resolve("DRACULA").id, "dracula", "case-insensitive")
+        t.expectEqual(ThemePalette.resolve("grape").id, "grape", "grape")
+        t.expectEqual(ThemePalette.resolve("TANGERINE").id, "tangerine", "case-insensitive")
         t.expectEqual(ThemePalette.resolve("auto").id, "dark", "auto → dark (caller handles auto)")
         t.expectEqual(ThemePalette.resolve("does-not-exist").id, "dark", "unknown → dark")
     }
