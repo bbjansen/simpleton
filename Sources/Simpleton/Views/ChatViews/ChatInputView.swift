@@ -10,6 +10,8 @@ struct ChatInputView: View {
     let onSend: () -> Void
     let onCancel: () -> Void
     let onSkillSelected: (Skill) -> Void
+    // Repaint this bar's `DT.surface` background on a live theme switch (its inputs may not change).
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     var body: some View {
         HStack(spacing: 8) {

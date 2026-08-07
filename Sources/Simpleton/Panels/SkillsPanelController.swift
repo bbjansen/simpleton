@@ -210,7 +210,7 @@ struct SkillsPanelView: View {
                     Text(skill.name).font(.system(size: 11)).lineLimit(1)
                         .foregroundColor(DT.textPrimary)
                     Text("/\(skill.slug)")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(DT.monoFont(size: 9))
                         .foregroundColor(DT.textTertiary)
                 }
                 Spacer()
@@ -267,7 +267,7 @@ struct SkillsPanelView: View {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(Array(vm.outputLines.enumerated()), id: \.offset) { _, line in
                     Text(line)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(DT.monoFont(size: 10))
                         .foregroundColor(DT.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

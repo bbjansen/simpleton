@@ -6,6 +6,10 @@ struct ChatHeaderView: View {
     @Binding var showAutopilotConfirm: Bool
     @Binding var watchActive: Bool
     var onDismiss: (() -> Void)?
+    // Observe the theme so this bar's `DT.surface` background re-renders on a live theme switch —
+    // its @Binding inputs don't change, so without this SwiftUI would skip its body and the header
+    // would stay on the previous theme's color while the rest of the AI panel flips.
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     var body: some View {
         HStack {

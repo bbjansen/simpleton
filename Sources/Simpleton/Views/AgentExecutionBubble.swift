@@ -11,6 +11,8 @@ struct AgentExecutionBubble: View {
     var onStop: (() -> Void)?
 
     @State private var showOutput = false
+    // Repaint this transcript bubble's `DT.*` tints on a live theme switch (its inputs don't change).
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     enum BubbleStatus {
         case waitingApproval, running, done, failed, skipped
@@ -22,7 +24,7 @@ struct AgentExecutionBubble: View {
                 statusIcon
                 VStack(alignment: .leading, spacing: 2) {
                     Text(cmd)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(DT.monoFont(size: 11))
                         .foregroundColor(DT.textPrimary)
                         .lineLimit(2)
                     if !explanation.isEmpty {
@@ -52,7 +54,7 @@ struct AgentExecutionBubble: View {
 
             if showOutput && !output.isEmpty {
                 Text(output)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(DT.monoFont(size: 10))
                     .foregroundColor(DT.textSecondary)
                     .padding(8)
                     .background(DT.base)

@@ -46,13 +46,13 @@ struct ProcessesPanelView: View {
                     HStack(spacing: 4) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(proc.command)
-                                .font(.system(.caption, design: .monospaced))
+                                .font(DT.monoFont(size: 11))
                                 .foregroundColor(DT.textPrimary)
                                 .lineLimit(1)
                             Text(
                                 "PID \(proc.pid)  CPU \(String(format: "%.1f", proc.cpu))%  MEM \(String(format: "%.1f", proc.mem))%"
                             )
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(DT.monoFont(size: 10))
                             .foregroundColor(DT.textTertiary)
                         }
                         Spacer()

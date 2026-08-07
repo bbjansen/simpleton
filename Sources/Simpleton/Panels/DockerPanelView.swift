@@ -99,7 +99,7 @@ struct DockerPanelView: View {
                             .fill(container.isRunning ? DT.accentGreen : DT.textFaint)
                             .frame(width: 8, height: 8)
                         Text(container.name)
-                            .font(.system(.caption, design: .monospaced))
+                            .font(DT.monoFont(size: 11))
                             .fontWeight(.semibold)
                             .foregroundColor(DT.textPrimary)
                         Spacer()
@@ -110,7 +110,7 @@ struct DockerPanelView: View {
                         .foregroundColor(DT.textTertiary)
                     if !container.ports.isEmpty {
                         Text(container.ports)
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(DT.monoFont(size: 10))
                             .foregroundColor(DT.textTertiary)
                     }
                 }
@@ -250,7 +250,7 @@ struct DockerLogSheet: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(logLines.indices, id: \.self) { i in
                         Text(logLines[i])
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(DT.monoFont(size: 10))
                             .foregroundColor(DT.textSecondary)
                             .textSelection(.enabled)
                             .padding(.horizontal, 8)

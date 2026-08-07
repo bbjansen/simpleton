@@ -56,11 +56,11 @@ struct EnvironmentPanelView: View {
                 List(filtered, id: \.key) { entry in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.key)
-                            .font(.system(.caption, design: .monospaced))
+                            .font(DT.monoFont(size: 11))
                             .fontWeight(.semibold)
                             .foregroundColor(DT.textPrimary)
                         Text(entry.value)
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(DT.monoFont(size: 10))
                             .foregroundColor(DT.textTertiary)
                             .lineLimit(1)
                     }

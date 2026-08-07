@@ -57,6 +57,10 @@ final class ThemeSettings: ObservableObject {
     /// Opacity of the theme-color wash in `themedGlass` (1 = solid, lower = more see-through frost).
     /// Driven by `AppConfig.appearance.chromeTranslucency`; published so chrome re-frosts live.
     @Published var chromeOpacity: Double = 0.94
+    /// The configured monospaced font family — the same font the terminal uses. Published so the
+    /// code-adjacent text in panels/sidebar (file paths, hashes, PIDs, command snippets, via
+    /// `DT.monoFont`) re-renders to match the terminal the instant the font is changed in Settings.
+    @Published var monoFontFamily: String = "SF Mono"
     /// The resolved accent — a colored theme's own accent, or the chosen accent for neutral themes.
     /// Reads `AppTheme.accentNSColor` (set by `AppTheme.update` before `theme` is published) rather
     /// than `accentID`, so colored themes tint chrome with their signature accent, not indigo.
@@ -99,6 +103,7 @@ enum AppTheme {
         activeTheme = resolved
         let translucency = min(max(config.appearance.chromeTranslucency, 0), 0.6)
         ThemeSettings.shared.chromeOpacity = 0.94 - translucency
+        ThemeSettings.shared.monoFontFamily = config.appearance.fontFamily
         ThemeSettings.shared.theme = resolved
 
         // Accent: a colored theme carries its own; neutral themes use the accent dropdown.

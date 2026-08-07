@@ -49,6 +49,9 @@ final class TabContainerController: NSViewController {
     private var tabStripHeightConstraint: NSLayoutConstraint?
     private var tabCountCancellable: AnyCancellable?
     private var backdropTint: NSView?
+    /// Gradient wash layer for gradient themes, hosted in `backdropTint`. Nil / detached for solid
+    /// themes (which fall back to a flat `layer.backgroundColor`). Sized to the tint view each pass.
+    private var backdropGradientLayer: CAGradientLayer?
     private var leftPanelVC: NSViewController?
     private var leftPanelID: String?
     private var rightPanelVC: NSViewController?
@@ -241,7 +244,7 @@ final class TabContainerController: NSViewController {
         // Theme-color wash over the backdrop so transparent chrome — the side panels and any gaps —
         // reads as the active theme's color instead of neutral vibrancy. Sits behind the split, so it
         // never intercepts events. Refreshed on a live theme change via updateConfig.
-        let tint = NSView()
+        let tint = BackdropTintView()
         tint.wantsLayer = true
         tint.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(tint)
@@ -567,12 +570,40 @@ final class TabContainerController: NSViewController {
         applyBackdropTint()  // retint the side-panel backdrop on a live theme change
     }
 
-    /// Paint the backdrop with the active theme's surface so transparent side panels read as the theme.
+    /// Paint the backdrop with the active theme so transparent side panels read as the theme. For a
+    /// gradient theme this lays down the SAME diagonal two-hue blend the SwiftUI chrome uses (via
+    /// `themedGlass`), so there is no flat-vs-gradient seam where the tint peeks out from behind the
+    /// header/rails at translucency; for a solid theme it stays a flat surface fill.
     private func applyBackdropTint() {
+        guard let tint = backdropTint, let layer = tint.layer else { return }
         // Fade the theme-color wash as translucency rises so the desktop shows through the frost.
         let alpha = 0.85 - min(max(config.appearance.chromeTranslucency, 0), 0.6)
-        backdropTint?.layer?.backgroundColor =
-            NSColor(hex: AppTheme.activeTheme.chrome.surface)?.withAlphaComponent(alpha).cgColor
+
+        if let stops = AppTheme.activeTheme.gradient,
+            stops.count >= 2,
+            case let cgColors = stops.compactMap({ NSColor(hex: $0)?.withAlphaComponent(alpha).cgColor }),
+            cgColors.count >= 2 {
+            // Gradient theme: host a CAGradientLayer that mirrors the SwiftUI blend
+            // (LinearGradient .topLeading → .bottomTrailing). In the tint view's non-flipped layer
+            // geometry (0,0 = bottom-left) that is start (0,1) top-leading → end (1,0) bottom-trailing.
+            // The BackdropTintView keeps this sublayer sized to bounds in its `layout()`.
+            let grad = backdropGradientLayer ?? CAGradientLayer()
+            grad.colors = cgColors
+            grad.startPoint = CGPoint(x: 0, y: 1)
+            grad.endPoint = CGPoint(x: 1, y: 0)
+            grad.frame = layer.bounds
+            if grad.superlayer == nil { layer.addSublayer(grad) }
+            (tint as? BackdropTintView)?.gradientLayer = grad
+            backdropGradientLayer = grad
+            layer.backgroundColor = nil  // gradient supplies the fill
+        } else {
+            // Solid theme: flat surface fill, and drop any gradient layer left from a prior theme.
+            backdropGradientLayer?.removeFromSuperlayer()
+            backdropGradientLayer = nil
+            (tint as? BackdropTintView)?.gradientLayer = nil
+            layer.backgroundColor =
+                NSColor(hex: AppTheme.activeTheme.chrome.surface)?.withAlphaComponent(alpha).cgColor
+        }
     }
 
     private func makeContext() -> PanelContext {
@@ -741,5 +772,22 @@ final class TabContainerController: NSViewController {
             self?.splitController.setFocus(to: focusedPane.id)
         }
         return pane
+    }
+}
+
+/// The full-bleed theme-color wash behind the chrome vibrancy. A plain layer-backed NSView, except it
+/// keeps an optional gradient sublayer (installed by `applyBackdropTint` for gradient themes) sized to
+/// its bounds — CALayer sublayers don't autoresize with a layer-backed view, so we do it in `layout()`.
+final class BackdropTintView: NSView {
+    weak var gradientLayer: CAGradientLayer?
+
+    override func layout() {
+        super.layout()
+        // Match the sublayer to the view without an implicit resize animation (which would lag the
+        // gradient behind a live window resize).
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer?.frame = bounds
+        CATransaction.commit()
     }
 }

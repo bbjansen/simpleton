@@ -76,6 +76,21 @@ enum DT {
         }
     }
 
+    // MARK: - Fonts
+
+    /// The configured terminal font, for the code-adjacent monospaced text in panels/sidebar (file
+    /// paths, git hashes, PIDs, env values, command snippets) so it matches the terminal instead of
+    /// the system mono. Reads the published family from `ThemeSettings`, so callers that observe it
+    /// re-render live when the font is changed in Settings. Falls back to the system monospaced font
+    /// when the configured family can't be resolved (bad name / empty), preserving the mono look.
+    static func monoFont(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let family = ThemeSettings.shared.monoFontFamily
+        if !family.isEmpty, NSFont(name: family, size: size) != nil {
+            return .custom(family, size: size).weight(weight)
+        }
+        return .system(size: size, weight: weight, design: .monospaced)
+    }
+
     // MARK: - Radii
 
     static let radiusCard: CGFloat = 8

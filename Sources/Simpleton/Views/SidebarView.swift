@@ -61,7 +61,7 @@ struct SidebarView: View {
             .background(Color.clear)
             .overlay(
                 RoundedRectangle(cornerRadius: DT.radiusCard)
-                    .stroke(DT.border, lineWidth: 1)
+                    .stroke(DT.border.opacity(0.5), lineWidth: 1)
             )
             .cornerRadius(DT.radiusCard)
             .contentShape(Rectangle())
@@ -221,7 +221,7 @@ struct SidebarRow: View {
                         .foregroundColor(isHovered ? DT.textPrimary : DT.textSecondary)
                         .lineLimit(1)
                     Text(bookmark.host)
-                        .font(.system(size: 10))
+                        .font(DT.monoFont(size: 10))
                         .foregroundColor(DT.textMuted)
                         .lineLimit(1)
                 }
@@ -269,7 +269,7 @@ struct SSHConfigRow: View {
                         .foregroundColor(isHovered ? DT.textPrimary : DT.textSecondary)
                         .lineLimit(1)
                     Text(entry.hostname ?? entry.hostAlias)
-                        .font(.system(size: 10))
+                        .font(DT.monoFont(size: 10))
                         .foregroundColor(DT.textMuted)
                         .lineLimit(1)
                 }

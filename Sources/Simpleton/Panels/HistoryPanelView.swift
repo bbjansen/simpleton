@@ -31,7 +31,7 @@ struct HistoryPanelView: View {
             } else {
                 List(filtered, id: \.self) { entry in
                     Text(entry)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(DT.monoFont(size: 11))
                         .foregroundColor(DT.textSecondary)
                         .lineLimit(1)
                         .listRowBackground(Color.clear)

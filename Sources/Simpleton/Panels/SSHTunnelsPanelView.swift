@@ -48,7 +48,7 @@ struct SSHTunnelsPanelView: View {
                 List(tunnels) { tunnel in
                     VStack(alignment: .leading, spacing: 2) {
                         Text("localhost:\(tunnel.localPort) → \(tunnel.remoteHost):\(tunnel.remotePort)")
-                            .font(.system(.caption, design: .monospaced))
+                            .font(DT.monoFont(size: 11))
                             .foregroundColor(DT.textPrimary)
                         Text(tunnel.paneName)
                             .font(.caption2)

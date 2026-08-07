@@ -11,6 +11,8 @@ struct SkillParameterForm: View {
     let onRun: () -> Void
     let onCancel: () -> Void
     var onFilePickerRequested: ((String) -> Void)?
+    // Repaint this form's `DT.*` surfaces if a live theme switch happens while it's open.
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     private var canRun: Bool {
         skill.parameters.filter(\.required).allSatisfy {

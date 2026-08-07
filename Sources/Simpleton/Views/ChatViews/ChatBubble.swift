@@ -4,6 +4,8 @@ import SwiftUI
 struct ChatBubble: View {
     let message: ChatMessage
     let onInsertCommand: (String) -> Void
+    // Repaint the bubble's `DT.*` tints on a live theme switch (its message value doesn't change).
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -30,7 +32,7 @@ struct ChatBubble: View {
                             Image(systemName: "terminal")
                                 .font(.system(size: 9))
                             Text(cmd)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(DT.monoFont(size: 11))
                                 .lineLimit(1)
                             Spacer()
                             Text("Insert")

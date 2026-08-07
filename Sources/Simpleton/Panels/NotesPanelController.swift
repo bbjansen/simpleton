@@ -50,7 +50,7 @@ struct NotesPanelView: View {
             .padding(.vertical, 6)
             ThemedDivider()
             TextEditor(text: $text)
-                .font(.system(size: 12, design: .monospaced))
+                .font(DT.monoFont(size: 12))
                 .foregroundColor(DT.textPrimary)
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, 4)

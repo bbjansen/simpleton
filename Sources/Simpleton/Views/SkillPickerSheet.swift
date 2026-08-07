@@ -8,6 +8,8 @@ struct SkillPickerSheet: View {
     let onDismiss: () -> Void
 
     @State private var searchText = ""
+    // Repaint this sheet's `DT.*` surfaces if a live theme switch happens while it's open.
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     private var filtered: [Skill] {
         guard !searchText.isEmpty else { return skillStore.allSkills }

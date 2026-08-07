@@ -38,13 +38,18 @@ extension NSVisualEffectView {
     }
 }
 
-/// A hairline divider tinted from the theme's border token, so panel section rules match the
-/// themed chrome instead of the system separator gray.
+/// A hairline section rule for panel/AI-chrome. A soft *recessed groove* (a faint dark line with a
+/// faint light lip beneath it) rather than a tinted line: on the saturated colored/gradient themes a
+/// theme-tinted border reads as a harsh glowing bar, so we match the header/tab-strip house style
+/// (`.black.opacity(~0.18)`) which sits back on every theme and still separates cleanly on dark/light.
 struct ThemedDivider: View {
     var body: some View {
         Rectangle()
-            .fill(DT.border.opacity(0.6))
+            .fill(.black.opacity(0.16))
             .frame(height: 1)
+            .overlay(
+                Rectangle().fill(.white.opacity(0.05)).frame(height: 1),
+                alignment: .bottom)
     }
 }
 

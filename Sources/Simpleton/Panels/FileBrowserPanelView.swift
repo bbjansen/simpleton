@@ -63,7 +63,7 @@ struct FileBrowserPanelView: View {
                         Image(systemName: entry.isDirectory ? "folder.fill" : "doc")
                             .foregroundColor(entry.isDirectory ? themeSettings.accent : DT.textTertiary)
                         Text(entry.name)
-                            .font(.system(.caption, design: .monospaced))
+                            .font(DT.monoFont(size: 11))
                             .fontWeight(entry.isDirectory ? .semibold : .regular)
                             .foregroundColor(DT.textPrimary)
                             .lineLimit(1)

@@ -4,6 +4,8 @@ import SwiftUI
 struct ChatStatusBar: View {
     let stepNumber: Int
     @Binding var unlimitedTurns: Bool
+    // Repaint this bar's `DT.base` background on a live theme switch (its inputs may not change).
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     var body: some View {
         HStack(spacing: 6) {

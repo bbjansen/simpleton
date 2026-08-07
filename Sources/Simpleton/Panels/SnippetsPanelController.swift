@@ -54,7 +54,7 @@ struct SnippetsPanelView: View {
                     TextField("Name", text: $newName).font(.system(size: 11))
                         .foregroundColor(DT.textPrimary)
                     TextField("Command (use {param} for placeholders)", text: $newCommand)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(DT.monoFont(size: 11))
                         .foregroundColor(DT.textPrimary)
                     HStack {
                         Spacer()
@@ -134,7 +134,7 @@ struct SnippetsPanelView: View {
                 Text(snippet.name).font(.system(size: 11)).lineLimit(1)
                     .foregroundColor(DT.textPrimary)
                 Text(snippet.command)
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(DT.monoFont(size: 9))
                     .foregroundColor(DT.textTertiary)
                     .lineLimit(1)
             }

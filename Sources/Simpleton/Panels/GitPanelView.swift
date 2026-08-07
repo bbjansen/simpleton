@@ -74,7 +74,7 @@ struct GitPanelView: View {
                     Image(systemName: "arrow.triangle.branch")
                         .foregroundColor(DT.textSecondary)
                     Text(status.branch)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(DT.monoFont(size: 11))
                         .fontWeight(.semibold)
                         .foregroundColor(DT.textPrimary)
                 }
@@ -98,7 +98,7 @@ struct GitPanelView: View {
                 Section {
                     ForEach(status.commits, id: \.self) { commit in
                         Text(commit)
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(DT.monoFont(size: 10))
                             .foregroundColor(DT.textSecondary)
                             .lineLimit(1)
                             .listRowBackground(Color.clear)

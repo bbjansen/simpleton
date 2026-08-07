@@ -5,6 +5,10 @@ import UniformTypeIdentifiers
 struct ActivityBarView: View {
     let side: PanelSide
     @ObservedObject var registry: PanelRegistry
+    // Observe the theme so the rail's `.themedGlass` wash re-evaluates on a live theme switch —
+    // otherwise the vibrancy background keeps the previous theme's color/gradient while the buttons
+    // (which observe ThemeSettings themselves) flip, leaving the rail stranded on the old hue.
+    @ObservedObject private var themeSettings = ThemeSettings.shared
     var onOpenSettings: (() -> Void)?
 
     private var panelIDs: [String] {
@@ -81,7 +85,7 @@ struct ActivityBarButton: View {
                 .font(.system(size: 16))
                 .symbolRenderingMode(.hierarchical)
                 .symbolEffect(.bounce, value: isActive)
-                .foregroundColor(isActive ? themeSettings.accent : .secondary)
+                .foregroundColor(isActive ? themeSettings.accent : DT.textSecondary.opacity(0.7))
                 .frame(width: 32, height: 32)
                 .background(
                     isActive ? themeSettings.accent.opacity(0.15) : Color.clear,

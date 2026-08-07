@@ -128,7 +128,9 @@ struct HeaderBarView: View {
             .padding(.horizontal, 11)
             .padding(.vertical, 6)
             .background(DT.base.opacity(0.55), in: Capsule())
-            .overlay(Capsule().strokeBorder(DT.border, lineWidth: 1))
+            // Muted rim so the field reads as a recessed glass pill instead of a hard saturated
+            // outline on the colored themes (full-strength DT.border glows orange/blue there).
+            .overlay(Capsule().strokeBorder(DT.border.opacity(0.5), lineWidth: 1))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
