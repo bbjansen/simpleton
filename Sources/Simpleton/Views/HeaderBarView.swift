@@ -19,8 +19,8 @@ struct HeaderBarView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Clear the traffic lights.
-            Color.clear.frame(width: 70)
+            // Clear the traffic lights (they are hidden in full screen, so collapse the reservation).
+            Color.clear.frame(width: model.isFullScreen ? 6 : 70)
 
             profileSwitcher
 
@@ -38,9 +38,9 @@ struct HeaderBarView: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 46)
-        .themedGlass(DT.surface)
+        .themedHeader(DT.surface)
         .overlay(
-            Rectangle().fill(DT.border.opacity(0.7)).frame(height: 0.5),
+            Rectangle().fill(.black.opacity(0.18)).frame(height: 1),
             alignment: .bottom)
     }
 
@@ -170,4 +170,22 @@ struct HeaderIconButton: View {
 /// without threading callbacks through SwiftUI.
 final class HeaderModel: ObservableObject {
     @Published var title: String = "Simpleton"
+    /// True while the window is in native full screen. The traffic lights are hidden there, so the
+    /// header collapses the space it reserves for them (otherwise the workspace switcher stays
+    /// indented ~70px behind nothing).
+    @Published var isFullScreen: Bool = false
+
+    private var observers: [NSObjectProtocol] = []
+    init() {
+        let nc = NotificationCenter.default
+        observers.append(
+            nc.addObserver(forName: NSWindow.didEnterFullScreenNotification, object: nil, queue: .main) {
+                [weak self] _ in self?.isFullScreen = true
+            })
+        observers.append(
+            nc.addObserver(forName: NSWindow.didExitFullScreenNotification, object: nil, queue: .main) {
+                [weak self] _ in self?.isFullScreen = false
+            })
+    }
+    deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
 }

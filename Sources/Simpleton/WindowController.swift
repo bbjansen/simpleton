@@ -110,7 +110,9 @@ final class WindowController: NSWindowController, NSWindowDelegate {
     /// The header is a 46px full-size-content strip, but AppKit positions the traffic lights for the
     /// stock ~28px titlebar, so they ride high and clip the window's top edge. Nudge the three
     /// standard buttons down so their centerline matches the header's. AppKit re-lays them out on
-    /// resize / key changes, so this is re-applied from the matching delegate hooks.
+    /// resize / key changes, so this is re-applied from the matching delegate hooks. (Manual button
+    /// repositioning against the native titlebar container is the production idiom — Chromium,
+    /// INAppStoreWindow, VSCode all do this; there is no NSWindow API to grow the real titlebar.)
     static let headerHeight: CGFloat = 46
     func centerTrafficLights(in window: NSWindow?) {
         guard let window,
@@ -120,10 +122,12 @@ final class WindowController: NSWindowController, NSWindowDelegate {
             let titlebar = close.superview
         else { return }
         let buttonHeight = close.frame.height
-        // The titlebar container is not flipped (origin bottom-left) and its top edge sits at the
-        // window's top. We want each button's center `headerHeight/2` down from that top edge, so in
-        // the container's coordinates the button origin is: containerTop - headerHeight/2 - btnH/2.
-        let targetY = titlebar.bounds.height - Self.headerHeight / 2 - buttonHeight / 2
+        // The titlebar container is not flipped (origin bottom-left) and its top edge sits flush with
+        // the window's top — the same top edge the 46px header starts from. Put each button's *center*
+        // on the header's centerline (headerHeight/2 below the top). In the container's coordinates the
+        // origin is therefore: containerTop − headerHeight/2 − btnH/2. `round` avoids a fractional
+        // origin that would blur/misalign the dots by a pixel (a known VSCode off-by-one).
+        let targetY = (titlebar.bounds.height - Self.headerHeight / 2 - buttonHeight / 2).rounded()
         for button in [close, miniaturize, zoom] {
             button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: targetY))
         }

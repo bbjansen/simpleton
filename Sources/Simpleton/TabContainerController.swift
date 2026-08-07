@@ -294,6 +294,12 @@ final class TabContainerController: NSViewController {
         else { return }
         let header = NSHostingView(rootView: HeaderBarView(registry: registry, model: headerModel))
         header.translatesAutoresizingMaskIntoConstraints = false
+        // The header is pinned to the window's top, which overlaps the transparent title-bar strip.
+        // By default an NSHostingView insets its SwiftUI content by the window's top safe-area (the
+        // title-bar height), so the header's themed background stops ~title-bar-height below the top
+        // and the desktop shows through that sliver above the traffic lights. Clearing safeAreaRegions
+        // lets the themed surface fill the full 46px frame, right up to the window's top edge.
+        header.safeAreaRegions = []
         outer.addSubview(header)
         headerHost = header
         containerTopConstraint?.isActive = false

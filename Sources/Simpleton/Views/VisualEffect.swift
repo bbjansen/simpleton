@@ -56,6 +56,25 @@ extension View {
         }
     }
 
+    /// The top header bar's surface. Uses the same vibrancy base as `themedGlass` (so the header,
+    /// rails, and sidebar read as one continuous chrome), but pushes the theme-color wash *more
+    /// opaque* than the rails so the traffic lights sit on a solid, cohesive band instead of a
+    /// washed-out translucent strip — and drops the top highlight (which made the traffic-light row
+    /// look like a separate lighter bar / "floating"). A faint bottom shade grounds the bar against
+    /// the content below.
+    func themedHeader(_ color: Color) -> some View {
+        background {
+            ZStack {
+                VisualEffect(material: .sidebar, blendingMode: .behindWindow)
+                // Denser color than the rails' chromeOpacity so the bar is unmistakably one surface.
+                color.opacity(min(1.0, ThemeSettings.shared.chromeOpacity + 0.22))
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.06)],
+                    startPoint: .top, endPoint: .bottom)
+            }
+        }
+    }
+
     /// A modern "glossy card" surface: continuous corners, a hairline that catches light, and a
     /// soft drop shadow for depth. On macOS 26 it upgrades to Liquid Glass automatically.
     func glossyCard(cornerRadius: CGFloat = 12, tint: Color = .clear) -> some View {
