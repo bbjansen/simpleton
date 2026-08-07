@@ -594,8 +594,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 (window.contentViewController as? TabContainerController)?.updateConfig(config)
                 window.alphaValue = config.appearance.windowOpacity
                 window.backgroundColor = NSColor(hex: AppTheme.activeTheme.chrome.surface) ?? window.backgroundColor
+                forceAppearanceRepaint(window)
             }
         }
+        // The Preferences window isn't in windowControllers — repaint it too so its chrome and the
+        // switch you just made both update live instead of on the next focus.
+        for window in NSApp.windows where window.title == "Preferences" {
+            window.appearance = AppTheme.nsAppearance(
+                for: config.appearance.appearanceMode, isDark: AppTheme.activeTheme.isDark)
+            forceAppearanceRepaint(window)
+        }
+    }
+
+    /// Force an immediate, synchronized repaint of a window's chrome after a theme/appearance change.
+    /// Setting `window.appearance` alone leaves a non-key window's `effectiveAppearance` — and thus its
+    /// NSHostingView `colorScheme` environment and NSVisualEffectView materials — stale until the window
+    /// next becomes key. That is the "panels stay dark until I click the window" symptom. Poking
+    /// layout/display down the whole view tree, then `displayIfNeeded()`, flushes the pending SwiftUI
+    /// re-render and recomposites the vibrancy immediately. Ref: WWDC 2018 "Advanced Dark Mode" (218)
+    /// + Apple DTS forums thread 104515.
+    private func forceAppearanceRepaint(_ window: NSWindow) {
+        guard let content = window.contentView else { return }
+        func poke(_ view: NSView) {
+            view.needsLayout = true
+            view.needsDisplay = true
+            for sub in view.subviews { poke(sub) }
+        }
+        poke(content)
+        window.displayIfNeeded()
     }
 
     // MARK: - New Connection
