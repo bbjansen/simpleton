@@ -14,7 +14,7 @@ struct TabStripView: View {
 
     var body: some View {
         if manager.tabs.count > 1 {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 ForEach(manager.tabs) { tab in
                     TabPill(
                         title: tab.title,
@@ -39,8 +39,10 @@ struct TabStripView: View {
     }
 }
 
-/// A single tab pill: title + a close "×" that appears on hover or when the tab is active. The
-/// active pill is tinted with the theme accent; inactive pills stay grayscale and light up on hover.
+/// A single tab pill. The active pill reads as a raised, accent-lit surface: an elevated fill, a
+/// hairline that catches light, a soft accent wash, and a short accent bar along the top edge so the
+/// focused tab is obvious at a glance. Inactive pills stay flat and grayscale, lighting to a subtle
+/// fill on hover. The close "×" is only present on the active or hovered pill.
 private struct TabPill: View {
     let title: String
     let isActive: Bool
@@ -50,22 +52,27 @@ private struct TabPill: View {
 
     @State private var hovered = false
 
-    private var background: Color {
-        if isActive { return accent.opacity(0.22) }
-        return hovered ? DT.hover : Color.clear
-    }
-
-    private var titleColor: Color {
-        isActive ? DT.textPrimary : DT.textSecondary
-    }
-
     private var showsClose: Bool { isActive || hovered }
+
+    // Fill: active → an elevated surface tinted by the accent so it lifts off the strip; inactive →
+    // clear, warming to the theme hover fill under the cursor.
+    @ViewBuilder private var fill: some View {
+        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        if isActive {
+            ZStack {
+                shape.fill(DT.elevated)
+                shape.fill(accent.opacity(0.18))
+            }
+        } else {
+            shape.fill(hovered ? DT.hover : Color.clear)
+        }
+    }
 
     var body: some View {
         HStack(spacing: 6) {
             Text(title.isEmpty ? "Terminal" : title)
                 .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                .foregroundColor(titleColor)
+                .foregroundColor(isActive ? DT.textPrimary : DT.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -74,7 +81,7 @@ private struct TabPill: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(hovered ? DT.textPrimary : DT.textTertiary)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 15, height: 15)
                     .background(
                         hovered ? DT.selected : Color.clear,
                         in: .rect(cornerRadius: 4, style: .continuous))
@@ -85,15 +92,27 @@ private struct TabPill: View {
             .allowsHitTesting(showsClose)
             .help("Close Tab  ⌘W")
         }
-        .padding(.leading, 10)
+        .padding(.leading, 11)
         .padding(.trailing, 5)
-        .frame(height: 24)
-        .frame(minWidth: 90, maxWidth: 200)
-        .background(background, in: .rect(cornerRadius: 7, style: .continuous))
+        .frame(height: 25)
+        .frame(minWidth: 96, maxWidth: 200)
+        .background(fill)
         .overlay(
+            // Hairline: a bright accent edge on the active pill, an invisible edge otherwise.
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(isActive ? accent.opacity(0.5) : Color.clear, lineWidth: 1)
+                .strokeBorder(isActive ? accent.opacity(0.55) : Color.clear, lineWidth: 1)
         )
+        .overlay(alignment: .top) {
+            // Accent bar hugging the top edge — the signature "this tab is focused" indicator.
+            if isActive {
+                Capsule(style: .continuous)
+                    .fill(accent)
+                    .frame(width: 22, height: 2.5)
+                    .padding(.top, 2)
+                    .shadow(color: accent.opacity(0.6), radius: 3, y: 0)
+            }
+        }
+        .shadow(color: .black.opacity(isActive ? 0.22 : 0), radius: 4, y: 1)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
         .onHover { h in withAnimation(DT.hoverAnimation) { hovered = h } }
@@ -110,7 +129,7 @@ private struct NewTabButton: View {
             Image(systemName: "plus")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(hovered ? DT.textPrimary : DT.textSecondary)
-                .frame(width: 24, height: 24)
+                .frame(width: 25, height: 25)
                 .background(
                     hovered ? DT.hover : Color.clear,
                     in: .rect(cornerRadius: 7, style: .continuous))
