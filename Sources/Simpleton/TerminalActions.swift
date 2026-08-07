@@ -62,11 +62,7 @@ final class TerminalActions {
     }
 
     func switchToTabN(tag: Int) {
-        guard let window = NSApp.keyWindow,
-            let tabbedWindows = window.tabbedWindows,
-            tag > 0, tag <= tabbedWindows.count
-        else { return }
-        tabbedWindows[tag - 1].makeKeyAndOrderFront(nil)
+        activeWindowController()?.tabManager.activate(index: tag)
     }
 
     // MARK: - Focus Navigation
@@ -79,27 +75,35 @@ final class TerminalActions {
     // MARK: - Tab Actions
 
     func newTab() {
-        guard let keyWindow = NSApp.keyWindow else { return }
-        let wcs = windowControllers()
-        if let wc = wcs.first(where: {
-            $0.window === keyWindow || $0.window?.tabbedWindows?.contains(keyWindow) == true
-        }) {
-            wc.newTab()
-        } else {
-            activeWindowController()?.newTab()
-        }
+        // Prefer the WindowController owning the key window; fall back to the active/main window's.
+        let keyWindow = NSApp.keyWindow
+        let wc =
+            windowControllers().first(where: { $0.window === keyWindow })
+            ?? activeWindowController()
+        wc?.newTab()
     }
 
+    /// Close the active tab (⌘W at the tab level). Closing the last tab closes the window.
     func closeTab() {
-        NSApp.keyWindow?.close()
+        guard let wc = closeTargetWindowController(), let active = wc.tabManager.activeItem else {
+            NSApp.keyWindow?.close()
+            return
+        }
+        wc.tabManager.close(active.id)
     }
 
     func nextTab() {
-        NSApp.keyWindow?.selectNextTab(nil)
+        closeTargetWindowController()?.tabManager.selectNext()
     }
 
     func prevTab() {
-        NSApp.keyWindow?.selectPreviousTab(nil)
+        closeTargetWindowController()?.tabManager.selectPrevious()
+    }
+
+    /// The WindowController whose window is key (else the active/main window's).
+    private func closeTargetWindowController() -> WindowController? {
+        let keyWindow = NSApp.keyWindow
+        return windowControllers().first(where: { $0.window === keyWindow }) ?? activeWindowController()
     }
 
     // MARK: - Font Actions

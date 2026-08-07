@@ -70,10 +70,10 @@ final class AICoordinator {
     func handleExplainError(paneID: PaneID) {
         guard let ai = aiService(), ai.isEnabled else { return }
 
-        for wc in windowControllers() {
-            guard let tabContainer = wc.window?.contentViewController as? TabContainerController,
-                let pane = tabContainer.splitController.panes[paneID]
-            else { continue }
+        // The pane may live in any tab of any window (custom in-app tabs).
+        let allContainers = windowControllers().flatMap { $0.tabManager.tabs.map(\.container) }
+        for tabContainer in allContainers {
+            guard let pane = tabContainer.splitController.panes[paneID] else { continue }
 
             let context = AIContextBuilder.build(terminalView: pane.terminalView, recentOutputLines: 50)
             let output = context.recentOutput ?? "(no output captured)"

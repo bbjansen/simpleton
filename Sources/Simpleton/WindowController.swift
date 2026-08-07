@@ -2,12 +2,25 @@
 import AppKit
 import SimpletonCore
 
-/// Manages one window. Each window contains one or more tabs (via native AppKit tabbing).
-/// Each tab has its own TabContainerController with its own split tree.
+/// Manages one window. Each window contains one or more tabs via a custom in-app `TabManager`
+/// (macOS native window tabbing is disabled). The window keeps a single content-host view; the
+/// active tab's `TabContainerController.view` is swapped in as that host's only subview. Each tab has
+/// its own TabContainerController with its own split tree.
 final class WindowController: NSWindowController, NSWindowDelegate {
 
     private var config: AppConfig
     private let theme: Theme
+
+    /// The window's tabs. The first tab's container is built at init.
+    let tabManager: TabManager
+
+    /// The persistent host that always fills the window; its only subview is the active tab's view.
+    private let contentHost = NSView()
+
+    /// The child VC currently installed in the host (so we can add/remove it as a child correctly).
+    private weak var installedChild: TabContainerController?
+
+    /// The initial tab's container.
     private var tabContainer: TabContainerController
 
     /// Keep the window's config current so tabs opened *after* a settings change (e.g. switching to
@@ -16,31 +29,35 @@ final class WindowController: NSWindowController, NSWindowDelegate {
 
     /// Set these after init to propagate to all TabContainerControllers.
     var bookmarkStore: BookmarkStore? {
-        didSet { tabContainer.bookmarkStore = bookmarkStore }
+        didSet { forEachContainer { $0.bookmarkStore = bookmarkStore } }
     }
     var sshConfigWatcher: SSHConfigWatcher? {
-        didSet { tabContainer.sshConfigWatcher = sshConfigWatcher }
+        didSet { forEachContainer { $0.sshConfigWatcher = sshConfigWatcher } }
     }
     var pluginManager: PluginManager? {
-        didSet { tabContainer.pluginManager = pluginManager }
+        didSet { forEachContainer { $0.pluginManager = pluginManager } }
     }
     var panelRegistry: PanelRegistry? {
-        didSet { tabContainer.panelRegistry = panelRegistry }
+        didSet { forEachContainer { $0.panelRegistry = panelRegistry } }
     }
     var aiService: AIService? {
-        didSet { tabContainer.aiService = aiService }
+        didSet { forEachContainer { $0.aiService = aiService } }
     }
     var skillStore: SkillStore? {
-        didSet { tabContainer.skillStore = skillStore }
+        didSet { forEachContainer { $0.skillStore = skillStore } }
     }
     var memoryStore: MemoryStore? {
-        didSet { tabContainer.memoryStore = memoryStore }
+        didSet { forEachContainer { $0.memoryStore = memoryStore } }
     }
     var mcpConfigStore: MCPConfigStore? {
-        didSet { tabContainer.mcpConfigStore = mcpConfigStore }
+        didSet { forEachContainer { $0.mcpConfigStore = mcpConfigStore } }
     }
     var eventBus: WorkspaceEventBus? {
-        didSet { tabContainer.eventBus = eventBus }
+        didSet { forEachContainer { $0.eventBus = eventBus } }
+    }
+
+    private func forEachContainer(_ apply: (TabContainerController) -> Void) {
+        for tab in tabManager.tabs { apply(tab.container) }
     }
 
     init(config: AppConfig, theme: Theme) {
@@ -55,36 +72,97 @@ final class WindowController: NSWindowController, NSWindowDelegate {
         )
         window.title = "Simpleton"
         window.minSize = NSSize(width: 400, height: 300)
-        window.tabbingMode = .preferred
-        window.tabbingIdentifier = "com.simpleton.terminal"
         WindowController.dissolveTitleBar(
             window, mode: config.appearance.appearanceMode,
             translucency: config.appearance.chromeTranslucency)
 
-        self.tabContainer = TabContainerController(config: config, theme: theme)
+        let initialContainer = TabContainerController(config: config, theme: theme)
+        self.tabContainer = initialContainer
+        self.tabManager = TabManager(initial: initialContainer, title: window.title)
 
         super.init(window: window)
 
-        window.contentViewController = tabContainer
+        // A dedicated content VC hosts the swappable tab view. The window's contentView is its view.
+        let hostVC = NSViewController()
+        hostVC.view = contentHost
+        contentHost.autoresizingMask = [.width, .height]
+        window.contentViewController = hostVC
         window.alphaValue = config.appearance.windowOpacity
         window.delegate = self
+
+        // Give the initial container the shared tab manager so it renders the strip, then install it.
+        initialContainer.tabManager = tabManager
+        wireContainer(initialContainer)
+        install(initialContainer)
         centerTrafficLights(in: window)
 
-        // Wire close-pane to close window when last pane closes
-        tabContainer.splitController.onPaneClose = { [weak self] _ in
-            self?.window?.close()
+        // Manager → window: swap views on activation (and sync the title bar to the activated tab's
+        // title), close window when empty, and track the active tab's live title changes.
+        tabManager.onActivate = { [weak self] item in
+            self?.swap(to: item.container)
+            self?.window?.title = item.title
         }
-
-        // Wire focus change to update window title
-        tabContainer.splitController.onFocusChange = { [weak self] paneID in
-            guard let pane = self?.tabContainer.splitController.panes[paneID] else { return }
-            pane.onTitleChange = { title in
-                self?.window?.title = title
-            }
+        tabManager.onLastTabClosed = { [weak self] in self?.window?.close() }
+        tabManager.onTitleChange = { [weak self] item in
+            guard let self, item.id == self.tabManager.activeTabID else { return }
+            self.window?.title = item.title
         }
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Wire a container's split callbacks: last-pane-close closes the *tab*, and focused-pane title
+    /// updates flow into the tab manager (→ strip pill + window title).
+    private func wireContainer(_ container: TabContainerController) {
+        container.splitController.onPaneClose = { [weak self, weak container] _ in
+            guard let self, let container else { return }
+            if let item = self.tabManager.tabs.first(where: { $0.container === container }) {
+                self.tabManager.close(item.id)
+            }
+        }
+        container.onTitleChange = { [weak self, weak container] title in
+            guard let self, let container else { return }
+            self.tabManager.setTitle(title, for: container)
+        }
+    }
+
+    // MARK: - Content swapping
+
+    /// Install a container as the host's only child + subview, full-bleed.
+    ///
+    /// Uses **frame-based** autoresizing (not AutoLayout pins) to attach the container's view. The
+    /// container's `outer` view is an AutoLayout subtree whose header hosting-view reports a fixed
+    /// intrinsic width (~474@999.9). If we pinned `outer` to the host with AutoLayout, that intrinsic
+    /// width — with no concrete width flowing down from the frame-based host — becomes the binding
+    /// constraint and caps how wide the window can grow. Sizing `outer` to the host's bounds and
+    /// letting it autoresize gives it a concrete width (exactly as the old code attached `outer`
+    /// straight to the window's content view), so the header stretches with the window. Verified via
+    /// runtime layout dump: AutoLayout pin → window stuck at 474; frame-based → widens freely.
+    private func install(_ container: TabContainerController) {
+        if let old = installedChild {
+            old.view.removeFromSuperview()
+            old.removeFromParent()
+        }
+        contentViewController?.addChild(container)
+        container.view.translatesAutoresizingMaskIntoConstraints = true
+        container.view.frame = contentHost.bounds
+        container.view.autoresizingMask = [.width, .height]
+        contentHost.addSubview(container.view)
+        installedChild = container
+    }
+
+    /// Swap the visible tab, then focus its terminal and re-center the traffic lights (AppKit resets
+    /// their origin whenever the content view hierarchy changes).
+    private func swap(to container: TabContainerController) {
+        guard container !== installedChild else { return }
+        install(container)
+        centerTrafficLights(in: window)
+        DispatchQueue.main.async { [weak self, weak container] in
+            guard let container else { return }
+            container.splitController.setFocus(to: container.splitController.focusedPaneID)
+            self?.centerTrafficLights(in: self?.window)
+        }
+    }
 
     // MARK: - Chrome
 
@@ -137,48 +215,32 @@ final class WindowController: NSWindowController, NSWindowDelegate {
 
     /// The active split controller (for the current tab).
     var activeSplitController: SplitController {
-        tabContainer.splitController
+        tabManager.activeContainer?.splitController ?? tabContainer.splitController
     }
 
     /// Create a new tab in this window; returns the new tab's container (used by session restore).
+    /// Builds a fresh TabContainerController with the same stores as the initial one, registers it
+    /// with the tab manager (which activates it and swaps the view in), and focuses its terminal.
     @discardableResult
     func newTab() -> TabContainerController {
-        let newTabContainer = TabContainerController(config: config, theme: theme)
-        newTabContainer.bookmarkStore = bookmarkStore
-        newTabContainer.sshConfigWatcher = sshConfigWatcher
-        newTabContainer.pluginManager = pluginManager
-        newTabContainer.panelRegistry = panelRegistry
-        newTabContainer.aiService = aiService
-        newTabContainer.skillStore = skillStore
-        newTabContainer.memoryStore = memoryStore
-        newTabContainer.mcpConfigStore = mcpConfigStore
-        newTabContainer.eventBus = eventBus
-        let newWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        newWindow.title = "Simpleton"
-        newWindow.tabbingMode = .preferred
-        newWindow.tabbingIdentifier = "com.simpleton.terminal"
-        WindowController.dissolveTitleBar(
-            newWindow, mode: config.appearance.appearanceMode,
-            translucency: config.appearance.chromeTranslucency)
-        newWindow.contentViewController = newTabContainer
-        newWindow.alphaValue = config.appearance.windowOpacity
+        let newContainer = TabContainerController(config: config, theme: theme)
+        newContainer.bookmarkStore = bookmarkStore
+        newContainer.sshConfigWatcher = sshConfigWatcher
+        newContainer.pluginManager = pluginManager
+        newContainer.panelRegistry = panelRegistry
+        newContainer.aiService = aiService
+        newContainer.skillStore = skillStore
+        newContainer.memoryStore = memoryStore
+        newContainer.mcpConfigStore = mcpConfigStore
+        newContainer.eventBus = eventBus
+        newContainer.tabManager = tabManager
 
-        newTabContainer.splitController.onPaneClose = { [weak newWindow] _ in
-            newWindow?.close()
-        }
+        wireContainer(newContainer)
+        tabManager.add(container: newContainer)  // appends, activates, and triggers the view swap
 
-        self.window?.addTabbedWindow(newWindow, ordered: .above)
-        newWindow.makeKeyAndOrderFront(nil)
-        centerTrafficLights(in: newWindow)
-
-        // Focus the new tab's terminal
-        newTabContainer.splitController.setFocus(to: newTabContainer.splitController.focusedPaneID)
-        return newTabContainer
+        // Focus the new tab's terminal.
+        newContainer.splitController.setFocus(to: newContainer.splitController.focusedPaneID)
+        return newContainer
     }
 
     // MARK: - NSWindowDelegate
@@ -205,4 +267,18 @@ final class WindowController: NSWindowController, NSWindowDelegate {
 
 extension Notification.Name {
     static let simpletonWindowClosed = Notification.Name("simpletonWindowClosed")
+}
+
+// MARK: - Window → active container resolution
+
+extension NSWindow {
+    /// The WindowController that owns this window (it is set as the window's delegate at init).
+    var simpletonWindowController: WindowController? { delegate as? WindowController }
+
+    /// The active tab's container for this window, if it is a Simpleton terminal window. Replaces the
+    /// old `contentViewController as? TabContainerController` (which no longer holds — the window's
+    /// content VC is now a swappable host, not the container itself).
+    var activeTabContainer: TabContainerController? {
+        simpletonWindowController?.tabManager.activeContainer
+    }
 }

@@ -23,11 +23,31 @@ final class TabContainerController: NSViewController {
     private var leftBarHost: NSHostingView<ActivityBarView>?
     private var rightBarHost: NSHostingView<ActivityBarView>?
     private var headerHost: NSHostingView<HeaderBarView>?
+    private var tabStripHost: NSHostingView<TabStripView>?
     private let headerModel = HeaderModel()
     /// The content area (backdrop + tint + split + activity bars) that sits *below* the header.
     private var contentContainer: NSView?
     private var outerView: NSView?
+    /// Pins the content's top to the tab strip's bottom (or the header's bottom when no strip yet).
     private var containerTopConstraint: NSLayoutConstraint?
+
+    /// The window's shared tab manager (in-app tabbing). Set by WindowController right after init and
+    /// before the view is installed. Every tab's container renders the strip from this same manager,
+    /// so the strip looks continuous as the active container swaps.
+    var tabManager: TabManager? {
+        didSet {
+            if isViewLoaded { installTabStripIfNeeded() }
+        }
+    }
+
+    /// Called when this tab's focused pane changes its title, so the WindowController can update the
+    /// shared tab manager (→ strip pill + window title). Set by WindowController.
+    var onTitleChange: ((String) -> Void)?
+
+    /// Drives the tab-strip band height: 0 with a single tab (strip hidden, Terminal.app style),
+    /// TabStripView.height with two or more. Toggled by observing the manager's tab count.
+    private var tabStripHeightConstraint: NSLayoutConstraint?
+    private var tabCountCancellable: AnyCancellable?
     private var backdropTint: NSView?
     private var leftPanelVC: NSViewController?
     private var leftPanelID: String?
@@ -167,8 +187,7 @@ final class TabContainerController: NSViewController {
             self?.splitController.setFocus(to: focusedPane.id)
         }
         initialPane.onTitleChange = { [weak self] title in
-            self?.view.window?.tab.title = title
-            self?.view.window?.title = title
+            self?.onTitleChange?(title)
         }
 
         let env = buildEnvironment()
@@ -283,14 +302,14 @@ final class TabContainerController: NSViewController {
 
         self.view = outer
         installHeaderIfNeeded()
+        installTabStripIfNeeded()
     }
 
     /// Build and pin the Slack-style header above the content. Idempotent; needs the panel registry
     /// (for the workspace switcher), which is assigned after `loadView`, so this is also called from
     /// the `panelRegistry` didSet.
     private func installHeaderIfNeeded() {
-        guard headerHost == nil, let outer = outerView, let container = contentContainer,
-            let registry = panelRegistry
+        guard headerHost == nil, let outer = outerView, let registry = panelRegistry
         else { return }
         let header = NSHostingView(rootView: HeaderBarView(registry: registry, model: headerModel))
         header.translatesAutoresizingMaskIntoConstraints = false
@@ -300,18 +319,74 @@ final class TabContainerController: NSViewController {
         // and the desktop shows through that sliver above the traffic lights. Clearing safeAreaRegions
         // lets the themed surface fill the full 46px frame, right up to the window's top edge.
         header.safeAreaRegions = []
+        // The header's SwiftUI content has a fixed *ideal* width (~474). Left to drive AutoLayout,
+        // that intrinsic width becomes a required constraint that AppKit clamps the whole window to
+        // (window stuck at 474 — verified via runtime `setContentSize` probe). The header is chrome
+        // that must stretch, and its width is already fully determined by the leading/trailing pins to
+        // `outer`, so stop it from reporting an intrinsic size at all.
+        header.sizingOptions = []
         outer.addSubview(header)
         headerHost = header
-        containerTopConstraint?.isActive = false
-        let newTop = container.topAnchor.constraint(equalTo: header.bottomAnchor)
-        containerTopConstraint = newTop
         NSLayoutConstraint.activate([
             header.leadingAnchor.constraint(equalTo: outer.leadingAnchor),
             header.trailingAnchor.constraint(equalTo: outer.trailingAnchor),
             header.topAnchor.constraint(equalTo: outer.topAnchor),
             header.heightAnchor.constraint(equalToConstant: 46),
-            newTop,
         ])
+        installTabStripIfNeeded()
+        relinkContentTop()
+    }
+
+    /// Build and pin the custom in-app tab strip directly below the header. Idempotent; needs the
+    /// header (so it can pin under it) and the shared tab manager (assigned by WindowController), so
+    /// this is also invoked when either becomes available. The SwiftUI strip hides itself at 1 tab.
+    private func installTabStripIfNeeded() {
+        guard tabStripHost == nil, let outer = outerView,
+            let header = headerHost, let manager = tabManager
+        else { return }
+        let strip = NSHostingView(rootView: TabStripView(manager: manager))
+        strip.translatesAutoresizingMaskIntoConstraints = false
+        strip.safeAreaRegions = []
+        // Same reasoning as the header: don't let the strip's SwiftUI content drive AutoLayout width
+        // (it would clamp the window). Width comes from the leading/trailing pins; height is an
+        // explicit constraint we toggle by tab count (0 hidden / TabStripView.height shown).
+        strip.sizingOptions = []
+        outer.addSubview(strip)
+        tabStripHost = strip
+        let heightC = strip.heightAnchor.constraint(
+            equalToConstant: manager.tabs.count > 1 ? TabStripView.height : 0)
+        tabStripHeightConstraint = heightC
+        NSLayoutConstraint.activate([
+            strip.leadingAnchor.constraint(equalTo: outer.leadingAnchor),
+            strip.trailingAnchor.constraint(equalTo: outer.trailingAnchor),
+            strip.topAnchor.constraint(equalTo: header.bottomAnchor),
+            heightC,
+        ])
+        // Collapse/expand the band as tabs are added/removed (published on every tab-list change).
+        tabCountCancellable = manager.$tabs
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] tabs in
+                self?.tabStripHeightConstraint?.constant = tabs.count > 1 ? TabStripView.height : 0
+            }
+        relinkContentTop()
+    }
+
+    /// Re-pin the content's top edge to whatever chrome sits above it: the tab strip if present, else
+    /// the header if present, else the outer's top. Keeps the layout chain correct as chrome arrives.
+    private func relinkContentTop() {
+        guard let outer = outerView, let container = contentContainer else { return }
+        containerTopConstraint?.isActive = false
+        let anchor: NSLayoutYAxisAnchor
+        if let strip = tabStripHost {
+            anchor = strip.bottomAnchor
+        } else if let header = headerHost {
+            anchor = header.bottomAnchor
+        } else {
+            anchor = outer.topAnchor
+        }
+        let newTop = container.topAnchor.constraint(equalTo: anchor)
+        containerTopConstraint = newTop
+        newTop.isActive = true
     }
 
     override func viewDidAppear() {
@@ -319,6 +394,23 @@ final class TabContainerController: NSViewController {
         splitController.setFocus(to: splitController.focusedPaneID)
         // Rebind AI Chat panel to this tab's conversation
         panelRegistry?.rebindAIChat(to: tabConversation)
+    }
+
+    /// Ensure the split's current root view is mounted in `contentSplit` at index 0 (the terminal
+    /// slot, before any panels). Session restore replaces the split tree via `SplitController.restore`,
+    /// whose `reconcile()` only re-parents the rebuilt root view if it still has a superview; when a
+    /// tab's container isn't mounted in the window at restore time, that superview is nil and the new
+    /// terminal ends up orphaned (blank pane). Calling this after a restore re-inserts it so the
+    /// restored terminals actually render. No-op when it's already in place (fresh tabs).
+    func reinstallSplitRootIfNeeded() {
+        guard let split = contentSplit else { return }
+        let root = splitController.rootView
+        if root.superview === split { return }
+        root.removeFromSuperview()
+        root.frame = split.bounds
+        root.autoresizingMask = [.width, .height]
+        split.insertArrangedSubview(root, at: 0)
+        split.adjustSubviews()
     }
 
     // MARK: - Activity Bars
@@ -465,7 +557,7 @@ final class TabContainerController: NSViewController {
     /// actions — opening an SSH host, inserting a command — target the tab the user is on
     /// rather than always the first tab. Falls back to this container.
     private var activePanelContainer: TabContainerController {
-        (NSApp.keyWindow?.contentViewController as? TabContainerController) ?? self
+        NSApp.keyWindow?.activeTabContainer ?? self
     }
 
     /// Push a fresh app config into this container so cached panels — which read
@@ -530,8 +622,10 @@ final class TabContainerController: NSViewController {
         pane.startLocalShell(
             shell: shell, args: shellLaunchArgs(for: shell), environment: env, workingDirectory: workingDir)
         pane.onTitleChange = { [weak self] title in
-            self?.view.window?.tab.title = title
-            pane.paneLabel = self?.tabConversation?.paneLabels[pane.id] ?? title
+            guard let self else { return }
+            pane.paneLabel = self.tabConversation?.paneLabels[pane.id] ?? title
+            // Only the focused pane drives the tab/window title.
+            if self.splitController.focusedPaneID == pane.id { self.onTitleChange?(title) }
         }
         pane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)
@@ -639,8 +733,9 @@ final class TabContainerController: NSViewController {
         ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
         pane.startSSH(bookmark: bookmark, config: config)
         pane.onTitleChange = { [weak self] title in
-            self?.view.window?.tab.title = title
-            pane.paneLabel = self?.tabConversation?.paneLabels[pane.id] ?? title
+            guard let self else { return }
+            pane.paneLabel = self.tabConversation?.paneLabels[pane.id] ?? title
+            if self.splitController.focusedPaneID == pane.id { self.onTitleChange?(title) }
         }
         pane.onFocused = { [weak self] focusedPane in
             self?.splitController.setFocus(to: focusedPane.id)

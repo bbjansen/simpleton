@@ -37,6 +37,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var sessionCoordinator: SessionCoordinator!
     private var updateManager: UpdateManager?
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Custom in-app tabs replace macOS native window tabbing. Disable automatic tabbing as early
+        // as possible so no window ever adopts the system tab bar (which would stack a redundant
+        // second bar under the app's custom header). Must run before any NSWindow is created.
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
@@ -235,9 +242,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 6. UI launch
         // Session restore is temporarily disabled: the restore prompt runs a blocking modal that
-        // gets in the way of launch/automation, and the restore path isn't end-to-end verified yet.
-        // Always start a fresh window. State is still captured below, so restore can be re-enabled
-        // by reinstating the shouldRestore check against config.general.restorePreviousSession.
+        // gets in the way of launch/automation. Always start a fresh window. State is still captured
+        // below, so restore can be re-enabled by reinstating the shouldRestore check against
+        // config.general.restorePreviousSession and calling sessionCoordinator.restoreSession(state:).
         createNewWindow()
 
         // Set up session state provider
@@ -295,14 +302,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard config.general.confirmBeforeClosing else { return .terminateNow }
 
-        // Count active SSH sessions across all windows/tabs
+        // Count active SSH sessions across all windows/tabs (custom in-app tabs).
         var activeSSHCount = 0
         for wc in windowControllers {
-            guard let window = wc.window else { continue }
-            let allWindows = window.tabbedWindows ?? [window]
-            for w in allWindows {
-                guard let tabContainer = w.contentViewController as? TabContainerController else { continue }
-                for pane in tabContainer.splitController.panes.values {
+            for tab in wc.tabManager.tabs {
+                for pane in tab.container.splitController.panes.values {
                     if case .ssh = pane.connectionType, pane.state == .running {
                         activeSSHCount += 1
                     }
@@ -365,12 +369,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         wc.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        // Focus the terminal in the new window
-        if let tabContainer = wc.window?.contentViewController as? TabContainerController {
+        // Focus the terminal in the new window's active tab.
+        if let tabContainer = wc.tabManager.activeContainer {
             wc.window?.makeFirstResponder(
                 tabContainer.splitController.panes[tabContainer.splitController.focusedPaneID]?.terminalView
             )
         }
+
     }
 
     @objc private func windowClosed(_ notification: Notification) {
@@ -378,20 +383,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowControllers.removeAll { $0 === wc }
     }
 
-    /// The active window controller (key window).
+    /// The active window controller (key window). Falls back to the main window (the key window is
+    /// often a floating panel — Quick Connect / palette — that owns no WindowController).
     private var activeWindowController: WindowController? {
         windowControllers.first { $0.window?.isKeyWindow == true }
+            ?? windowControllers.first { $0.window?.isMainWindow == true }
     }
 
-    /// The active split controller, resolved from the key window's content view controller.
-    /// This correctly handles native AppKit tabbing where each tab is a separate NSWindow.
+    /// The active split controller: the active window's active tab's split controller. With custom
+    /// in-app tabbing the key window hosts one swappable content view, so resolve through the window
+    /// controller's TabManager rather than the window's contentViewController.
     private var activeSplitController: SplitController? {
-        guard let window = NSApp.keyWindow,
-            let tabContainer = window.contentViewController as? TabContainerController
-        else {
-            return nil
-        }
-        return tabContainer.splitController
+        activeWindowController?.tabManager.activeContainer?.splitController
     }
 
     // MARK: - Config
@@ -559,10 +562,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func applyThemeToAllPanes(_ theme: Theme) {
         for wc in windowControllers {
-            let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
-            for window in windows {
-                guard let tabContainer = window.contentViewController as? TabContainerController else { continue }
-                for pane in tabContainer.splitController.panes.values {
+            for tab in wc.tabManager.tabs {
+                for pane in tab.container.splitController.panes.values {
                     ThemeApplier.apply(theme: theme, config: config, to: pane.terminalView)
                 }
             }
@@ -593,13 +594,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let surface = NSColor(hex: AppTheme.activeTheme.chrome.surface)
         for wc in windowControllers {
             wc.updateConfig(config)  // so tabs opened later inherit the current appearance
-            let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
-            for window in windows {
+            // Window-level appearance/opacity/translucency applies once per window.
+            if let window = wc.window {
                 window.appearance = nsAppearance
-                (window.contentViewController as? TabContainerController)?.updateConfig(config)
                 window.alphaValue = config.appearance.windowOpacity
                 window.isOpaque = !translucent
                 window.backgroundColor = translucent ? .clear : (surface ?? window.backgroundColor)
+            }
+            // Push fresh config into every tab's container so cached panels re-read it.
+            for tab in wc.tabManager.tabs {
+                tab.container.updateConfig(config)
             }
         }
         // The Preferences window isn't in windowControllers — retint it in the same pass.
@@ -615,9 +619,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func repaintChromeOnAllWindows() {
+        // One window per WindowController now (custom in-app tabs). Poking the window's content view
+        // tree repaints the header, tab strip, and the active tab's chrome. Inactive tab containers
+        // are detached from the view hierarchy and re-render when next swapped in.
         for wc in windowControllers {
-            let windows = wc.window?.tabGroup?.windows ?? [wc.window].compactMap { $0 }
-            for window in windows { forceAppearanceRepaint(window) }
+            if let window = wc.window { forceAppearanceRepaint(window) }
         }
         for window in NSApp.windows where window.title == "Preferences" {
             forceAppearanceRepaint(window)
@@ -746,9 +752,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let candidates =
             [NSApp.mainWindow, targetWindow, NSApp.keyWindow].compactMap { $0 }
             + NSApp.orderedWindows
-        guard
-            let tabContainer = candidates.compactMap({ $0.contentViewController as? TabContainerController })
-                .first
+        guard let tabContainer = candidates.compactMap({ $0.activeTabContainer }).first
         else { return }
         tabContainer.openSSHConnection(bookmark: bookmark)
     }
@@ -759,8 +763,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// `open-pane` action. `mode`: "split-right" (default), "split-down", or "tab".
     private func openPaneWithCommand(_ command: String, mode: String) {
         let candidates = [NSApp.keyWindow, activeWindowController?.window].compactMap { $0 }
-        guard let window = candidates.first(where: { $0.contentViewController is TabContainerController }),
-            let tabContainer = window.contentViewController as? TabContainerController
+        guard let tabContainer = candidates.compactMap({ $0.activeTabContainer }).first
         else { return }
 
         switch mode.lowercased() {

@@ -69,11 +69,9 @@ final class SessionCoordinator {
                 width: Double(window.frame.width),
                 height: Double(window.frame.height)
             )
-            // Native AppKit tabs are separate NSWindows in the window's tab group — capture all of them.
-            let tabWindows = window.tabGroup?.windows ?? [window]
-            let tabs = tabWindows.compactMap { tabWin -> TabState? in
-                guard let tc = tabWin.contentViewController as? TabContainerController else { return nil }
-                return TabState(title: tabWin.title, splitTree: captureTree(from: tc.splitController))
+            // Custom in-app tabs: enumerate the window's TabManager (title + split tree per tab).
+            let tabs = wc.tabManager.tabs.map { tab in
+                TabState(title: tab.title, splitTree: captureTree(from: tab.container.splitController))
             }
             guard !tabs.isEmpty else { return nil }
             return WindowState(frame: frame, tabs: tabs)
@@ -139,29 +137,40 @@ final class SessionCoordinator {
             wc.eventBus = eventBus()
             addWindowController(wc)
 
-            if let window = wc.window {
-                let frame = NSRect(
-                    x: windowState.frame.x,
-                    y: windowState.frame.y,
-                    width: windowState.frame.width,
-                    height: windowState.frame.height
-                )
-                window.setFrame(frame, display: true)
-            }
-
-            if let firstTab = windowState.tabs.first,
-                let tabContainer = wc.window?.contentViewController as? TabContainerController
-            {
-                restoreSplitTree(firstTab.splitTree, in: tabContainer)
-            }
-            // Recreate any additional tabs (native tab group) beyond the first.
-            for extraTab in windowState.tabs.dropFirst() {
-                let tabContainer = wc.newTab()
-                restoreSplitTree(extraTab.splitTree, in: tabContainer)
-            }
-
+            let frame = NSRect(
+                x: windowState.frame.x, y: windowState.frame.y,
+                width: windowState.frame.width, height: windowState.frame.height)
+            wc.window?.setFrame(frame, display: true)
+            // Show the window (and force a layout) BEFORE restoring split trees so each container's
+            // view is actually in the window hierarchy. SplitController.reconcile() reattaches the
+            // rebuilt terminal view to its parent (the content split) via rootView.superview — which
+            // is nil until the container's view is mounted, so restoring before the window is shown
+            // would orphan the terminal and render a blank pane.
             wc.window?.makeKeyAndOrderFront(nil)
             wc.showWindow(nil)
+            wc.window?.layoutIfNeeded()
+
+            // Restore the first tab into the initial container, and each additional tab via newTab()
+            // (custom in-app tabbing) — the same abstract tab-list shape the native-tab version used.
+            if let firstTab = windowState.tabs.first,
+                let tabContainer = wc.tabManager.activeContainer
+            {
+                restoreSplitTree(firstTab.splitTree, in: tabContainer)
+                wc.tabManager.setTitle(firstTab.title, for: tabContainer)
+            }
+            for extraTab in windowState.tabs.dropFirst() {
+                let tabContainer = wc.newTab()
+                wc.window?.layoutIfNeeded()  // mount the newly-swapped container before rebuilding its split
+                restoreSplitTree(extraTab.splitTree, in: tabContainer)
+                wc.tabManager.setTitle(extraTab.title, for: tabContainer)
+            }
+            // Land the user on the first tab (newTab activates the last one it created).
+            if let firstID = wc.tabManager.tabs.first?.id { wc.tabManager.activate(firstID) }
+
+            // Re-assert the saved frame: rebuilding the splits (and the panel's async divider
+            // positioning) can momentarily pull the window toward its content-minimum width.
+            wc.window?.setFrame(frame, display: true)
+            DispatchQueue.main.async { wc.window?.setFrame(frame, display: true) }
         }
 
         if windowControllers().isEmpty {
@@ -183,6 +192,9 @@ final class SessionCoordinator {
         var panes: [PaneID: PaneController] = [:]
         for leaf in leaves { panes[leaf.id] = factory(leaf.id) }
         sc.restore(tree: tree, panes: panes, focusedPaneID: focusID)
+        // reconcile() only re-parents the rebuilt root view when it still had a superview; if this
+        // container isn't mounted in the window yet, re-mount the restored root so the terminal shows.
+        tabContainer.reinstallSplitRootIfNeeded()
 
         // Restore each leaf's saved connection into its pane. Panes are created in the default
         // working directory, so a local leaf restarts its shell in the saved directory.
@@ -221,7 +233,7 @@ final class SessionCoordinator {
             let name = input.stringValue
 
             guard let self,
-                let tabContainer = window.contentViewController as? TabContainerController
+                let tabContainer = window.activeTabContainer
             else { return }
 
             let frame = WindowFrame(
