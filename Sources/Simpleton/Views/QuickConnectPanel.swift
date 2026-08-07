@@ -40,6 +40,11 @@ final class QuickConnectPanel {
             // so it raised NSUnknownKeyException (swallowed by AppKit's run loop) and silently
             // aborted the panel. Shadow is already enabled via `hasShadow = true`.
 
+            // Hide the traffic-light window buttons — this is a floating quick-connect dialog.
+            newPanel.standardWindowButton(.closeButton)?.isHidden = true
+            newPanel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            newPanel.standardWindowButton(.zoomButton)?.isHidden = true
+
             let contentView = QuickConnectContentView(
                 bookmarkStore: bookmarkStore,
                 onSelect: { [weak self] bookmark in

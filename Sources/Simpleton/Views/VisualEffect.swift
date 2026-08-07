@@ -125,16 +125,33 @@ extension View {
 
     /// A floating panel surface (command palette, quick connect): real Liquid Glass on macOS 26,
     /// frosted `.hudWindow` vibrancy on macOS 14/15. Both get a continuous-corner clip + hairline.
+    /// A theme-color wash sits on top of the frosted glass (behind the panel content) so the dialog
+    /// reads as the active theme — the same `ThemeWash` the chrome uses — instead of a neutral gray.
+    /// Read from `ThemeSettings.shared` at render time, so it flips live with the theme (the content
+    /// views already observe ThemeSettings and re-render on a switch).
     @ViewBuilder
     func frostedPanel(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        // The theme-color wash, clipped to the panel shape, painted on top of the frosted glass so the
+        // dialog takes the theme's color. Same layering as `themedGlass`: vibrancy at the back, wash on
+        // top of it, panel content above.
+        let wash = ThemeWash(color: DT.surface, opacity: ThemeSettings.shared.chromeOpacity)
+            .clipShape(shape)
+            .allowsHitTesting(false)
         if #available(macOS 26.0, *) {
-            self.glassEffect(.regular, in: shape)
-                .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: 1))
+            self.background {
+                Color.clear
+                    .glassEffect(.regular, in: shape)
+                    .overlay(wash)
+            }
+            .overlay(shape.strokeBorder(.white.opacity(0.10), lineWidth: 1))
         } else {
-            self.background(VisualEffect(material: .hudWindow, blendingMode: .behindWindow))
-                .clipShape(shape)
-                .overlay(shape.strokeBorder(.white.opacity(0.12), lineWidth: 1))
+            self.background {
+                VisualEffect(material: .hudWindow, blendingMode: .behindWindow)
+                    .overlay(wash)
+                    .clipShape(shape)
+            }
+            .overlay(shape.strokeBorder(.white.opacity(0.12), lineWidth: 1))
         }
     }
 }

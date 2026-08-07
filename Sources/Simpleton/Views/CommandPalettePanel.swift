@@ -45,6 +45,11 @@ final class CommandPalettePanel {
             // thrown during a menu action, so instead of crashing it silently aborted the palette
             // (the panel never appeared). Window shadow is already enabled via `hasShadow = true`.
 
+            // Hide the traffic-light window buttons — this is a floating command dialog, not a window.
+            newPanel.standardWindowButton(.closeButton)?.isHidden = true
+            newPanel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            newPanel.standardWindowButton(.zoomButton)?.isHidden = true
+
             self.panel = newPanel
             // Dismiss when the panel loses focus (user clicks away) — Spotlight/Raycast behaviour.
             NotificationCenter.default.addObserver(
