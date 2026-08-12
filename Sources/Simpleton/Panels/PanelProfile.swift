@@ -85,7 +85,7 @@ extension PanelProfile {
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
             name: "General",
             leftPanelIDs: ["connections", "history", "file-browser"],
-            rightPanelIDs: ["ai-chat"],
+            rightPanelIDs: [],
             leftActivePanelID: "connections",
             rightActivePanelID: nil
         ),
@@ -96,15 +96,15 @@ extension PanelProfile {
                 "connections", "snippets", "notes", "history", "environment", "file-browser", "processes",
                 "ssh-tunnels",
             ],
-            rightPanelIDs: ["ai-chat"],
+            rightPanelIDs: [],
             leftActivePanelID: "connections",
-            rightActivePanelID: "ai-chat"
+            rightActivePanelID: nil
         ),
         PanelProfile(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
             name: "DevOps",
             leftPanelIDs: ["connections", "notes", "ssh-tunnels", "processes", "git", "docker"],
-            rightPanelIDs: ["ai-chat"],
+            rightPanelIDs: [],
             leftActivePanelID: "connections",
             rightActivePanelID: nil
         ),

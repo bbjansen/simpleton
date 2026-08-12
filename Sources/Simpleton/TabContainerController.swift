@@ -22,6 +22,9 @@ final class TabContainerController: NSViewController {
     private var contentSplit: NSSplitView?
     private var leftBarHost: NSHostingView<ActivityBarView>?
     private var rightBarHost: NSHostingView<ActivityBarView>?
+    /// The right activity bar's width constraint, kept so it can collapse to 0 when that side has
+    /// no panels (e.g. after the AI panel became a header-only button).
+    private var rightBarWidthConstraint: NSLayoutConstraint?
     private var headerHost: NSHostingView<HeaderBarView>?
     private var tabStripHost: NSHostingView<TabStripView>?
     private let headerModel = HeaderModel()
@@ -443,6 +446,9 @@ final class TabContainerController: NSViewController {
         container.addSubview(rightBar)
         rightBarHost = rightBar
 
+        let rightWidth = rightBar.widthAnchor.constraint(equalToConstant: 40)
+        rightBarWidthConstraint = rightWidth
+
         NSLayoutConstraint.activate([
             // Left bar
             leftBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -453,13 +459,24 @@ final class TabContainerController: NSViewController {
             rightBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             rightBar.topAnchor.constraint(equalTo: container.topAnchor),
             rightBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            rightBar.widthAnchor.constraint(equalToConstant: 40),
+            rightWidth,
             // Content split between bars
             split.leadingAnchor.constraint(equalTo: leftBar.trailingAnchor),
             split.trailingAnchor.constraint(equalTo: rightBar.leadingAnchor),
             split.topAnchor.constraint(equalTo: container.topAnchor),
             split.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
+
+        updateRightBarVisibility(for: registry.activeProfile)
+    }
+
+    /// Collapse the right activity-bar rail to zero width and hide it when its side has no panels
+    /// (e.g. after the AI panel moved to a header-only button). It reappears automatically once a
+    /// right-side panel is added to the profile.
+    private func updateRightBarVisibility(for profile: PanelProfile) {
+        let isEmpty = profile.rightPanelIDs.isEmpty
+        rightBarWidthConstraint?.constant = isEmpty ? 0 : 40
+        rightBarHost?.isHidden = isEmpty
     }
 
     private func rebuildActivityBars() {
@@ -497,6 +514,8 @@ final class TabContainerController: NSViewController {
 
     private func updatePanels(for profile: PanelProfile) {
         guard let split = contentSplit else { return }
+
+        updateRightBarVisibility(for: profile)
 
         // ── 1. Tear down any existing panel VCs ────────────────
         if let vc = leftPanelVC {
