@@ -20,6 +20,7 @@ runSSHConfigParserChecks(runner)
 // Core (async — actor-backed stores)
 await runBookmarkStoreChecks(runner)
 await runConfigStoreChecks(runner)
+await runConnectionStoreChecks(runner)
 
 // Models (synchronous)
 runAppConfigChecks(runner)
