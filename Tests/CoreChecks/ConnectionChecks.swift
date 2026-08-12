@@ -50,3 +50,90 @@ func runConnectionChecks(_ t: TestRunner) {
         }
     }
 }
+
+func runConnectionStoreChecks(_ t: TestRunner) async {
+    func makeTempDir() -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("corechecks-conn-" + UUID().uuidString)
+        try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    await t.suite("ConnectionStore add / all / byKind / pinned") {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        do {
+            let store = ConnectionStore(directory: dir)
+            try await store.add(Connection(name: "pg", kind: .postgres, pinned: true))
+            try await store.add(Connection(name: "my", kind: .mysql))
+            try await store.add(Connection(name: "lite", kind: .sqlite))
+            t.expectEqual(await store.all().count, 3, "three connections stored")
+            t.expectEqual(await store.byKind(.postgres).count, 1, "one postgres connection")
+            t.expectEqual(await store.pinned().count, 1, "one pinned connection")
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+    }
+
+    await t.suite("ConnectionStore update / delete / search") {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        do {
+            let store = ConnectionStore(directory: dir)
+            var c = Connection(name: "web-prod", kind: .postgres, host: "10.0.0.1")
+            try await store.add(c)
+            c.name = "web-prod-renamed"
+            try await store.update(c)
+            t.expectEqual(await store.connection(for: c.id)?.name, "web-prod-renamed", "renamed")
+            t.expectEqual(await store.search(query: "10.0.0").count, 1, "search matches host")
+            try await store.delete(id: c.id)
+            t.expect(await store.all().isEmpty, "empty after delete")
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+    }
+
+    await t.suite("ConnectionStore persistence across instances") {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        do {
+            let s1 = ConnectionStore(directory: dir)
+            try await s1.add(Connection(name: "persisted", kind: .amqp))
+            try await s1.flush()
+            let s2 = ConnectionStore(directory: dir)
+            try await s2.load()
+            t.expectEqual(await s2.all().count, 1, "second instance loads persisted connection")
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+    }
+
+    await t.suite("ConnectionStore posts .simpletonConnectionsChanged on add") {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = ConnectionStore(directory: dir)
+        // The store posts on the main queue; observe on .main and race it against a 2s timeout.
+        // Both the observer and the timeout run serially on the main queue, so a plain `done`
+        // flag is safe and the continuation resumes exactly once.
+        let fired = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            var done = false
+            var obs: NSObjectProtocol?
+            obs = NotificationCenter.default.addObserver(
+                forName: .simpletonConnectionsChanged, object: nil, queue: .main
+            ) { _ in
+                guard !done else { return }
+                done = true
+                if let obs { NotificationCenter.default.removeObserver(obs) }
+                cont.resume(returning: true)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                guard !done else { return }
+                done = true
+                if let obs { NotificationCenter.default.removeObserver(obs) }
+                cont.resume(returning: false)
+            }
+            Task { try? await store.add(Connection(name: "x", kind: .s3)) }
+        }
+        t.expect(fired, ".simpletonConnectionsChanged fired within 2s")
+    }
+}
