@@ -49,6 +49,33 @@ func runConnectionChecks(_ t: TestRunner) {
             t.expect(false, "unexpected error: \(error)")
         }
     }
+
+    runCredentialStoreChecks(t)
+}
+
+/// Keychain-backed; guarded because an unsigned `swift run CoreChecks` binary (or a headless CI
+/// runner) often cannot access the Keychain. We probe first and skip cleanly if it's unavailable,
+/// so these checks never produce a false CI failure.
+private func runCredentialStoreChecks(_ t: TestRunner) {
+    let probeID = UUID()
+    let probeOK = CredentialStore.store(ConnectionSecret(password: "probe"), for: probeID)
+    CredentialStore.delete(for: probeID)
+    guard probeOK else {
+        print("  … CredentialStore checks skipped (Keychain unavailable in this runner)")
+        return
+    }
+
+    t.suite("CredentialStore store / retrieve / has / delete round-trip") {
+        let id = UUID()
+        defer { CredentialStore.delete(for: id) }
+        let secret = ConnectionSecret(password: "hunter2", accessKey: "AKIA", secretKey: "shh")
+        t.expect(CredentialStore.store(secret, for: id), "store succeeds")
+        t.expect(CredentialStore.has(id: id), "has() true after store")
+        t.expectEqual(CredentialStore.secret(for: id), secret, "retrieved secret matches")
+        t.expect(CredentialStore.delete(for: id), "delete succeeds")
+        t.expect(!CredentialStore.has(id: id), "has() false after delete")
+        t.expect(CredentialStore.secret(for: id) == nil, "secret nil after delete")
+    }
 }
 
 func runConnectionStoreChecks(_ t: TestRunner) async {
