@@ -14,27 +14,14 @@ struct ProcessesPanelView: View {
     @ObservedObject private var themeSettings = ThemeSettings.shared
 
     @State private var processes: [ProcessEntry] = []
-    @State private var timer: Timer? = nil
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("PROCESSES")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(1.5)
-                    .foregroundColor(DT.textPrimary)
-                Spacer()
-                Button {
-                    Task { await load() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .foregroundColor(DT.textSecondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            ThemedDivider()
+        ClientPanelScaffold(
+            title: "PROCESSES",
+            availability: .ready,
+            autoRefresh: 3,
+            onRefresh: { await load() }
+        ) {
             if processes.isEmpty {
                 PanelEmptyStateView(
                     icon: "cpu",
@@ -43,49 +30,45 @@ struct ProcessesPanelView: View {
                 )
             } else {
                 List(processes) { proc in
-                    HStack(spacing: 4) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(proc.command)
-                                .font(DT.monoFont(size: 11))
-                                .foregroundColor(DT.textPrimary)
-                                .lineLimit(1)
-                            Text(
-                                "PID \(proc.pid)  CPU \(String(format: "%.1f", proc.cpu))%  MEM \(String(format: "%.1f", proc.mem))%"
-                            )
-                            .font(DT.monoFont(size: 10))
-                            .foregroundColor(DT.textTertiary)
-                        }
-                        Spacer()
-                        Button {
-                            kill(proc.pid, SIGTERM)
-                            let pid = proc.pid
-                            Task {
-                                try? await Task.sleep(for: .seconds(2))
-                                kill(pid, SIGKILL)
-                            }
-                            Task { await load() }
-                        } label: {
-                            Image(systemName: "xmark.circle")
-                                .foregroundColor(DT.accentRed)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .listRowBackground(Color.clear)
+                    processRow(proc)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
         }
         .themedGlass(DT.surface)
-        .onAppear {
-            Task { await load() }
-            timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
-                Task { @MainActor in await self.load() }
+    }
+
+    @ViewBuilder
+    private func processRow(_ proc: ProcessEntry) -> some View {
+        HStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(proc.command)
+                    .font(DT.monoFont(size: 11))
+                    .foregroundColor(DT.textPrimary)
+                    .lineLimit(1)
+                Text(
+                    "PID \(proc.pid)  CPU \(String(format: "%.1f", proc.cpu))%  MEM \(String(format: "%.1f", proc.mem))%"
+                )
+                .font(DT.monoFont(size: 10))
+                .foregroundColor(DT.textTertiary)
             }
+            Spacer()
+            Button {
+                kill(proc.pid, SIGTERM)
+                let pid = proc.pid
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    kill(pid, SIGKILL)
+                }
+                Task { await load() }
+            } label: {
+                Image(systemName: "xmark.circle")
+                    .foregroundColor(DT.accentRed)
+            }
+            .buttonStyle(.plain)
         }
-        .onDisappear {
-            timer?.invalidate(); timer = nil
-        }
+        .listRowBackground(Color.clear)
     }
 
     @MainActor
