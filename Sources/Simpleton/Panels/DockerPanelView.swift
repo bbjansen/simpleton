@@ -23,47 +23,15 @@ struct DockerPanelView: View {
     @State private var state: DockerPanelState = .loading
     @State private var logSheetContainer: DockerContainer? = nil
     @State private var logLines: [String] = []
-    @State private var timer: Timer? = nil
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("DOCKER")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(1.5)
-                    .foregroundColor(DT.textPrimary)
-                Spacer()
-                Button {
-                    Task { await refresh() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .foregroundColor(DT.textSecondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            ThemedDivider()
-            switch state {
-            case .loading:
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .notInstalled:
-                PanelEmptyStateView(
-                    icon: "shippingbox",
-                    title: "Docker not installed",
-                    message: "Install Docker Desktop to use this panel.",
-                    actionLabel: "Get Docker",
-                    action: { NSWorkspace.shared.open(URL(string: "https://www.docker.com/products/docker-desktop/")!) }
-                )
-            case .notRunning:
-                PanelEmptyStateView(
-                    icon: "shippingbox",
-                    title: "Docker not running",
-                    message: "Start Docker Desktop to see your containers.",
-                    actionLabel: "Open Docker Desktop",
-                    action: { NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Docker.app")) }
-                )
-            case .loaded(let containers):
+        ClientPanelScaffold(
+            title: "DOCKER",
+            availability: availability,
+            autoRefresh: 5,
+            onRefresh: { await refresh() }
+        ) {
+            if case .loaded(let containers) = state {
                 dockerList(containers)
             }
         }
@@ -72,14 +40,29 @@ struct DockerPanelView: View {
                 .frame(width: 600, height: 400)
         }
         .themedGlass(DT.surface)
-        .onAppear {
-            Task { await refresh() }
-            timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
-                Task { @MainActor in await self.refresh() }
-            }
-        }
-        .onDisappear {
-            timer?.invalidate(); timer = nil
+    }
+
+    /// Maps the Docker load state onto the scaffold's availability model.
+    private var availability: ClientAvailability {
+        switch state {
+        case .loading:
+            return .loading
+        case .notInstalled:
+            return .unavailable(
+                icon: "shippingbox",
+                title: "Docker not installed",
+                message: "Install Docker Desktop to use this panel.",
+                actionLabel: "Get Docker",
+                action: { NSWorkspace.shared.open(URL(string: "https://www.docker.com/products/docker-desktop/")!) })
+        case .notRunning:
+            return .unavailable(
+                icon: "shippingbox",
+                title: "Docker not running",
+                message: "Start Docker Desktop to see your containers.",
+                actionLabel: "Open Docker Desktop",
+                action: { NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Docker.app")) })
+        case .loaded:
+            return .ready
         }
     }
 
