@@ -51,5 +51,12 @@ func runSQLCellFormattingChecks(_ t: TestRunner) {
         t.expectEqual(SQLCellFormatting.compare(.integer(9), .text("a")), .orderedAscending, "number < text")
         t.expectEqual(SQLCellFormatting.compare(.text("z"), .bool(false)), .orderedAscending, "text < bool")
         t.expectEqual(SQLCellFormatting.compare(.bool(true), .blob(Data())), .orderedAscending, "bool < blob")
+        // Large Int64s must not collapse through Double (52-bit mantissa) — 2^53 vs 2^53+1.
+        t.expectEqual(
+            SQLCellFormatting.compare(.integer(9_007_199_254_740_992), .integer(9_007_199_254_740_993)),
+            .orderedAscending, "adjacent large Int64 distinct")
+        t.expectEqual(
+            SQLCellFormatting.compare(.integer(Int64.max), .integer(Int64.max - 1)),
+            .orderedDescending, "Int64.max > max-1")
     }
 }

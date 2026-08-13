@@ -56,7 +56,9 @@ public struct SQLGridData: Sendable {
     }
 
     private func escape(_ field: String) -> String {
-        guard field.contains("\t") || field.contains("\n") || field.contains("\"") else { return field }
+        guard field.contains("\t") || field.contains("\n") || field.contains("\r") || field.contains("\"") else {
+            return field
+        }
         return "\"" + field.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 }

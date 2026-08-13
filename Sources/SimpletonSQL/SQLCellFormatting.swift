@@ -60,6 +60,11 @@ public enum SQLCellFormatting {
         switch (a, b) {
         case (.null, .null):
             return .orderedSame
+        case let (.integer(x), .integer(y)):
+            // Compare Int64 directly — routing through Double would lose precision
+            // above 2^53 (Snowflake IDs, large keys, epoch-ns timestamps).
+            if x == y { return .orderedSame }
+            return x < y ? .orderedAscending : .orderedDescending
         case let (.bool(x), .bool(y)):
             if x == y { return .orderedSame }
             return (!x && y) ? .orderedAscending : .orderedDescending

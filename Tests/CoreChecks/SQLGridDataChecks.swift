@@ -35,5 +35,8 @@ func runSQLGridDataChecks(_ t: TestRunner) {
 
         let q2 = SQLGridData(columns: [Column(name: "c")], rows: [[.text("he said \"hi\"")]])
         t.expectEqual(q2.tsv(rows: [0], withHeader: false), "\"he said \"\"hi\"\"\"", "embedded quote doubled")
+
+        let cr = SQLGridData(columns: [Column(name: "c")], rows: [[.text("a\rb")]])
+        t.expectEqual(cr.tsv(rows: [0], withHeader: false), "\"a\rb\"", "carriage-return value quoted")
     }
 }

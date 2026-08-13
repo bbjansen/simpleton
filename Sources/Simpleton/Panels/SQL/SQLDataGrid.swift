@@ -43,7 +43,7 @@ struct SQLDataGrid: NSViewRepresentable {
         context.coordinator.rebuildColumns()
         context.coordinator.applyOrder()
         context.coordinator.applyTheme()
-        table.reloadData()
+        context.coordinator.reloadPreservingSelection()
         return scroll
     }
 
@@ -56,20 +56,23 @@ struct SQLDataGrid: NSViewRepresentable {
         }
         context.coordinator.applyOrder()
         context.coordinator.applyTheme()
-        table.reloadData()
+        context.coordinator.reloadPreservingSelection()
     }
 
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var parent: SQLDataGrid
         weak var table: NSTableView?
         private(set) var order: [Int] = []
-        private var builtColumnCount = -1
+        private var builtColumns: [Column] = []
+        private var isProgrammaticReload = false
         private let cellID = NSUserInterfaceItemIdentifier("gridCell")
         private let rowID = NSUserInterfaceItemIdentifier("gridRow")
 
         init(_ parent: SQLDataGrid) { self.parent = parent }
 
-        func needsColumnRebuild() -> Bool { builtColumnCount != parent.data.columnCount }
+        /// Rebuild when the column identity changes — not merely the count, or a
+        /// new query with the same column count keeps the previous headers.
+        func needsColumnRebuild() -> Bool { builtColumns != parent.data.columns }
 
         func rebuildColumns() {
             guard let table else { return }
@@ -88,7 +91,7 @@ struct SQLDataGrid: NSViewRepresentable {
                 c.sortDescriptorPrototype = NSSortDescriptor(key: String(i), ascending: true)
                 table.addTableColumn(c)
             }
-            builtColumnCount = parent.data.columnCount
+            builtColumns = parent.data.columns
         }
 
         func applyOrder() {
@@ -99,6 +102,22 @@ struct SQLDataGrid: NSViewRepresentable {
             guard let table else { return }
             table.gridColor = DT.Grid.gridline
             table.headerView?.needsDisplay = true
+        }
+
+        /// Reload and restore the table selection from the `selectedRow` binding
+        /// (mapping the original row index back to its current display row). The
+        /// `isProgrammaticReload` guard stops selection callbacks from writing
+        /// SwiftUI state during the view-update pass.
+        func reloadPreservingSelection() {
+            guard let table else { return }
+            isProgrammaticReload = true
+            table.reloadData()
+            if let sel = parent.selectedRow, let displayRow = order.firstIndex(of: sel) {
+                table.selectRowIndexes(IndexSet(integer: displayRow), byExtendingSelection: false)
+            } else {
+                table.deselectAll(nil)
+            }
+            isProgrammaticReload = false
         }
 
         private var fontSize: CGFloat { max(10, parent.rowHeight * 0.42) }
@@ -137,20 +156,21 @@ struct SQLDataGrid: NSViewRepresentable {
         }
 
         func tableViewSelectionDidChange(_ notification: Notification) {
-            guard let table else { return }
+            guard !isProgrammaticReload, let table else { return }
             let r = table.selectedRow
-            parent.selectedRow = (r >= 0 && order.indices.contains(r)) ? order[r] : nil
+            let newValue = (r >= 0 && order.indices.contains(r)) ? order[r] : nil
+            if parent.selectedRow != newValue { parent.selectedRow = newValue }
         }
 
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+            // Mutate the bindings only; the resulting SwiftUI update re-runs
+            // updateNSView, which applies the new order and reloads once.
             if let sd = tableView.sortDescriptors.first, let key = sd.key, let col = Int(key) {
                 parent.sortColumn = col
                 parent.ascending = sd.ascending
             } else {
                 parent.sortColumn = nil
             }
-            applyOrder()
-            tableView.reloadData()
         }
 
         func copySelection(withHeader: Bool) {
@@ -203,7 +223,8 @@ final class GridTableView: NSTableView {
 final class GridRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
         guard isSelected else { return }
-        DT.Grid.selectionFill.setFill()
+        // Reduced alpha so cell text stays legible on saturated colored themes.
+        DT.Grid.selectionFill.withAlphaComponent(0.35).setFill()
         dirtyRect.fill()
     }
 }
