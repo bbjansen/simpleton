@@ -231,8 +231,9 @@ extension PanelDefinition {
                 case .gui:
                     // Stash the target synchronously so the panel sees it whether it mounts fresh
                     // (cold) or is already visible (warm); the container observes the notification to
-                    // reveal/mount the SQL panel.
-                    SQLPendingOpen.shared.connectionID = connection.id
+                    // reveal/mount the target GUI client panel.
+                    PendingClientOpen.shared.connectionID = connection.id
+                    PendingClientOpen.shared.panelID = GUIClientRegistry.shared.panelID(for: connection.kind)
                     NotificationCenter.default.post(
                         name: .simpletonOpenConnectionGUI, object: connection.id)
                 case .text:
