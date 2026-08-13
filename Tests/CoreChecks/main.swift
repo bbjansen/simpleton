@@ -22,6 +22,7 @@ await runBookmarkStoreChecks(runner)
 await runConfigStoreChecks(runner)
 await runConnectionStoreChecks(runner)
 await runSQLDriverChecks(runner)
+await runS3DriverChecks(runner)
 
 // Models (synchronous)
 runAppConfigChecks(runner)
