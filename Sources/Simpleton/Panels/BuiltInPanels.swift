@@ -213,4 +213,31 @@ extension PanelDefinition {
     ) { context in
         NSHostingController(rootView: SQLPanelView(appSupportDir: context.appSupportDir))
     }
+
+    static let dataConnections = PanelDefinition(
+        id: PanelProfile.PanelID.dataConnections,
+        name: "Data Connections",
+        icon: "bookmark.fill",
+        description: "Saved database & service connections",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        DataConnectionsHostController(
+            appSupportDir: context.appSupportDir,
+            bookmarkStore: context.bookmarkStore,
+            onLaunch: { connection, mode in
+                switch mode {
+                case .gui:
+                    // Notify the SQL panel (if mounted) to open this connection. Reliable reveal/
+                    // docking arrives in workbench sub-project 2; deferred post lets a just-activated
+                    // panel mount first.
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(
+                            name: .simpletonOpenConnectionGUI, object: connection.id)
+                    }
+                case .text:
+                    NSLog("SIMP: text client for %@ — implemented in workbench sub-project 2", connection.name)
+                }
+            })
+    }
 }

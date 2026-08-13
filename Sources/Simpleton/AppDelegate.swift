@@ -161,6 +161,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panelRegistry.register(.git)
         panelRegistry.register(.docker)
         panelRegistry.register(.sql)
+        panelRegistry.register(.dataConnections)
         // Register JS panels from script plugins
         for plugin in pluginManager?.scriptPlugins ?? [] {
             for panelManifest in plugin.manifest.panels ?? [] {

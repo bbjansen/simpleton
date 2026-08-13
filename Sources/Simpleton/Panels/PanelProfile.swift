@@ -29,6 +29,7 @@ extension PanelProfile {
         static let git = "git"
         static let docker = "docker"
         static let sql = "sql"
+        static let dataConnections = "data-connections"
     }
 }
 
@@ -94,8 +95,8 @@ extension PanelProfile {
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
             name: "Developer",
             leftPanelIDs: [
-                "connections", "snippets", "notes", "history", "environment", "file-browser", "processes",
-                "ssh-tunnels",
+                "connections", "data-connections", "snippets", "notes", "history", "environment",
+                "file-browser", "processes", "ssh-tunnels",
             ],
             rightPanelIDs: ["sql"],
             leftActivePanelID: "connections",

@@ -25,6 +25,9 @@ struct SQLPanelView: View {
                 Task { await model.saveConnection(connection, secret: secret) }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .simpletonOpenConnectionGUI)) { note in
+            if let id = note.object as? UUID { Task { await model.openConnection(id: id) } }
+        }
     }
 
     private var content: some View {

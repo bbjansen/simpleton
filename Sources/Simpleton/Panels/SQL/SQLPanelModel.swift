@@ -54,6 +54,15 @@ final class SQLPanelModel: ObservableObject {
         if selectedID == nil { selectedID = connections.first?.id }
     }
 
+    /// Open a specific connection by id (from the Data Connections manager): select it and connect.
+    func openConnection(id: UUID) async {
+        await reload()
+        if connections.contains(where: { $0.id == id }) {
+            selectedID = id
+            await connect()
+        }
+    }
+
     func connect() async {
         guard let connection = selectedConnection else { return }
         await disconnect()
