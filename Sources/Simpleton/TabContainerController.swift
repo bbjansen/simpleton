@@ -520,6 +520,7 @@ final class TabContainerController: NSViewController {
         cancellables.removeAll()
         guard let registry = panelRegistry else { return }
         registry.$activeProfile
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] profile in
                 self?.updatePanels(for: profile)
