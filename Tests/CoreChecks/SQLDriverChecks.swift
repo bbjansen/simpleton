@@ -69,6 +69,23 @@ func runSQLDriverChecks(_ t: TestRunner) async {
         }
     }
 
+    await t.suite("SQLQueryHistoryStore record/dedup/cap/persist") {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("corechecks-sqlhist-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let id = UUID()
+        let store = SQLQueryHistoryStore(directory: dir)
+        await store.record("SELECT 1", for: id)
+        await store.record("SELECT 2", for: id)
+        await store.record("SELECT 1", for: id)  // dedup → moves to front
+        let h = await store.history(for: id)
+        t.expectEqual(h.first, "SELECT 1", "most recent first after dedup")
+        t.expectEqual(h.count, 2, "deduped to two entries")
+        let reloaded = SQLQueryHistoryStore(directory: dir)
+        t.expectEqual(await reloaded.history(for: id).count, 2, "persisted across instances")
+    }
+
     t.suite("SQLDriverFactory mapping") {
         do {
             let sqlite = try SQLDriverFactory.make(

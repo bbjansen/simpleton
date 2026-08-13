@@ -13,8 +13,12 @@ final class SQLPanelModel: ObservableObject {
     @Published var isConnecting = false
     @Published var isConnected = false
     @Published var showingEditor = false
+    @Published var historyItems: [String] = []
+    @Published var tables: [TableInfo] = []
+    @Published var columnsByTable: [String: [ColumnInfo]] = [:]
 
     private let store: ConnectionStore
+    private let history: SQLQueryHistoryStore
     private var driver: SQLDriver?
 
     /// The SQL kinds this panel manages.
@@ -22,6 +26,7 @@ final class SQLPanelModel: ObservableObject {
 
     init(appSupportDir: URL) {
         self.store = ConnectionStore(directory: appSupportDir)
+        self.history = SQLQueryHistoryStore(directory: appSupportDir)
     }
 
     var selectedConnection: Connection? {
@@ -60,6 +65,8 @@ final class SQLPanelModel: ObservableObject {
             try await d.connect()
             driver = d
             isConnected = true
+            historyItems = await history.history(for: connection.id)
+            await loadSchema()
         } catch {
             errorMessage = Self.describe(error)
         }
@@ -71,6 +78,8 @@ final class SQLPanelModel: ObservableObject {
         driver = nil
         isConnected = false
         result = nil
+        tables = []
+        columnsByTable = [:]
     }
 
     func runQuery() async {
@@ -80,9 +89,28 @@ final class SQLPanelModel: ObservableObject {
         errorMessage = nil
         do {
             result = try await driver.run(sql)
+            if let id = selectedConnection?.id {
+                await history.record(sql, for: id)
+                historyItems = await history.history(for: id)
+            }
         } catch {
             errorMessage = Self.describe(error)
         }
+    }
+
+    func loadSchema() async {
+        guard let driver else { return }
+        tables = (try? await driver.tables(in: nil)) ?? []
+        columnsByTable = [:]
+    }
+
+    func expand(table: String) async {
+        guard let driver, columnsByTable[table] == nil else { return }
+        columnsByTable[table] = (try? await driver.columns(of: table, in: nil)) ?? []
+    }
+
+    func pickTable(_ table: String) {
+        queryText = "SELECT * FROM \(table) LIMIT 100"
     }
 
     /// Heuristic: a non-SELECT/EXPLAIN/PRAGMA/WITH statement modifies data.

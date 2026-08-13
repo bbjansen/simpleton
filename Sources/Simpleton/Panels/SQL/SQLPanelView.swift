@@ -31,6 +31,16 @@ struct SQLPanelView: View {
         VStack(spacing: 0) {
             connectionBar
             ThemedDivider()
+            if !model.tables.isEmpty {
+                SQLSchemaBrowser(
+                    tables: model.tables,
+                    columnsByTable: model.columnsByTable,
+                    onExpand: { table in Task { await model.expand(table: table) } },
+                    onPickTable: { table in model.pickTable(table) }
+                )
+                .frame(maxHeight: 160)
+                ThemedDivider()
+            }
             editor
             ThemedDivider()
             SQLResultsGrid(result: model.result)
@@ -72,6 +82,16 @@ struct SQLPanelView: View {
                         .font(.system(size: 10)).foregroundColor(DT.accentRed)
                 }
                 Spacer()
+                if !model.historyItems.isEmpty {
+                    Menu {
+                        ForEach(model.historyItems, id: \.self) { item in
+                            Button(item) { model.queryText = item }
+                        }
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                    }
+                    .menuStyle(.borderlessButton).fixedSize().help("Query history")
+                }
                 Button("Run  ⌘↵") { Task { await model.runQuery() } }
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(!model.isConnected)
