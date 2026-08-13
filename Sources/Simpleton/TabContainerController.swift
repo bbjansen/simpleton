@@ -26,6 +26,9 @@ final class TabContainerController: NSViewController {
     private var outerSplit: NSSplitView?
     private var drawerPanelVC: NSViewController?
     private var drawerPanelID: String?
+    /// Panel controllers cached PER CONTAINER (not on the shared registry), so each window/tab
+    /// instantiates and owns its own panel views — a panel can't be re-parented between windows.
+    private var panelControllers: [String: NSViewController] = [:]
     private var leftBarHost: NSHostingView<ActivityBarView>?
     private var rightBarHost: NSHostingView<ActivityBarView>?
     /// The right activity bar's width constraint, kept so it can collapse to 0 when that side has
@@ -100,7 +103,7 @@ final class TabContainerController: NSViewController {
                     splitController: splitController,
                     aiService: aiService
                 )
-                panelRegistry?.rebindAIChat(to: tabConversation)
+                rebindAIChatLocal(to: tabConversation)
             }
             // Propagate to all existing panes so active AI hints work.
             for pane in splitController.panes.values {
@@ -447,7 +450,7 @@ final class TabContainerController: NSViewController {
         super.viewDidAppear()
         splitController.setFocus(to: splitController.focusedPaneID)
         // Rebind AI Chat panel to this tab's conversation
-        panelRegistry?.rebindAIChat(to: tabConversation)
+        rebindAIChatLocal(to: tabConversation)
     }
 
     /// Ensure the split's current root view is mounted in `contentSplit` at index 0 (the terminal
@@ -584,7 +587,7 @@ final class TabContainerController: NSViewController {
 
         // ── 2. Insert left panel at index 0 (before terminal) ──
         if let id = profile.leftActivePanelID,
-            let vc = panelRegistry?.makeController(for: id, context: makeContext())
+            let vc = makePanelController(for: id)
         {
             addChild(vc)
             vc.view.frame = NSRect(x: 0, y: 0, width: profile.leftWidth, height: split.bounds.height)
@@ -595,7 +598,7 @@ final class TabContainerController: NSViewController {
 
         // ── 3. Append right panel at end (after terminal) ──────
         if let id = profile.rightActivePanelID,
-            let vc = panelRegistry?.makeController(for: id, context: makeContext())
+            let vc = makePanelController(for: id)
         {
             addChild(vc)
             vc.view.frame = NSRect(x: 0, y: 0, width: profile.rightWidth, height: split.bounds.height)
@@ -613,7 +616,7 @@ final class TabContainerController: NSViewController {
         }
         if let id = profile.bottomActivePanelID,
             let outer = outerSplit,
-            let vc = panelRegistry?.makeController(for: id, context: makeContext())
+            let vc = makePanelController(for: id)
         {
             addChild(vc)
             vc.view.frame = NSRect(x: 0, y: 0, width: outer.bounds.width, height: profile.drawerSize)
@@ -655,6 +658,23 @@ final class TabContainerController: NSViewController {
         var profile = registry.activeProfile
         profile.setDrawer(id: id)
         registry.activeProfile = profile
+    }
+
+    /// Build (or reuse this container's cached) controller for a panel id, from the registry's
+    /// definitions. The cache is per-container so panels are not shared across windows/tabs.
+    private func makePanelController(for id: String) -> NSViewController? {
+        if let cached = panelControllers[id] { return cached }
+        guard let def = panelRegistry?.definitions.first(where: { $0.id == id }) else { return nil }
+        let vc = def.make(makeContext())
+        panelControllers[id] = vc
+        return vc
+    }
+
+    /// Rebind this container's cached AI Chat panel to the active tab's conversation.
+    private func rebindAIChatLocal(to conversation: TabConversation?) {
+        guard let controller = panelControllers[PanelProfile.PanelID.aiChat] as? AIChatPanelController
+        else { return }
+        controller.conversation = conversation
     }
 
     // MARK: - Context
