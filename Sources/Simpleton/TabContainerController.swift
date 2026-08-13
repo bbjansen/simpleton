@@ -183,12 +183,12 @@ final class TabContainerController: NSViewController {
                 let registry = self.panelRegistry,
                 self.view.window?.isKeyWindow == true
             else { return }
-            // If SQL is already the active right panel, the mounted panel's own `.onReceive` consumes
+            // If SQL is already docked in the drawer, the mounted panel's own `.onReceive` consumes
             // the pending connection — skip the profile re-assignment (which would needlessly rebuild
-            // panels across every container that shares this registry).
-            guard registry.activeProfile.rightActivePanelID != PanelProfile.PanelID.sql else { return }
+            // panels).
+            guard registry.activeProfile.bottomActivePanelID != PanelProfile.PanelID.sql else { return }
             var profile = registry.activeProfile
-            profile.activatePanel(id: PanelProfile.PanelID.sql, on: .right)
+            profile.setDrawer(id: PanelProfile.PanelID.sql)
             registry.activeProfile = profile
         }
 
