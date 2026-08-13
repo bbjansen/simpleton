@@ -76,17 +76,30 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
     }
 
     public func columns(of table: String, in database: String?) async throws -> [ColumnInfo] {
-        let escaped = table.replacingOccurrences(of: "'", with: "''")
-        guard
-            case .rows(_, let rows) = try await run(
-                "SELECT column_name, data_type, is_nullable FROM information_schema.columns "
-                    + "WHERE table_name = '\(escaped)' ORDER BY ordinal_position")
-        else { return [] }
-        return rows.compactMap { row in
-            guard row.count >= 3 else { return nil }
-            return ColumnInfo(
-                name: row[0].displayString, type: row[1].displayString,
-                nullable: row[2].displayString.uppercased() == "YES", isPrimaryKey: false)
+        guard let connection else { throw SQLDriverError.notConnected }
+        do {
+            // `table` is bound as a parameter ($1) via PostgresQuery string interpolation — NOT raw
+            // SQL — so no manual escaping and no injection surface (contrast `run`'s unsafeSQL path,
+            // which intentionally executes the user's own IDE queries).
+            let seq = try await connection.query(
+                """
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns \
+                WHERE table_name = \(table) ORDER BY ordinal_position
+                """, logger: logger)
+            var out: [ColumnInfo] = []
+            for try await row in seq {
+                let cells = Array(row)
+                guard cells.count >= 3 else { continue }
+                out.append(
+                    ColumnInfo(
+                        name: (try? cells[0].decode(String.self)) ?? "",
+                        type: (try? cells[1].decode(String.self)) ?? "",
+                        nullable: ((try? cells[2].decode(String.self)) ?? "").uppercased() == "YES",
+                        isPrimaryKey: false))
+            }
+            return out
+        } catch {
+            throw SQLDriverError.queryFailed("\(error)")
         }
     }
 

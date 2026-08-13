@@ -119,6 +119,29 @@ func runSQLDriverChecks(_ t: TestRunner) async {
         print("  … PostgresDriver checks skipped (set SIMPLETON_PG_TEST_URL to run)")
     }
 
+    if let url = ProcessInfo.processInfo.environment["SIMPLETON_MYSQL_TEST_URL"],
+        let (conn, secret) = parseSQLURL(url, kind: .mysql)
+    {
+        await t.suite("MySQLDriver SELECT 1 (integration)") {
+            do {
+                let driver = try SQLDriverFactory.make(conn, secret: secret)
+                try await driver.connect()
+                if case .rows(let cols, let rows) = try await driver.run("SELECT 1 AS n") {
+                    t.expectEqual(cols.first?.name, "n", "column name n")
+                    t.expectEqual(rows.first?.first?.displayString, "1", "value 1")
+                } else {
+                    t.expect(false, "SELECT should return rows")
+                }
+                _ = try await driver.tables(in: nil)
+                await driver.close()
+            } catch {
+                t.expect(false, "unexpected error: \(error)")
+            }
+        }
+    } else {
+        print("  … MySQLDriver checks skipped (set SIMPLETON_MYSQL_TEST_URL to run)")
+    }
+
     t.suite("SQLDriverFactory mapping") {
         do {
             let sqlite = try SQLDriverFactory.make(

@@ -11,7 +11,7 @@ public enum SQLDriverFactory {
         case .postgres:
             return try PostgresDriver(connection: connection, secret: secret)
         case .mysql:
-            throw SQLDriverError.unsupported("mysql driver not yet implemented")
+            return try MySQLDriver(connection: connection, secret: secret)
         default:
             throw SQLDriverError.unsupported("\(connection.kind.rawValue) is not a SQL connection")
         }
