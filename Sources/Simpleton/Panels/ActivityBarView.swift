@@ -27,10 +27,13 @@ struct ActivityBarView: View {
         VStack(spacing: 4) {
             ForEach(panelIDs, id: \.self) { panelID in
                 if let def = registry.definitions.first(where: { $0.id == panelID }) {
+                    let isDrawerLauncher = side == .right && def.prefersDrawer
                     ActivityBarButton(
                         icon: def.icon,
                         label: def.name,
-                        isActive: activePanelID == panelID
+                        isActive: isDrawerLauncher
+                            ? registry.activeProfile.bottomActivePanelID == panelID
+                            : activePanelID == panelID
                     ) {
                         togglePanel(id: panelID)
                     }

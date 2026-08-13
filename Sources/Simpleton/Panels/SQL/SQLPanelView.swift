@@ -46,6 +46,14 @@ struct SQLPanelView: View {
                 )
                 .frame(maxHeight: 160)
                 ThemedDivider()
+            } else if model.isConnected {
+                // Connected, but the database has no tables — say so, so an empty DB doesn't read
+                // as "nothing loaded".
+                Text("Connected — this database has no tables yet. Run a query to create or query data.")
+                    .font(.system(size: 11)).foregroundColor(DT.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                ThemedDivider()
             }
             editor
             ThemedDivider()

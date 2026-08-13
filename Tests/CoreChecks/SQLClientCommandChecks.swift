@@ -36,4 +36,19 @@ func runSQLClientCommandChecks(_ t: TestRunner) {
             SQLClientCommand.build(for: Connection(name: "s", kind: .s3), password: nil) == nil,
             "s3 → nil")
     }
+
+    t.suite("SQLClientCommand.build — conninfo-looking database is dropped, not passed to psql") {
+        let evil = Connection(
+            name: "e", kind: .postgres, host: "db", port: 5432, username: "u",
+            params: ["database": "host=evil.example.com dbname=y"])
+        let built = SQLClientCommand.build(for: evil, password: "pw")
+        t.expect(!(built?.args.contains("-d") ?? true), "conninfo-looking db is not passed as -d")
+        t.expect(
+            !(built?.args.contains(where: { $0.contains("evil") }) ?? true),
+            "attacker host never reaches argv")
+        // A plain name still passes.
+        let ok = Connection(
+            name: "o", kind: .postgres, host: "db", username: "u", params: ["database": "appdb"])
+        t.expect(SQLClientCommand.build(for: ok, password: nil)?.args.contains("appdb") ?? false, "plain db passes")
+    }
 }

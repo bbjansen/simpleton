@@ -25,6 +25,7 @@ final class TabContainerController: NSViewController {
     /// Outer split stacking [contentSplit, drawer?] so a GUI client can dock on an edge.
     private var outerSplit: NSSplitView?
     private var drawerPanelVC: NSViewController?
+    private var drawerHostView: NSView?
     private var drawerPanelID: String?
     /// Panel controllers cached PER CONTAINER (not on the shared registry), so each window/tab
     /// instantiates and owns its own panel views — a panel can't be re-parented between windows.
@@ -586,7 +587,9 @@ final class TabContainerController: NSViewController {
         // After teardown, split.arrangedSubviews == [terminal rootView]
 
         // ── 2. Insert left panel at index 0 (before terminal) ──
-        if let id = profile.leftActivePanelID,
+        // A prefersDrawer panel is a GUI client that only ever mounts in the drawer — never a side
+        // slot — so the same cached controller can't be parented into two splits at once.
+        if let id = profile.leftActivePanelID, !panelPrefersDrawer(id),
             let vc = makePanelController(for: id)
         {
             addChild(vc)
@@ -597,7 +600,7 @@ final class TabContainerController: NSViewController {
         }
 
         // ── 3. Append right panel at end (after terminal) ──────
-        if let id = profile.rightActivePanelID,
+        if let id = profile.rightActivePanelID, !panelPrefersDrawer(id),
             let vc = makePanelController(for: id)
         {
             addChild(vc)
@@ -609,7 +612,8 @@ final class TabContainerController: NSViewController {
 
         // ── 3b. Drawer (edge-docked GUI client) ────────────────
         if let vc = drawerPanelVC {
-            vc.view.removeFromSuperview()
+            drawerHostView?.removeFromSuperview()
+            drawerHostView = nil
             vc.removeFromParent()
             drawerPanelVC = nil
             drawerPanelID = nil
@@ -619,13 +623,29 @@ final class TabContainerController: NSViewController {
             let vc = makePanelController(for: id)
         {
             addChild(vc)
-            vc.view.frame = NSRect(x: 0, y: 0, width: outer.bounds.width, height: profile.drawerSize)
+            // Wrap the panel with a small close (✕) button so the drawer can always be dismissed,
+            // even when the launcher rail is hidden or empty.
+            let host = NSView(frame: NSRect(x: 0, y: 0, width: outer.bounds.width, height: profile.drawerSize))
+            vc.view.frame = host.bounds
+            vc.view.autoresizingMask = [.width, .height]
+            host.addSubview(vc.view)
+            let close = NSButton(
+                frame: NSRect(x: host.bounds.width - 24, y: host.bounds.height - 22, width: 18, height: 18))
+            close.autoresizingMask = [.minXMargin, .minYMargin]
+            close.isBordered = false
+            close.bezelStyle = .inline
+            close.image = NSImage(
+                systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Close drawer")
+            close.target = self
+            close.action = #selector(closeDrawerAction)
+            host.addSubview(close)
             if profile.drawerEdge == .top {
-                outer.insertArrangedSubview(vc.view, at: 0)
+                outer.insertArrangedSubview(host, at: 0)
             } else {
-                outer.addArrangedSubview(vc.view)  // .bottom (and .trailing treated as bottom for v1)
+                outer.addArrangedSubview(host)  // .bottom (and .trailing treated as bottom for v1)
             }
             drawerPanelVC = vc
+            drawerHostView = host
             drawerPanelID = id
         }
 
@@ -652,12 +672,21 @@ final class TabContainerController: NSViewController {
         }
     }
 
+    @objc private func closeDrawerAction() {
+        activateDrawer(id: nil)
+    }
+
     /// Open (or close, with nil) the edge drawer's GUI panel.
     func activateDrawer(id: String?) {
         guard let registry = panelRegistry else { return }
         var profile = registry.activeProfile
         profile.setDrawer(id: id)
         registry.activeProfile = profile
+    }
+
+    /// Whether a panel id is a GUI client that docks in the edge drawer (never a side slot).
+    private func panelPrefersDrawer(_ id: String) -> Bool {
+        panelRegistry?.definitions.first(where: { $0.id == id })?.prefersDrawer ?? false
     }
 
     /// Build (or reuse this container's cached) controller for a panel id, from the registry's

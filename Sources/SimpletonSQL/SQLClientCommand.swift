@@ -27,13 +27,15 @@ public enum SQLClientCommand {
         case .postgres:
             var args = ["-h", connection.host ?? "localhost", "-p", String(connection.port ?? 5432)]
             if let u = connection.username { args += ["-U", u] }
-            if let db = connection.params["database"], !db.isEmpty { args += ["-d", db] }
+            // Only pass a plain database name — never a libpq conninfo/URI string (which would let a
+            // `host=…` in the field silently redirect the connection + leak PGPASSWORD elsewhere).
+            if let db = connection.params["database"], isPlainDBName(db) { args += ["-d", db] }
             let env = password.map { ["PGPASSWORD=\($0)"] } ?? []
             return (args, env)
         case .mysql:
             var args = ["-h", connection.host ?? "127.0.0.1", "-P", String(connection.port ?? 3306)]
             if let u = connection.username { args += ["-u", u] }
-            if let db = connection.params["database"], !db.isEmpty { args += [db] }
+            if let db = connection.params["database"], isPlainDBName(db) { args += [db] }
             let env = password.map { ["MYSQL_PWD=\($0)"] } ?? []
             return (args, env)
         case .sqlite:
@@ -41,5 +43,12 @@ public enum SQLClientCommand {
         default:
             return nil
         }
+    }
+
+    /// A safe, plain database name: non-empty, no leading `-` (would parse as an option), and no
+    /// `=`/whitespace/`://` (which libpq would interpret as a full conninfo/URI string).
+    private static func isPlainDBName(_ db: String) -> Bool {
+        guard !db.isEmpty, !db.hasPrefix("-") else { return false }
+        return !db.contains(where: { $0 == "=" || $0 == " " || $0 == "\t" }) && !db.contains("://")
     }
 }
