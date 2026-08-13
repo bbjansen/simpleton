@@ -141,6 +141,18 @@ final class SQLPanelModel: ObservableObject {
         if let secret { CredentialStore.store(secret, for: connection.id) }
         await reload()
         selectedID = connection.id
+        await connect()  // a freshly added connection connects + loads immediately
+    }
+
+    /// Connect to whatever is currently selected (or disconnect if the selection was cleared).
+    /// Driven by the connection bar's selection change, so picking a database loads it immediately
+    /// without a separate "Connect" click.
+    func connectSelected() async {
+        if selectedID == nil {
+            await disconnect()
+        } else {
+            await connect()
+        }
     }
 
     private static func describe(_ error: Error) -> String {
