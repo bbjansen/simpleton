@@ -510,9 +510,9 @@ final class TabContainerController: NSViewController {
     /// (e.g. after the AI panel moved to a header-only button). It reappears automatically once a
     /// right-side panel is added to the profile.
     private func updateRightBarVisibility(for profile: PanelProfile) {
-        let isEmpty = profile.rightPanelIDs.isEmpty
-        rightBarWidthConstraint?.constant = isEmpty ? 0 : 40
-        rightBarHost?.isHidden = isEmpty
+        let show = config.appearance.showToolLauncher && !profile.rightPanelIDs.isEmpty
+        rightBarWidthConstraint?.constant = show ? 40 : 0
+        rightBarHost?.isHidden = !show
     }
 
     private func rebuildActivityBars() {
@@ -624,6 +624,9 @@ final class TabContainerController: NSViewController {
     func updateConfig(_ newConfig: AppConfig) {
         self.config = newConfig
         applyBackdropTint()  // retint the side-panel backdrop on a live theme change
+        if let registry = panelRegistry {
+            updateRightBarVisibility(for: registry.activeProfile)  // live-toggle the launcher rail
+        }
     }
 
     /// Paint the backdrop with the active theme so transparent side panels read as the theme. For a
