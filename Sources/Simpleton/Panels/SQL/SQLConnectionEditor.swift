@@ -5,6 +5,7 @@ import SwiftUI
 /// A sheet to add a SQL connection (SQLite path, or server host/port/user/password/database).
 struct SQLConnectionEditor: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var themeSettings = ThemeSettings.shared
     let onSave: (Connection, ConnectionSecret?) -> Void
 
     @State private var kind: ConnectionKind = .postgres
@@ -53,6 +54,7 @@ struct SQLConnectionEditor: View {
             }
         }
         .padding(16).frame(width: 380)
+        .background(DT.base)  // theme the sheet with the active appearance, matching the app chrome
     }
 
     private func chooseFile() {

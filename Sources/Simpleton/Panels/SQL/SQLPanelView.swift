@@ -6,6 +6,7 @@ import SwiftUI
 /// client-panel chrome. Schema browser + history are layered on in a later task.
 struct SQLPanelView: View {
     @StateObject private var model: SQLPanelModel
+    @ObservedObject private var themeSettings = ThemeSettings.shared
 
     init(appSupportDir: URL) {
         _model = StateObject(wrappedValue: SQLPanelModel(appSupportDir: appSupportDir))
@@ -31,6 +32,7 @@ struct SQLPanelView: View {
         .task {
             await model.consumePendingOpen()  // cold: panel just mounted via reveal
         }
+        .themedGlass(DT.surface)  // theme the panel/drawer with the active appearance, like the other panels
     }
 
     private var content: some View {

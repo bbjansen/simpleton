@@ -6,6 +6,7 @@ import SwiftUI
 /// SSH-bookmark tunnel reference. Secrets go to the Keychain via the caller.
 struct DataConnectionEditor: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var themeSettings = ThemeSettings.shared
     let bookmarks: [Bookmark]
     let existingGroups: [String]
     let existing: Connection?
@@ -67,6 +68,7 @@ struct DataConnectionEditor: View {
             }
         }
         .padding(16).frame(width: 400)
+        .background(DT.base)  // theme the sheet with the active appearance, matching the app chrome
         .onAppear(perform: loadExisting)
     }
 
