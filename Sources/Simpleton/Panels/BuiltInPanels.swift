@@ -209,7 +209,8 @@ extension PanelDefinition {
         icon: "cylinder.split.1x2",
         description: "Query databases (SQLite, Postgres, MySQL)",
         defaultSide: .right,
-        isBuiltIn: true
+        isBuiltIn: true,
+        prefersDrawer: true
     ) { context in
         NSHostingController(rootView: SQLPanelView(appSupportDir: context.appSupportDir))
     }
