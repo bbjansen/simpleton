@@ -17,6 +17,30 @@ func runConnectionChecks(_ t: TestRunner) {
         }
     }
 
+    t.suite("Connection new fields round-trip + tolerant legacy decode") {
+        let full = Connection(
+            name: "prod-db", kind: .postgres, host: "db", port: 5432, username: "app",
+            params: ["database": "app"], tags: ["prod"], pinned: true,
+            color: "red", group: "prod", tunnelBookmarkID: UUID())
+        do {
+            let data = try JSONEncoder().encode(full)
+            let decoded = try JSONDecoder().decode(Connection.self, from: data)
+            t.expectEqual(decoded, full, "full connection with color/group/tunnel round-trips")
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+        // Legacy record (no new keys) → new fields default nil.
+        let legacy = #"{"id":"22222222-2222-2222-2222-222222222222","name":"old","kind":"mysql"}"#
+        do {
+            let d = try JSONDecoder().decode(Connection.self, from: Data(legacy.utf8))
+            t.expect(d.color == nil, "color defaults nil")
+            t.expect(d.group == nil, "group defaults nil")
+            t.expect(d.tunnelBookmarkID == nil, "tunnelBookmarkID defaults nil")
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+    }
+
     t.suite("Connection tolerant decode — missing new fields fall back to defaults") {
         let json = #"{"id":"11111111-1111-1111-1111-111111111111","name":"legacy","kind":"mysql"}"#
         do {
