@@ -11,7 +11,7 @@ final class TerminalDropTarget: NSView {
         self.targetTerminal = terminal
         super.init(frame: terminal.bounds)
         autoresizingMask = [.width, .height]
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes([.fileURL, NSPasteboard.PasteboardType("com.simpleton.connection-id")])
     }
 
     @available(*, unavailable)
@@ -22,6 +22,14 @@ final class TerminalDropTarget: NSView {
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { .copy }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        // A data-connection drag → open a text (CLI) client pane for that connection.
+        let connType = NSPasteboard.PasteboardType("com.simpleton.connection-id")
+        if let idString = sender.draggingPasteboard.string(forType: connType),
+            let id = UUID(uuidString: idString)
+        {
+            NotificationCenter.default.post(name: .simpletonOpenConnectionText, object: id)
+            return true
+        }
         guard let items = sender.draggingPasteboard.pasteboardItems else { return false }
         let paths = items.compactMap { item -> String? in
             guard let urlString = item.string(forType: .fileURL),

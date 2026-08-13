@@ -18,6 +18,7 @@ final class TabContainerController: NSViewController {
     private var aiChatShimObserver: NSObjectProtocol?
     private var skillPickerShimObserver: NSObjectProtocol?
     private var openConnectionObserver: NSObjectProtocol?
+    private var openConnectionTextObserver: NSObjectProtocol?
 
     // Auto Layout panel management
     private var contentSplit: NSSplitView?
@@ -187,6 +188,23 @@ final class TabContainerController: NSViewController {
             registry.activeProfile = profile
         }
 
+        openConnectionTextObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonOpenConnectionText, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let self = self, self.view.window?.isKeyWindow == true,
+                let id = note.object as? UUID
+            else { return }
+            let dir = self.appSupportDir
+            Task { [weak self] in
+                let store = ConnectionStore(directory: dir)
+                guard let connection = await store.connection(for: id) else { return }
+                let secret = CredentialStore.secret(for: id)
+                await MainActor.run {
+                    self?.openClientPane(connection: connection, secret: secret, direction: .vertical)
+                }
+            }
+        }
+
         skillPickerShimObserver = NotificationCenter.default.addObserver(
             forName: .simpletonRunSkillPicker, object: nil, queue: .main
         ) { [weak self] notification in
@@ -238,6 +256,7 @@ final class TabContainerController: NSViewController {
         [
             closeObserver, searchObserver, sidebarShimObserver,
             aiChatShimObserver, skillPickerShimObserver, openConnectionObserver,
+            openConnectionTextObserver,
         ].forEach {
             if let obs = $0 { NotificationCenter.default.removeObserver(obs) }
         }
@@ -722,6 +741,30 @@ final class TabContainerController: NSViewController {
             integrationEnabled: config.general.shellIntegration,
             bashRcfilePath: AppPaths.shellIntegrationDir.appendingPathComponent("bash-rcfile").path
         )
+    }
+
+    // MARK: - Text (CLI) Clients
+
+    /// Open a data connection as a text client in a new split pane running its CLI.
+    func openClientPane(connection: Connection, secret: ConnectionSecret?, direction: SplitDirection) {
+        let previousFactory = splitController.paneFactory
+        splitController.paneFactory = { [weak self] paneID in
+            guard let self = self else {
+                return PaneController(
+                    id: paneID, frame: .zero,
+                    connectionType: .local(shell: "/bin/zsh", workingDirectory: NSHomeDirectory()))
+            }
+            let cwd = self.splitController.panes[self.splitController.focusedPaneID]?.currentDirectory
+            let pane = self.createPane(id: paneID, inheritedWorkingDirectory: cwd)
+            pane.startClient(connection: connection, secret: secret)
+            return pane
+        }
+        splitController.splitFocusedPane(direction: direction)
+        splitController.paneFactory = previousFactory
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.splitController.setFocus(to: self.splitController.focusedPaneID)
+        }
     }
 
     // MARK: - SSH Connections

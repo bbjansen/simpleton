@@ -26,6 +26,8 @@ enum ConnectionLaunch { case gui, text }
 extension Notification.Name {
     /// Posted (object = connection `id: UUID`) to reveal the SQL panel and open that connection.
     static let simpletonOpenConnectionGUI = Notification.Name("simpletonOpenConnectionGUI")
+    /// Posted (object = connection `id: UUID`) to open that connection as a text (CLI) client pane.
+    static let simpletonOpenConnectionText = Notification.Name("simpletonOpenConnectionText")
 }
 
 /// One-shot bridge for a `.gui` launch: the connection id the SQL panel should open on its next

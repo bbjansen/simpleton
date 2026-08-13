@@ -41,6 +41,17 @@ struct DataConnectionRow: View {
         }
         .buttonStyle(.plain)
         .onHover { h in withAnimation(DT.hoverAnimation) { isHovered = h } }
+        .onDrag {
+            // Drag onto the terminal to open this connection as a text (CLI) client pane.
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(
+                forTypeIdentifier: "com.simpleton.connection-id", visibility: .all
+            ) { completion in
+                completion(Data(connection.id.uuidString.utf8), nil)
+                return nil
+            }
+            return provider
+        }
     }
 
     private var subtitle: String {
