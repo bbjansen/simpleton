@@ -110,7 +110,7 @@ public enum CellRole: Sendable, Hashable { case number, text, bool, null, blob }
 public enum CellAlignment: Sendable, Hashable { case leading, trailing }
 
 public struct CellPresentation: Sendable, Hashable {
-    public let text: String          // "NULL", "", "42", ✓/✗ mapped by the view, "<12 bytes>"
+    public let text: String          // "NULL", "", "42", "true"/"false", "<12 bytes>"
     public let role: CellRole
     public let alignment: CellAlignment
     public let isNull: Bool
@@ -118,17 +118,18 @@ public struct CellPresentation: Sendable, Hashable {
 }
 
 public enum SQLCellFormatting {
-    public static func present(_ value: SQLValue, column: Column) -> CellPresentation
+    public static func present(_ value: SQLValue) -> CellPresentation
     /// Stable, type-aware ordering. NULLs sort last on ascending. Mixed
     /// types ordered by a fixed role rank so sorting never traps.
     public static func compare(_ a: SQLValue, _ b: SQLValue) -> ComparisonResult
 }
 ```
 
-Role comes from the value case (reliable across engines). `declaredType`
-is available but v1 does not reclassify by it. `present` returns the raw
-display text; the *view* maps `role == .bool` to a ✓/✗ glyph and applies
-color/font — `CellPresentation` stays UI-framework-free.
+Role comes from the value case (reliable across engines); v1 does not use
+`Column.declaredType` (a clean future refinement). `present` returns the
+raw display text (`"true"`/`"false"` for bool); the *view* maps
+`role == .bool` to a ✓/✗ glyph and applies color/font — `CellPresentation`
+stays UI-framework-free.
 
 Presentation rules:
 
@@ -156,20 +157,24 @@ public struct SQLGridData: Sendable {
     public init(columns: [Column], rows: [[SQLValue]])
 
     public var rowCount: Int { rows.count }
-    /// Display order after applying the current sort (identity when unsorted).
+    public var columnCount: Int { columns.count }
+    /// Original row indices in display order (identity when `sortColumn == nil`).
+    /// Stable: equal keys keep input order; tie-broken by original index.
     public func sortedIndex(sortColumn: Int?, ascending: Bool) -> [Int]
-    /// The value at a display position, mapped through `order`.
-    public func value(displayRow: Int, column: Int, order: [Int]) -> SQLValue
-    /// TSV for the given display rows (already ordered). NULL → empty field;
-    /// cells containing tab/newline/`"` get RFC-4180 double-quote quoting.
-    public func tsv(displayRows: [Int], order: [Int], withHeader: Bool) -> String
+    /// The value at an original row/column (bounds-safe → `.null` if out of range).
+    public func value(row: Int, column: Int) -> SQLValue
+    /// TSV for the given original row indices, already in the desired order.
+    /// NULL → empty field; cells containing tab/newline/`"` get RFC-4180
+    /// double-quote quoting. `withHeader` prepends the column names.
+    public func tsv(rows: [Int], withHeader: Bool) -> String
 }
 ```
 
 Sorting is **in-memory** over the materialized rows — we already hold every
 row, so no `ORDER BY` re-query. `sortedIndex` is a stable sort keyed by
-`SQLCellFormatting.compare`, tie-broken by original index. This struct is
-the data brain of the grid Coordinator, tested directly by CoreChecks.
+`SQLCellFormatting.compare`, tie-broken by original index. The Coordinator
+holds `order = data.sortedIndex(...)` and maps display row → `order[row]`.
+This struct is the data brain of the grid, tested directly by CoreChecks.
 
 ### `SQLDataGrid` (`NSViewRepresentable`)
 
@@ -238,22 +243,21 @@ prev/next stepper showing "row *i* of *N*" that moves `selectedRow`.
 ## Theming
 
 `DesignTokens.swift` gains, mirroring the existing SwiftUI tokens that read
-`ThemeSettings.shared.theme.chrome`:
+`ThemeSettings.shared.theme.chrome` (reusing the existing `NSColor(hex:)`
+in `ThemeApplier.swift`):
 
-- `NSColor(hex:)` — a failable initializer mirroring the existing
-  `Color(hex:)`.
 - `enum DT.Grid` themed `NSColor` accessors: `headerBackground`,
   `headerText`, `gridline` (hairline, low-opacity `border`), `rowText`
   (primary), `rowTextSecondary`, `nullText` (faint), `selectionFill`
-  (`chrome.selected`), `focusRing` (`accentNSColor`).
+  (`chrome.selected`). The focus ring uses the native first-responder ring.
 - `DT.monoNSFont(size:weight:)` — an `NSFont` from
   `ThemeSettings.shared.monoFontFamily` (fallback
   `.monospacedSystemFont`), for tabular digits matching the terminal.
 
 Refined-look rules baked in: **hairline 1px low-opacity dividers** (not
 heavy gridlines); **zebra striping off by default** (it fights
-hover/selection); sticky header; subtle hover; a selection tint + accent
-focus ring; right-aligned tabular numerals; a dim NULL token distinct from
+hover/selection); sticky header; subtle hover; a selection tint (with the
+native focus ring); right-aligned tabular numerals; a dim NULL token distinct from
 `(empty)`; boolean glyphs. The table re-themes live because
 `SQLResultsView` observes `ThemeSettings` and `updateNSView` re-applies
 colors.
