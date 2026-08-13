@@ -22,9 +22,9 @@ final class DataConnectionsHostController: NSViewController {
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
-        let model = DataConnectionsModel(
+        let panel = DataConnectionsPanel(
             appSupportDir: appSupportDir, bookmarkStore: bookmarkStore, onLaunch: onLaunch)
-        self.view = NSHostingView(rootView: DataConnectionsPanel(model: model))
+        self.view = NSHostingView(rootView: panel)
         self.view.frame = NSRect(x: 0, y: 0, width: 240, height: 600)
     }
 }

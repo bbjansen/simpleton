@@ -64,12 +64,17 @@ final class DataConnectionsModel: ObservableObject {
     }
 
     func duplicate(_ connection: Connection) async {
+        let newID = UUID()
         let copy = Connection(
-            name: connection.name + " copy", kind: connection.kind, host: connection.host,
+            id: newID, name: connection.name + " copy", kind: connection.kind, host: connection.host,
             port: connection.port, username: connection.username, params: connection.params,
             tags: connection.tags, pinned: false, color: connection.color, group: connection.group,
             tunnelBookmarkID: connection.tunnelBookmarkID)
         try? await store.add(copy)
+        // Copy the stored secret so the duplicate is immediately usable (credentials are id-keyed).
+        if let secret = CredentialStore.secret(for: connection.id) {
+            CredentialStore.store(secret, for: newID)
+        }
         await reload()
     }
 
@@ -85,8 +90,17 @@ final class DataConnectionsModel: ObservableObject {
 }
 
 struct DataConnectionsPanel: View {
-    @StateObject var model: DataConnectionsModel
+    @StateObject private var model: DataConnectionsModel
     @ObservedObject private var themeSettings = ThemeSettings.shared
+
+    init(
+        appSupportDir: URL, bookmarkStore: BookmarkStore?,
+        onLaunch: @escaping (Connection, ConnectionLaunch) -> Void
+    ) {
+        _model = StateObject(
+            wrappedValue: DataConnectionsModel(
+                appSupportDir: appSupportDir, bookmarkStore: bookmarkStore, onLaunch: onLaunch))
+    }
 
     var body: some View {
         VStack(spacing: 0) {

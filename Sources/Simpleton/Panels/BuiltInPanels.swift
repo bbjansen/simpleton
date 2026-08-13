@@ -228,13 +228,12 @@ extension PanelDefinition {
             onLaunch: { connection, mode in
                 switch mode {
                 case .gui:
-                    // Notify the SQL panel (if mounted) to open this connection. Reliable reveal/
-                    // docking arrives in workbench sub-project 2; deferred post lets a just-activated
-                    // panel mount first.
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(
-                            name: .simpletonOpenConnectionGUI, object: connection.id)
-                    }
+                    // Stash the target synchronously so the panel sees it whether it mounts fresh
+                    // (cold) or is already visible (warm); the container observes the notification to
+                    // reveal/mount the SQL panel.
+                    SQLPendingOpen.shared.connectionID = connection.id
+                    NotificationCenter.default.post(
+                        name: .simpletonOpenConnectionGUI, object: connection.id)
                 case .text:
                     NSLog("SIMP: text client for %@ — implemented in workbench sub-project 2", connection.name)
                 }

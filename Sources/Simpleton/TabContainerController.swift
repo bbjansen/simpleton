@@ -17,6 +17,7 @@ final class TabContainerController: NSViewController {
     private var sidebarShimObserver: NSObjectProtocol?
     private var aiChatShimObserver: NSObjectProtocol?
     private var skillPickerShimObserver: NSObjectProtocol?
+    private var openConnectionObserver: NSObjectProtocol?
 
     // Auto Layout panel management
     private var contentSplit: NSSplitView?
@@ -170,6 +171,19 @@ final class TabContainerController: NSViewController {
         }
 
         // Shim: skill picker → open skills panel on right
+        openConnectionObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonOpenConnectionGUI, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self = self,
+                let registry = self.panelRegistry,
+                self.view.window?.isKeyWindow == true
+            else { return }
+            // Reveal/mount the SQL panel so it can consume the pending connection (SQLPendingOpen).
+            var profile = registry.activeProfile
+            profile.activatePanel(id: PanelProfile.PanelID.sql, on: .right)
+            registry.activeProfile = profile
+        }
+
         skillPickerShimObserver = NotificationCenter.default.addObserver(
             forName: .simpletonRunSkillPicker, object: nil, queue: .main
         ) { [weak self] notification in
@@ -220,7 +234,7 @@ final class TabContainerController: NSViewController {
     deinit {
         [
             closeObserver, searchObserver, sidebarShimObserver,
-            aiChatShimObserver, skillPickerShimObserver,
+            aiChatShimObserver, skillPickerShimObserver, openConnectionObserver,
         ].forEach {
             if let obs = $0 { NotificationCenter.default.removeObserver(obs) }
         }

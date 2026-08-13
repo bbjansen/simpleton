@@ -24,6 +24,18 @@ enum ConnectionColor {
 enum ConnectionLaunch { case gui, text }
 
 extension Notification.Name {
-    /// Posted (object = connection `id: UUID`) to ask the SQL panel to open that connection.
+    /// Posted (object = connection `id: UUID`) to reveal the SQL panel and open that connection.
     static let simpletonOpenConnectionGUI = Notification.Name("simpletonOpenConnectionGUI")
+}
+
+/// One-shot bridge for a `.gui` launch: the connection id the SQL panel should open on its next
+/// appearance. Set synchronously *before* posting `.simpletonOpenConnectionGUI`, so every observer
+/// (the container that reveals/mounts the panel, and the panel itself) sees it regardless of order.
+/// The panel consumes it exactly once (clears on read), so a cold mount and a warm notification never
+/// double-open.
+@MainActor
+final class SQLPendingOpen {
+    static let shared = SQLPendingOpen()
+    var connectionID: UUID?
+    private init() {}
 }

@@ -25,8 +25,11 @@ struct SQLPanelView: View {
                 Task { await model.saveConnection(connection, secret: secret) }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .simpletonOpenConnectionGUI)) { note in
-            if let id = note.object as? UUID { Task { await model.openConnection(id: id) } }
+        .onReceive(NotificationCenter.default.publisher(for: .simpletonOpenConnectionGUI)) { _ in
+            Task { await model.consumePendingOpen() }  // warm: panel already mounted
+        }
+        .task {
+            await model.consumePendingOpen()  // cold: panel just mounted via reveal
         }
     }
 
