@@ -29,15 +29,3 @@ extension Notification.Name {
     /// Posted (object = connection `id: UUID`) to open that connection as a text (CLI) client pane.
     static let simpletonOpenConnectionText = Notification.Name("simpletonOpenConnectionText")
 }
-
-/// One-shot bridge for a `.gui` launch: the connection id the SQL panel should open on its next
-/// appearance. Set synchronously *before* posting `.simpletonOpenConnectionGUI`, so every observer
-/// (the container that reveals/mounts the panel, and the panel itself) sees it regardless of order.
-/// The panel consumes it exactly once (clears on read), so a cold mount and a warm notification never
-/// double-open.
-@MainActor
-final class SQLPendingOpen {
-    static let shared = SQLPendingOpen()
-    var connectionID: UUID?
-    private init() {}
-}

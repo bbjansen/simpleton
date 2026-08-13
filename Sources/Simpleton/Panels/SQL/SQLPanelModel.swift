@@ -55,11 +55,11 @@ final class SQLPanelModel: ObservableObject {
     }
 
     /// Consume a pending "open this connection" request from the Data Connections manager (set in
-    /// `SQLPendingOpen` before the reveal notification). Guarded by the holder so it fires exactly
-    /// once whether triggered by a cold mount (`.task`) or a warm notification (`.onReceive`).
+    /// `PendingClientOpen` before the reveal notification). Guarded by the holder so it fires exactly
+    /// once whether triggered by a cold mount (`.task`) or a warm notification (`.onReceive`), and
+    /// only when the pending open targets the SQL panel.
     func consumePendingOpen() async {
-        guard let pending = SQLPendingOpen.shared.connectionID else { return }
-        SQLPendingOpen.shared.connectionID = nil
+        guard let pending = PendingClientOpen.shared.take(for: PanelProfile.PanelID.sql) else { return }
         await reload()
         if connections.contains(where: { $0.id == pending }) {
             selectedID = pending

@@ -185,14 +185,15 @@ final class TabContainerController: NSViewController {
         ) { [weak self] _ in
             guard let self = self,
                 let registry = self.panelRegistry,
-                self.view.window?.isKeyWindow == true
+                self.view.window?.isKeyWindow == true,
+                let targetPanel = PendingClientOpen.shared.panelID
             else { return }
-            // If SQL is already docked in the drawer, the mounted panel's own `.onReceive` consumes
-            // the pending connection — skip the profile re-assignment (which would needlessly rebuild
-            // panels).
-            guard registry.activeProfile.bottomActivePanelID != PanelProfile.PanelID.sql else { return }
+            // If the target client is already docked in the drawer, the mounted panel's own
+            // `.onReceive` consumes the pending connection — skip the profile re-assignment (which
+            // would needlessly rebuild panels).
+            guard registry.activeProfile.bottomActivePanelID != targetPanel else { return }
             var profile = registry.activeProfile
-            profile.setDrawer(id: PanelProfile.PanelID.sql)
+            profile.setDrawer(id: targetPanel)
             registry.activeProfile = profile
         }
 
