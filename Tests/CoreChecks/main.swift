@@ -21,6 +21,7 @@ runSSHConfigParserChecks(runner)
 await runBookmarkStoreChecks(runner)
 await runConfigStoreChecks(runner)
 await runConnectionStoreChecks(runner)
+await runSQLDriverChecks(runner)
 
 // Models (synchronous)
 runAppConfigChecks(runner)

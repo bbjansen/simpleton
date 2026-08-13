@@ -11,15 +11,28 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.0.0"),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+        .package(url: "https://github.com/vapor/postgres-nio.git", exact: "1.33.1"),
+        .package(url: "https://github.com/vapor/mysql-nio.git", exact: "1.9.1"),
     ],
     targets: [
         .target(
             name: "SimpletonCore",
             dependencies: ["SwiftTerm"]
         ),
+        // SQL client data layer. Isolates the heavy NIO drivers from SimpletonCore and the app.
+        .target(
+            name: "SimpletonSQL",
+            dependencies: [
+                "SimpletonCore",
+                .product(name: "PostgresNIO", package: "postgres-nio"),
+                .product(name: "MySQLNIO", package: "mysql-nio"),
+            ]
+        ),
         .executableTarget(
             name: "Simpleton",
-            dependencies: ["SimpletonCore", "SwiftTerm", .product(name: "Sparkle", package: "Sparkle")],
+            dependencies: [
+                "SimpletonCore", "SimpletonSQL", "SwiftTerm", .product(name: "Sparkle", package: "Sparkle"),
+            ],
             resources: [.process("Resources")],
             linkerSettings: [.linkedFramework("NaturalLanguage")]
         ),
@@ -31,7 +44,7 @@ let package = Package(
         // so runnable checks live in a plain executable target (see Tests/CoreChecks).
         .executableTarget(
             name: "CoreChecks",
-            dependencies: ["SimpletonCore"],
+            dependencies: ["SimpletonCore", "SimpletonSQL"],
             path: "Tests/CoreChecks"
         ),
     ]
