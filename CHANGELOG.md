@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.4](https://github.com/bbjansen/simpleton/compare/v0.1.3...v0.1.4) (2026-08-13)
+
+
+### Features
+
+* **connections:** add ConnectionStore actor with change notification ([51dc54f](https://github.com/bbjansen/simpleton/commit/51dc54f9192b86be65e4cd09412e6cd327ac68da))
+* **connections:** add generic Connection model + kinds + secret ([9c00cb7](https://github.com/bbjansen/simpleton/commit/9c00cb72b882f002535b7296561d3ca19bc1e810))
+* **connections:** add Keychain-backed CredentialStore ([a92b872](https://github.com/bbjansen/simpleton/commit/a92b87238826497e7ea51fe077d61857e787ea8f))
+* **panels:** add ClientPanelScaffold shared chrome for tool panels ([691bc2b](https://github.com/bbjansen/simpleton/commit/691bc2b59c0bd6d9de3f4e7e6e49593684e5855a))
+
 ## [0.1.3](https://github.com/bbjansen/simpleton/compare/v0.1.2...v0.1.3) (2026-08-07)
 
 
