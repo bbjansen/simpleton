@@ -1,6 +1,7 @@
 // Sources/Simpleton/PaneController.swift
 import AppKit
 import SimpletonCore
+import SimpletonSQL
 import SwiftTerm
 
 /// Owns a single terminal pane — its LocalProcessTerminalView, process lifecycle,
@@ -260,6 +261,43 @@ final class PaneController: NSObject, LocalProcessTerminalViewDelegate {
                 "bookmarkId": bookmark.id.uuidString,
                 "bookmarkName": bookmark.name,
             ])
+    }
+
+    /// Resolve the first client executable that exists on disk for `kind` (TUI preferred).
+    private func resolveClientExecutable(for kind: ConnectionKind) -> String? {
+        let dirs = [
+            "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin",
+            "/opt/homebrew/opt/mysql-client@8.4/bin",
+        ]
+        for name in SQLClientCommand.candidates(for: kind) {
+            for dir in dirs {
+                let path = dir + "/" + name
+                if FileManager.default.isExecutableFile(atPath: path) { return path }
+            }
+        }
+        return nil
+    }
+
+    /// Start a text (CLI) client for a data connection. Password is passed via environment.
+    func startClient(connection: Connection, secret: ConnectionSecret?) {
+        guard let executable = resolveClientExecutable(for: connection.kind),
+            let built = SQLClientCommand.build(for: connection, password: secret?.password)
+        else {
+            let names = SQLClientCommand.candidates(for: connection.kind).joined(separator: " or ")
+            bannerManager?.showError(
+                message: "Install \(names) to open a text client for \(connection.name)")
+            return
+        }
+        terminalView.terminate()
+        connectionType = .client(connectionID: connection.id)
+        state = .running
+        onTitleChange?(statusTitle(connection.name))
+        terminalView.startProcess(
+            executable: executable,
+            args: built.args,
+            environment: built.environment.isEmpty ? nil : built.environment,
+            execName: nil,
+            currentDirectory: nil)
     }
 
     /// Attempt to reconnect an SSH session.

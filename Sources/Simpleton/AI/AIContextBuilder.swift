@@ -188,6 +188,8 @@ enum AIContextBuilder {
             return URL(fileURLWithPath: shell).lastPathComponent
         case .ssh:
             return "ssh"
+        case .client:
+            return "client"
         }
     }
 
@@ -204,6 +206,8 @@ enum AIContextBuilder {
                 return "Pane \(number) (SSH: \(host))"
             }
             return "Pane \(number) (SSH)"
+        case .client:
+            return "Pane \(number) (client)"
         }
     }
 }
