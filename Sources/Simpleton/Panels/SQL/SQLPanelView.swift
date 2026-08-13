@@ -59,7 +59,7 @@ struct SQLPanelView: View {
             }
             editor
             ThemedDivider()
-            SQLResultsGrid(result: model.result)
+            SQLResultsView(result: model.result)
         }
     }
 
