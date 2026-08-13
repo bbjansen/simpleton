@@ -22,6 +22,10 @@ final class TabContainerController: NSViewController {
 
     // Auto Layout panel management
     private var contentSplit: NSSplitView?
+    /// Outer split stacking [contentSplit, drawer?] so a GUI client can dock on an edge.
+    private var outerSplit: NSSplitView?
+    private var drawerPanelVC: NSViewController?
+    private var drawerPanelID: String?
     private var leftBarHost: NSHostingView<ActivityBarView>?
     private var rightBarHost: NSHostingView<ActivityBarView>?
     /// The right activity bar's width constraint, kept so it can collapse to 0 when that side has
@@ -300,23 +304,31 @@ final class TabContainerController: NSViewController {
         let split = NSSplitView(frame: frame)
         split.isVertical = true
         split.dividerStyle = .thin
-        split.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(split)
         contentSplit = split
 
         // Terminal is always the first arranged subview in contentSplit
         splitController.rootView.frame = frame
         split.addArrangedSubview(splitController.rootView)
 
+        // Outer split stacks the content split (top) above an optional edge drawer (bottom),
+        // via a horizontal divider. contentSplit becomes its first arranged subview.
+        let outerSplitView = NSSplitView(frame: frame)
+        outerSplitView.isVertical = false
+        outerSplitView.dividerStyle = .thin
+        outerSplitView.translatesAutoresizingMaskIntoConstraints = false
+        outerSplitView.addArrangedSubview(split)
+        container.addSubview(outerSplitView)
+        outerSplit = outerSplitView
+
         if let registry = panelRegistry {
             mountActivityBars(in: container, registry: registry)
         } else {
-            // Fallback: no activity bars — terminal fills the full width
+            // Fallback: no activity bars — content fills the full width
             NSLayoutConstraint.activate([
-                split.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                split.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                split.topAnchor.constraint(equalTo: container.topAnchor),
-                split.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                outerSplitView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                outerSplitView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                outerSplitView.topAnchor.constraint(equalTo: container.topAnchor),
+                outerSplitView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             ])
         }
 
@@ -458,7 +470,7 @@ final class TabContainerController: NSViewController {
     // MARK: - Activity Bars
 
     private func mountActivityBars(in container: NSView, registry: PanelRegistry) {
-        guard let split = contentSplit else { return }
+        guard let outer = outerSplit else { return }
 
         let leftBar = NSHostingView(
             rootView: ActivityBarView(
@@ -496,11 +508,11 @@ final class TabContainerController: NSViewController {
             rightBar.topAnchor.constraint(equalTo: container.topAnchor),
             rightBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             rightWidth,
-            // Content split between bars
-            split.leadingAnchor.constraint(equalTo: leftBar.trailingAnchor),
-            split.trailingAnchor.constraint(equalTo: rightBar.leadingAnchor),
-            split.topAnchor.constraint(equalTo: container.topAnchor),
-            split.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            // Content (outer split) between bars
+            outer.leadingAnchor.constraint(equalTo: leftBar.trailingAnchor),
+            outer.trailingAnchor.constraint(equalTo: rightBar.leadingAnchor),
+            outer.topAnchor.constraint(equalTo: container.topAnchor),
+            outer.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
 
         updateRightBarVisibility(for: registry.activeProfile)
@@ -522,10 +534,10 @@ final class TabContainerController: NSViewController {
         leftBarHost = nil
         rightBarHost = nil
 
-        // Remove old split-to-container constraints before remounting
-        if let split = contentSplit {
+        // Remove old outer-split-to-container constraints before remounting
+        if let outer = outerSplit {
             let old = container.constraints.filter {
-                ($0.firstItem as? NSView == split || $0.secondItem as? NSView == split)
+                ($0.firstItem as? NSView == outer || $0.secondItem as? NSView == outer)
                     && ($0.firstItem as? NSView == container || $0.secondItem as? NSView == container)
             }
             NSLayoutConstraint.deactivate(old)
@@ -592,6 +604,28 @@ final class TabContainerController: NSViewController {
             rightPanelID = id
         }
 
+        // ── 3b. Drawer (edge-docked GUI client) ────────────────
+        if let vc = drawerPanelVC {
+            vc.view.removeFromSuperview()
+            vc.removeFromParent()
+            drawerPanelVC = nil
+            drawerPanelID = nil
+        }
+        if let id = profile.bottomActivePanelID,
+            let outer = outerSplit,
+            let vc = panelRegistry?.makeController(for: id, context: makeContext())
+        {
+            addChild(vc)
+            vc.view.frame = NSRect(x: 0, y: 0, width: outer.bounds.width, height: profile.drawerSize)
+            if profile.drawerEdge == .top {
+                outer.insertArrangedSubview(vc.view, at: 0)
+            } else {
+                outer.addArrangedSubview(vc.view)  // .bottom (and .trailing treated as bottom for v1)
+            }
+            drawerPanelVC = vc
+            drawerPanelID = id
+        }
+
         // ── 4. Set divider positions ───────────────────────────
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let split = self.contentSplit else { return }
@@ -604,8 +638,23 @@ final class TabContainerController: NSViewController {
                 let rightPos = split.bounds.width - profile.rightWidth
                 split.setPosition(rightPos, ofDividerAt: dividerIdx)
             }
+            if let outer = self.outerSplit, self.drawerPanelVC != nil {
+                let pos =
+                    profile.drawerEdge == .top
+                    ? profile.drawerSize
+                    : outer.bounds.height - profile.drawerSize
+                outer.setPosition(pos, ofDividerAt: 0)
+            }
             self.splitController.setFocus(to: self.splitController.focusedPaneID)
         }
+    }
+
+    /// Open (or close, with nil) the edge drawer's GUI panel.
+    func activateDrawer(id: String?) {
+        guard let registry = panelRegistry else { return }
+        var profile = registry.activeProfile
+        profile.setDrawer(id: id)
+        registry.activeProfile = profile
     }
 
     // MARK: - Context
