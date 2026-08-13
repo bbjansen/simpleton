@@ -26,4 +26,68 @@ func runSQLDriverChecks(_ t: TestRunner) async {
             t.expect(false, "expected .status")
         }
     }
+
+    func tempDBPath() -> String {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("corechecks-sql-\(UUID().uuidString).sqlite").path
+    }
+
+    await t.suite("SQLiteDriver end-to-end") {
+        let path = tempDBPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let driver = SQLiteDriver(path: path)
+        do {
+            try await driver.connect()
+            _ = try await driver.run(
+                "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT NOT NULL, score REAL, note TEXT)")
+            if case .status(let n, _) = try await driver.run(
+                "INSERT INTO t (name, score, note) VALUES ('a', 1.5, NULL)")
+            {
+                t.expectEqual(n, 1, "insert affected 1")
+            } else {
+                t.expect(false, "insert should return .status")
+            }
+            if case .rows(let cols, let rows) = try await driver.run("SELECT id, name, score, note FROM t") {
+                t.expectEqual(cols.map(\.name), ["id", "name", "score", "note"], "column names")
+                t.expectEqual(rows.count, 1, "one row")
+                t.expectEqual(rows[0][0], SQLValue.integer(1), "id integer")
+                t.expectEqual(rows[0][1], SQLValue.text("a"), "name text")
+                t.expectEqual(rows[0][2], SQLValue.double(1.5), "score double")
+                t.expectEqual(rows[0][3], SQLValue.null, "note null")
+            } else {
+                t.expect(false, "select should return .rows")
+            }
+            let tables = try await driver.tables(in: nil)
+            t.expect(tables.contains(TableInfo(name: "t", kind: .table)), "table t listed")
+            let columns = try await driver.columns(of: "t", in: nil)
+            t.expectEqual(columns.first?.name, "id", "first column id")
+            t.expect(columns.first?.isPrimaryKey == true, "id is primary key")
+            t.expect(columns.contains { $0.name == "name" && !$0.nullable }, "name is NOT NULL")
+            await driver.close()
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+    }
+
+    t.suite("SQLDriverFactory mapping") {
+        do {
+            let sqlite = try SQLDriverFactory.make(
+                Connection(name: "s", kind: .sqlite, params: ["path": "/tmp/x.sqlite"]), secret: nil)
+            t.expect(sqlite is SQLiteDriver, "sqlite → SQLiteDriver")
+        } catch {
+            t.expect(false, "sqlite factory should not throw: \(error)")
+        }
+        do {
+            _ = try SQLDriverFactory.make(Connection(name: "s3", kind: .s3), secret: nil)
+            t.expect(false, "s3 should throw unsupported")
+        } catch let e as SQLDriverError {
+            if case .unsupported = e {
+                t.expect(true, "s3 → unsupported")
+            } else {
+                t.expect(false, "wrong error \(e)")
+            }
+        } catch {
+            t.expect(false, "wrong error type: \(error)")
+        }
+    }
 }
