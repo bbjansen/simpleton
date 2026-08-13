@@ -202,4 +202,15 @@ extension PanelDefinition {
     ) { _ in
         NSHostingController(rootView: DockerPanelView())
     }
+
+    static let sql = PanelDefinition(
+        id: PanelProfile.PanelID.sql,
+        name: "SQL",
+        icon: "cylinder.split.1x2",
+        description: "Query databases (SQLite, Postgres, MySQL)",
+        defaultSide: .right,
+        isBuiltIn: true
+    ) { context in
+        NSHostingController(rootView: SQLPanelView(appSupportDir: context.appSupportDir))
+    }
 }

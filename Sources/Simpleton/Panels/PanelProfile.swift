@@ -28,6 +28,7 @@ extension PanelProfile {
         static let sshTunnels = "ssh-tunnels"
         static let git = "git"
         static let docker = "docker"
+        static let sql = "sql"
     }
 }
 
@@ -96,7 +97,7 @@ extension PanelProfile {
                 "connections", "snippets", "notes", "history", "environment", "file-browser", "processes",
                 "ssh-tunnels",
             ],
-            rightPanelIDs: [],
+            rightPanelIDs: ["sql"],
             leftActivePanelID: "connections",
             rightActivePanelID: nil
         ),
