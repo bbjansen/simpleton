@@ -172,7 +172,7 @@ In `runConnectionStoreChecks` (async), add a suite:
         defer { try? FileManager.default.removeItem(at: dir) }
         do {
             let store = ConnectionStore(directory: dir)
-            try await store.add(Connection(name: "a", kind: .postgres, group: "prod", color: "red"))
+            try await store.add(Connection(name: "a", kind: .postgres, color: "red", group: "prod"))
             try await store.add(Connection(name: "b", kind: .mysql, group: "prod"))
             try await store.add(Connection(name: "c", kind: .sqlite))  // ungrouped
             t.expectEqual(await store.groups(), ["prod"], "distinct sorted groups")

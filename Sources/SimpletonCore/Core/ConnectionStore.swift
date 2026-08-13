@@ -95,6 +95,18 @@ public actor ConnectionStore {
             .sorted { $0.name < $1.name }
     }
 
+    /// Distinct non-nil group names, sorted.
+    public func groups() -> [String] {
+        try? ensureLoaded()
+        return Array(Set(connections.values.compactMap { $0.group })).sorted()
+    }
+
+    /// Connections in a given group, sorted by name.
+    public func byGroup(_ group: String) -> [Connection] {
+        try? ensureLoaded()
+        return connections.values.filter { $0.group == group }.sorted { $0.name < $1.name }
+    }
+
     public func flush() throws {
         try save()
     }

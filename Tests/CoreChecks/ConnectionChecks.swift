@@ -187,4 +187,25 @@ func runConnectionStoreChecks(_ t: TestRunner) async {
         }
         t.expect(fired, ".simpletonConnectionsChanged fired within 2s")
     }
+
+    await t.suite("ConnectionStore groups() / byGroup / new-field persistence") {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        do {
+            let store = ConnectionStore(directory: dir)
+            try await store.add(Connection(name: "a", kind: .postgres, color: "red", group: "prod"))
+            try await store.add(Connection(name: "b", kind: .mysql, group: "prod"))
+            try await store.add(Connection(name: "c", kind: .sqlite))  // ungrouped
+            t.expectEqual(await store.groups(), ["prod"], "distinct sorted groups")
+            t.expectEqual(await store.byGroup("prod").count, 2, "two in prod")
+            // New fields persist across instances.
+            let s2 = ConnectionStore(directory: dir)
+            try await s2.load()
+            let a = await s2.all().first { $0.name == "a" }
+            t.expectEqual(a?.color, "red", "color persisted")
+            t.expectEqual(a?.group, "prod", "group persisted")
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+    }
 }
