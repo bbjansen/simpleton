@@ -8,8 +8,10 @@ public enum SQLDriverFactory {
         switch connection.kind {
         case .sqlite:
             return SQLiteDriver(path: connection.params["path"] ?? "")
-        case .postgres, .mysql:
-            throw SQLDriverError.unsupported("\(connection.kind.rawValue) driver not yet implemented")
+        case .postgres:
+            return try PostgresDriver(connection: connection, secret: secret)
+        case .mysql:
+            throw SQLDriverError.unsupported("mysql driver not yet implemented")
         default:
             throw SQLDriverError.unsupported("\(connection.kind.rawValue) is not a SQL connection")
         }

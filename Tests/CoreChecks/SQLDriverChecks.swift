@@ -86,6 +86,39 @@ func runSQLDriverChecks(_ t: TestRunner) async {
         t.expectEqual(await reloaded.history(for: id).count, 2, "persisted across instances")
     }
 
+    func parseSQLURL(_ raw: String, kind: ConnectionKind) -> (Connection, ConnectionSecret?)? {
+        guard let c = URLComponents(string: raw), let host = c.host else { return nil }
+        let db = c.path.hasPrefix("/") ? String(c.path.dropFirst()) : c.path
+        let conn = Connection(
+            name: "test", kind: kind, host: host, port: c.port,
+            username: c.user, params: ["database": db, "useTLS": "false"])
+        let secret = c.password.map { ConnectionSecret(password: $0) }
+        return (conn, secret)
+    }
+
+    if let url = ProcessInfo.processInfo.environment["SIMPLETON_PG_TEST_URL"],
+        let (conn, secret) = parseSQLURL(url, kind: .postgres)
+    {
+        await t.suite("PostgresDriver SELECT 1 (integration)") {
+            do {
+                let driver = try SQLDriverFactory.make(conn, secret: secret)
+                try await driver.connect()
+                if case .rows(let cols, let rows) = try await driver.run("SELECT 1 AS n") {
+                    t.expectEqual(cols.first?.name, "n", "column name n")
+                    t.expectEqual(rows.first?.first, SQLValue.integer(1), "value 1")
+                } else {
+                    t.expect(false, "SELECT should return rows")
+                }
+                _ = try await driver.tables(in: nil)  // smoke: schema query runs
+                await driver.close()
+            } catch {
+                t.expect(false, "unexpected error: \(error)")
+            }
+        }
+    } else {
+        print("  … PostgresDriver checks skipped (set SIMPLETON_PG_TEST_URL to run)")
+    }
+
     t.suite("SQLDriverFactory mapping") {
         do {
             let sqlite = try SQLDriverFactory.make(
