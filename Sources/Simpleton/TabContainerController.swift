@@ -178,7 +178,10 @@ final class TabContainerController: NSViewController {
                 let registry = self.panelRegistry,
                 self.view.window?.isKeyWindow == true
             else { return }
-            // Reveal/mount the SQL panel so it can consume the pending connection (SQLPendingOpen).
+            // If SQL is already the active right panel, the mounted panel's own `.onReceive` consumes
+            // the pending connection — skip the profile re-assignment (which would needlessly rebuild
+            // panels across every container that shares this registry).
+            guard registry.activeProfile.rightActivePanelID != PanelProfile.PanelID.sql else { return }
             var profile = registry.activeProfile
             profile.activatePanel(id: PanelProfile.PanelID.sql, on: .right)
             registry.activeProfile = profile

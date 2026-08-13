@@ -65,7 +65,7 @@ struct SQLPanelView: View {
             Button(model.isConnected ? "Disconnect" : "Connect") {
                 Task { model.isConnected ? await model.disconnect() : await model.connect() }
             }
-            .disabled(model.selectedID == nil)
+            .disabled(model.selectedID == nil || model.isConnecting)
             Button {
                 model.showingEditor = true
             } label: {

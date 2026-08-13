@@ -68,9 +68,13 @@ final class SQLPanelModel: ObservableObject {
     }
 
     func connect() async {
-        guard let connection = selectedConnection else { return }
-        await disconnect()
+        // Reentrancy guard: `isConnecting` is set synchronously (before any await) so a second
+        // concurrent connect() — a double-click, or a reveal-remount re-firing .task — returns here
+        // instead of racing and orphaning the first driver without closing it.
+        guard !isConnecting, let connection = selectedConnection else { return }
         isConnecting = true
+        defer { isConnecting = false }
+        await disconnect()
         errorMessage = nil
         let secret = CredentialStore.secret(for: connection.id)
         do {
@@ -83,7 +87,6 @@ final class SQLPanelModel: ObservableObject {
         } catch {
             errorMessage = Self.describe(error)
         }
-        isConnecting = false
     }
 
     func disconnect() async {

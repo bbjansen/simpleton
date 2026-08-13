@@ -162,7 +162,10 @@ struct DataConnectionsPanel: View {
     }
 
     private func row(_ c: Connection) -> some View {
-        DataConnectionRow(connection: c, onTap: { model.onLaunch(c, .gui) })
+        // Only SQL kinds have a GUI client today; a non-SQL kind falls back to the text-client path
+        // (sub-project 2) instead of revealing an empty SQL panel.
+        let launch: ConnectionLaunch = SQLPanelModel.sqlKinds.contains(c.kind) ? .gui : .text
+        return DataConnectionRow(connection: c, onTap: { model.onLaunch(c, launch) })
             .contextMenu {
                 Button(c.pinned ? "Unpin" : "Pin") { Task { await model.togglePin(c) } }
                 Button("Edit") { model.beginEdit(c) }
