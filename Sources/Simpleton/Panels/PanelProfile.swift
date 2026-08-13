@@ -75,6 +75,7 @@ extension PanelProfile {
         static let git = "git"
         static let docker = "docker"
         static let sql = "sql"
+        static let sftp = "sftp"
         static let dataConnections = "data-connections"
     }
 }

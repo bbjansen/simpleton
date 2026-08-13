@@ -162,10 +162,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panelRegistry.register(.git)
         panelRegistry.register(.docker)
         panelRegistry.register(.sql)
+        panelRegistry.register(.sftp)
         panelRegistry.register(.dataConnections)
         // Map connection kinds to their GUI client panel so Data Connections can launch them.
         GUIClientRegistry.shared.register(
             kinds: Array(SQLPanelModel.sqlKinds), panelID: PanelProfile.PanelID.sql)
+        GUIClientRegistry.shared.register(
+            kinds: [.sftp], panelID: PanelProfile.PanelID.sftp)
         // Register JS panels from script plugins
         for plugin in pluginManager?.scriptPlugins ?? [] {
             for panelManifest in plugin.manifest.panels ?? [] {

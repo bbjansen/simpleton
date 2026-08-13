@@ -21,13 +21,15 @@ struct DataConnectionEditor: View {
     @State private var database = ""
     @State private var sqlitePath = ""
     @State private var useTLS = false
+    @State private var identityFile = ""
+    @State private var passphrase = ""
     @State private var color: String?
     @State private var group = ""
     @State private var tagsText = ""
     @State private var tunnelBookmarkID: UUID?
     @State private var didLoad = false
 
-    private let kinds: [ConnectionKind] = [.postgres, .mysql, .sqlite]
+    private let kinds: [ConnectionKind] = [.postgres, .mysql, .sqlite, .sftp]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -44,6 +46,24 @@ struct DataConnectionEditor: View {
                     TextField("Database file path", text: $sqlitePath).textFieldStyle(.roundedBorder)
                     Button("Choose…") { chooseFile() }
                 }
+            } else if kind == .sftp {
+                HStack {
+                    TextField("Host", text: $host).textFieldStyle(.roundedBorder)
+                    TextField("Port", text: $port).textFieldStyle(.roundedBorder).frame(width: 80)
+                }
+                TextField("User", text: $username).textFieldStyle(.roundedBorder)
+                SecureField(passwordPlaceholder, text: $password).textFieldStyle(.roundedBorder)
+                HStack {
+                    TextField("Identity file (optional)", text: $identityFile)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Choose…") { chooseIdentityFile() }
+                }
+                SecureField(
+                    existing == nil ? "Passphrase (optional)" : "Passphrase (blank = unchanged)",
+                    text: $passphrase
+                )
+                .textFieldStyle(.roundedBorder)
+                tunnelPicker
             } else {
                 HStack {
                     TextField("Host", text: $host).textFieldStyle(.roundedBorder)
@@ -51,8 +71,7 @@ struct DataConnectionEditor: View {
                 }
                 TextField("Database", text: $database).textFieldStyle(.roundedBorder)
                 TextField("User", text: $username).textFieldStyle(.roundedBorder)
-                SecureField(existing == nil ? "Password" : "Password (blank = unchanged)", text: $password)
-                    .textFieldStyle(.roundedBorder)
+                SecureField(passwordPlaceholder, text: $password).textFieldStyle(.roundedBorder)
                 Toggle("Use TLS", isOn: $useTLS)
                 tunnelPicker
             }
@@ -115,6 +134,13 @@ struct DataConnectionEditor: View {
         return "None"
     }
 
+    /// SFTP allows key-only auth, so its password is optional; the SQL kinds require a password.
+    private var passwordPlaceholder: String {
+        let optional = kind == .sftp
+        if existing == nil { return optional ? "Password (optional)" : "Password" }
+        return "Password (blank = unchanged)"
+    }
+
     private func loadExisting() {
         guard !didLoad else { return }
         didLoad = true
@@ -127,6 +153,7 @@ struct DataConnectionEditor: View {
         database = c.params["database"] ?? ""
         sqlitePath = c.params["path"] ?? ""
         useTLS = c.params["useTLS"] == "true"
+        identityFile = c.params["identityFile"] ?? ""
         color = c.color
         group = c.group ?? ""
         tagsText = c.tags.joined(separator: ", ")
@@ -141,11 +168,25 @@ struct DataConnectionEditor: View {
         if p.runModal() == .OK, let url = p.url { sqlitePath = url.path }
     }
 
+    private func chooseIdentityFile() {
+        let p = NSOpenPanel()
+        p.canChooseFiles = true
+        p.canChooseDirectories = false
+        p.allowsMultipleSelection = false
+        p.showsHiddenFiles = true  // SSH keys live in the hidden ~/.ssh directory
+        p.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh")
+        if p.runModal() == .OK, let url = p.url { identityFile = url.path }
+    }
+
     private func save() {
         var params: [String: String] = [:]
-        if kind == .sqlite {
+        switch kind {
+        case .sqlite:
             params["path"] = sqlitePath
-        } else {
+        case .sftp:
+            let trimmed = identityFile.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty { params["identityFile"] = trimmed }
+        default:
             params["database"] = database
             params["useTLS"] = useTLS ? "true" : "false"
         }
@@ -162,8 +203,25 @@ struct DataConnectionEditor: View {
             createdAt: existing?.createdAt ?? Date(),
             color: color, group: group.isEmpty ? nil : group,
             tunnelBookmarkID: kind == .sqlite ? nil : tunnelBookmarkID)
-        let secret = (kind == .sqlite || password.isEmpty) ? nil : ConnectionSecret(password: password)
+        let secret = buildSecret()
         onSave(connection, secret)
         dismiss()
+    }
+
+    /// Build the Keychain secret for the current kind: SQLite has none; SFTP carries an optional
+    /// password and/or passphrase; the SQL server kinds carry a password. Empty fields → nil so an
+    /// edit that leaves a secret blank does not overwrite the stored value.
+    private func buildSecret() -> ConnectionSecret? {
+        switch kind {
+        case .sqlite:
+            return nil
+        case .sftp:
+            let pw = password.isEmpty ? nil : password
+            let pp = passphrase.isEmpty ? nil : passphrase
+            guard pw != nil || pp != nil else { return nil }
+            return ConnectionSecret(password: pw, passphrase: pp)
+        default:
+            return password.isEmpty ? nil : ConnectionSecret(password: password)
+        }
     }
 }
