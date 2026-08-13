@@ -142,4 +142,32 @@ enum DT {
         static let background = NSColor(red: 0.051, green: 0.051, blue: 0.078, alpha: 0.92)
         static let borderColor = NSColor(red: 0.165, green: 0.165, blue: 0.227, alpha: 1)
     }
+
+    // MARK: - Results grid (AppKit NSTableView)
+
+    /// Themed NSColors for the SQL results grid. They read the same chrome hex
+    /// as the SwiftUI tokens (via NSColor(hex:) in ThemeApplier), so the grid
+    /// re-themes live when the appearance changes.
+    enum Grid {
+        private static func ns(_ hex: String) -> NSColor {
+            NSColor(hex: hex) ?? NSColor(red: 1, green: 0, blue: 1, alpha: 1)
+        }
+        private static var chrome: ChromeColors { ThemeSettings.shared.theme.chrome }
+
+        static var headerBackground: NSColor { ns(chrome.surface) }
+        static var headerText: NSColor { ns(chrome.textSecondary) }
+        static var gridline: NSColor { ns(chrome.border).withAlphaComponent(0.5) }
+        static var rowText: NSColor { ns(chrome.textPrimary) }
+        static var rowTextSecondary: NSColor { ns(chrome.textSecondary) }
+        static var nullText: NSColor { ns(chrome.textFaint) }
+        static var selectionFill: NSColor { ns(chrome.selected) }
+    }
+
+    /// The configured mono font as an NSFont (tabular digits; matches the
+    /// terminal). Falls back to the system monospaced font.
+    static func monoNSFont(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        let family = ThemeSettings.shared.monoFontFamily
+        if !family.isEmpty, let f = NSFont(name: family, size: size) { return f }
+        return NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+    }
 }

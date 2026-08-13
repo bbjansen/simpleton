@@ -391,6 +391,9 @@ struct AppearanceTab: View {
 
                 Toggle("Thin strokes (non-Retina)", isOn: $config.appearance.thinStrokes)
                     .onChange(of: config.appearance.thinStrokes) { onChanged(config) }
+
+                Toggle("Show tool launcher rail", isOn: $config.appearance.showToolLauncher)
+                    .onChange(of: config.appearance.showToolLauncher) { onChanged(config) }
             } header: {
                 PrefsSectionHeader(title: "Window")
             }

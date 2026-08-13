@@ -118,6 +118,8 @@ public struct AppearanceConfig: Codable, Equatable {
     /// through the theme color (glass). Clamped 0…0.6. The terminal stays opaque for legibility.
     public var chromeTranslucency: Double
     public var thinStrokes: Bool
+    /// Whether the right-side tool launcher rail is shown.
+    public var showToolLauncher: Bool
 
     public init(
         appearanceMode: String = "dark",
@@ -128,7 +130,8 @@ public struct AppearanceConfig: Codable, Equatable {
         cursorBlink: Bool = true,
         windowOpacity: Double = 1.0,
         chromeTranslucency: Double = 0.0,
-        thinStrokes: Bool = false
+        thinStrokes: Bool = false,
+        showToolLauncher: Bool = true
     ) {
         self.appearanceMode = appearanceMode
         self.accentColor = accentColor
@@ -139,11 +142,12 @@ public struct AppearanceConfig: Codable, Equatable {
         self.windowOpacity = windowOpacity
         self.chromeTranslucency = chromeTranslucency
         self.thinStrokes = thinStrokes
+        self.showToolLauncher = showToolLauncher
     }
 
     enum CodingKeys: String, CodingKey {
         case appearanceMode, accentColor, fontFamily, fontSize, cursorStyle, cursorBlink, windowOpacity,
-            chromeTranslucency, thinStrokes
+            chromeTranslucency, thinStrokes, showToolLauncher
     }
 
     /// Tolerant decoding: missing keys (older config.json, or the retired `theme` key) fall back
@@ -161,6 +165,8 @@ public struct AppearanceConfig: Codable, Equatable {
         chromeTranslucency =
             try c.decodeIfPresent(Double.self, forKey: .chromeTranslucency) ?? d.chromeTranslucency
         thinStrokes = try c.decodeIfPresent(Bool.self, forKey: .thinStrokes) ?? d.thinStrokes
+        showToolLauncher =
+            try c.decodeIfPresent(Bool.self, forKey: .showToolLauncher) ?? d.showToolLauncher
     }
 }
 

@@ -12,4 +12,5 @@ public enum PaneState: Equatable {
 public enum ConnectionType: Equatable {
     case local(shell: String, workingDirectory: String)
     case ssh(bookmarkID: UUID)
+    case client(connectionID: UUID)
 }

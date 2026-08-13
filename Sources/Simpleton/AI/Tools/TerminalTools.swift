@@ -50,6 +50,7 @@ struct TerminalTools: ToolHandler {
             switch pane.connectionType {
             case .local: connStr = "local"
             case .ssh: connStr = "SSH"
+            case .client: connStr = "client"
             }
             lines.append("  \(pane.label)\(focus) — \(cwdStr) [\(shellStr), \(connStr)]")
         }
@@ -122,6 +123,9 @@ struct TerminalTools: ToolHandler {
         case .ssh:
             connStr = "SSH (\(pane.sshHost ?? "unknown"))"
             shellStr = "remote"
+        case .client:
+            connStr = "client"
+            shellStr = "client"
         }
         let stateStr: String
         switch pane.state {

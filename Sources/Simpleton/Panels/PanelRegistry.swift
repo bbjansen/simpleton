@@ -9,8 +9,6 @@ final class PanelRegistry: ObservableObject {
     @Published var activeProfile: PanelProfile
     @Published private(set) var profiles: [PanelProfile]
 
-    // Cached NSViewControllers keyed by panel id — created lazily on first show, retained indefinitely.
-    private var controllers: [String: NSViewController] = [:]
     private let profilesDir: URL
 
     init(profilesDir: URL) {
@@ -24,21 +22,6 @@ final class PanelRegistry: ObservableObject {
     func register(_ panel: PanelDefinition) {
         guard !definitions.contains(where: { $0.id == panel.id }) else { return }
         definitions.append(panel)
-    }
-
-    // MARK: - Controller Cache
-
-    /// Returns a cached controller if one exists, otherwise creates and caches a new one.
-    func makeController(for id: String, context: PanelContext) -> NSViewController? {
-        if let cached = controllers[id] { return cached }
-        guard let def = definitions.first(where: { $0.id == id }) else { return nil }
-        let vc = def.make(context)
-        controllers[id] = vc
-        return vc
-    }
-
-    func evictController(for id: String) {
-        controllers.removeValue(forKey: id)
     }
 
     // MARK: - Profile Management
@@ -78,13 +61,6 @@ final class PanelRegistry: ObservableObject {
         // Let the active workspace re-sync its profile choice if auto-sync is on (AppDelegate decides;
         // it ignores this while it is itself applying a workspace).
         NotificationCenter.default.post(name: .simpletonWorkspaceSetupChanged, object: nil)
-    }
-
-    /// Rebind the cached AI Chat panel to a new TabConversation.
-    /// Called when the active tab changes.
-    func rebindAIChat(to conversation: TabConversation?) {
-        guard let controller = controllers[PanelProfile.PanelID.aiChat] as? AIChatPanelController else { return }
-        controller.conversation = conversation
     }
 
     // MARK: - Private

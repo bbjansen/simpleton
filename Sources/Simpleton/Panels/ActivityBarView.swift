@@ -27,10 +27,13 @@ struct ActivityBarView: View {
         VStack(spacing: 4) {
             ForEach(panelIDs, id: \.self) { panelID in
                 if let def = registry.definitions.first(where: { $0.id == panelID }) {
+                    let isDrawerLauncher = side == .right && def.prefersDrawer
                     ActivityBarButton(
                         icon: def.icon,
                         label: def.name,
-                        isActive: activePanelID == panelID
+                        isActive: isDrawerLauncher
+                            ? registry.activeProfile.bottomActivePanelID == panelID
+                            : activePanelID == panelID
                     ) {
                         togglePanel(id: panelID)
                     }
@@ -60,7 +63,14 @@ struct ActivityBarView: View {
 
     private func togglePanel(id: String) {
         var profile = registry.activeProfile
-        profile.togglePanel(id: id, on: side)
+        if side == .right,
+            let def = registry.definitions.first(where: { $0.id == id }), def.prefersDrawer
+        {
+            // A GUI-client launcher icon toggles the edge drawer instead of a side panel.
+            profile.setDrawer(id: profile.bottomActivePanelID == id ? nil : id)
+        } else {
+            profile.togglePanel(id: id, on: side)
+        }
         registry.activeProfile = profile
     }
 

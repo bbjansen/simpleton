@@ -96,6 +96,9 @@ final class SessionCoordinator {
                     connection = .local(workingDirectory: dir)
                 case .ssh(let bookmarkID):
                     connection = .ssh(bookmarkId: bookmarkID)
+                case .client:
+                    // Text-client panes restore as a plain shell (v1: the CLI is not re-launched).
+                    connection = .local(workingDirectory: NSHomeDirectory())
                 }
             } else {
                 connection = .local(workingDirectory: NSHomeDirectory())

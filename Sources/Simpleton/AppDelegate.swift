@@ -1,6 +1,7 @@
 // Sources/Simpleton/AppDelegate.swift
 import AppKit
 import SimpletonCore
+import SimpletonSQL
 import SwiftTerm
 import SwiftUI
 
@@ -160,6 +161,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panelRegistry.register(.sshTunnels)
         panelRegistry.register(.git)
         panelRegistry.register(.docker)
+        panelRegistry.register(.sql)
+        panelRegistry.register(.dataConnections)
         // Register JS panels from script plugins
         for plugin in pluginManager?.scriptPlugins ?? [] {
             for panelManifest in plugin.manifest.panels ?? [] {
@@ -279,6 +282,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // "SIMP-WSE2E RESULT PASS/FAIL …" then quits. A no-op unless the env var is set.
         if ProcessInfo.processInfo.environment["SIMPLETON_WORKSPACE_E2E"] != nil {
             runWorkspaceE2E()
+        }
+
+        // Headless SQL-panel end-to-end check (set SIMPLETON_SQL_E2E): seed a populated SQLite DB +
+        // a connection, drive SQLPanelModel exactly as the UI does, and log whether it connects and
+        // loads the tables. Pinpoints whether "nothing loads" is a model/driver bug vs a UI bug.
+        if ProcessInfo.processInfo.environment["SIMPLETON_SQL_E2E"] != nil {
+            runSQLPanelE2E()
         }
 
         let menuResult = MenuBarBuilder.build(target: self, workspacesMenuDelegate: self)
@@ -846,6 +856,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// fresh window came back with the two-pane split at the saved size. Timing-based (the split +
     /// restore rebuild views), so it uses generous delays. Logs one `SIMP-WSE2E RESULT …` line, cleans
     /// up the temp workspace, and quits. Gated behind SIMPLETON_WORKSPACE_E2E.
+    /// Headless probe of the SQL connect/load flow at the model level (SIMPLETON_SQL_E2E).
+    private func runSQLPanelE2E() {
+        NSLog("SIMP-SQLE2E starting")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("sqle2e-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dbPath = dir.appendingPathComponent("demo.db").path
+        Task { @MainActor in
+            // 1. Seed a populated DB via the driver.
+            let seed = SQLiteDriver(path: dbPath)
+            do {
+                try await seed.connect()
+                _ = try await seed.run("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
+                _ = try await seed.run("INSERT INTO t(name) VALUES('a'),('b')")
+                await seed.close()
+            } catch {
+                NSLog("SIMP-SQLE2E RESULT FAIL: seed error \(error)")
+                NSApp.terminate(nil)
+                return
+            }
+            // 2. Drive the ADD flow exactly as the UI does — saveConnection must auto-connect + load.
+            let conn = Connection(name: "demo", kind: .sqlite, params: ["path": dbPath])
+            let model = SQLPanelModel(appSupportDir: dir)
+            await model.saveConnection(conn, secret: nil)
+            let ok = model.isConnected && model.tables.contains { $0.name == "t" }
+            NSLog(
+                "SIMP-SQLE2E RESULT %@: connected=%@ tables=%@ connCount=%d selected=%@ error=%@",
+                ok ? "PASS" : "FAIL", "\(model.isConnected)", "\(model.tables.map(\.name))",
+                model.connections.count, model.selectedID?.uuidString ?? "nil",
+                model.errorMessage ?? "nil")
+            NSApp.terminate(nil)
+        }
+    }
+
     private func runWorkspaceE2E() {
         NSLog("SIMP-WSE2E starting")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in

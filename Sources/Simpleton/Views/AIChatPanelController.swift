@@ -32,7 +32,7 @@ final class AIChatPanelController: NSViewController {
     var projectIndexer: ProjectIndexer?
     var currentPaneProvider: (() -> PaneController?)?
 
-    /// Per-tab conversation. Set by PanelRegistry.rebindAIChat(to:) when the active tab changes.
+    /// Per-tab conversation. Set by the container's rebindAIChatLocal(to:) when the active tab changes.
     var conversation: TabConversation? {
         didSet { rebuildHostingView() }
     }

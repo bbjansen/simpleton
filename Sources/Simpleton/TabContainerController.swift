@@ -17,9 +17,19 @@ final class TabContainerController: NSViewController {
     private var sidebarShimObserver: NSObjectProtocol?
     private var aiChatShimObserver: NSObjectProtocol?
     private var skillPickerShimObserver: NSObjectProtocol?
+    private var openConnectionObserver: NSObjectProtocol?
+    private var openConnectionTextObserver: NSObjectProtocol?
 
     // Auto Layout panel management
     private var contentSplit: NSSplitView?
+    /// Outer split stacking [contentSplit, drawer?] so a GUI client can dock on an edge.
+    private var outerSplit: NSSplitView?
+    private var drawerPanelVC: NSViewController?
+    private var drawerHostView: NSView?
+    private var drawerPanelID: String?
+    /// Panel controllers cached PER CONTAINER (not on the shared registry), so each window/tab
+    /// instantiates and owns its own panel views — a panel can't be re-parented between windows.
+    private var panelControllers: [String: NSViewController] = [:]
     private var leftBarHost: NSHostingView<ActivityBarView>?
     private var rightBarHost: NSHostingView<ActivityBarView>?
     /// The right activity bar's width constraint, kept so it can collapse to 0 when that side has
@@ -94,7 +104,7 @@ final class TabContainerController: NSViewController {
                     splitController: splitController,
                     aiService: aiService
                 )
-                panelRegistry?.rebindAIChat(to: tabConversation)
+                rebindAIChatLocal(to: tabConversation)
             }
             // Propagate to all existing panes so active AI hints work.
             for pane in splitController.panes.values {
@@ -170,6 +180,39 @@ final class TabContainerController: NSViewController {
         }
 
         // Shim: skill picker → open skills panel on right
+        openConnectionObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonOpenConnectionGUI, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self = self,
+                let registry = self.panelRegistry,
+                self.view.window?.isKeyWindow == true
+            else { return }
+            // If SQL is already docked in the drawer, the mounted panel's own `.onReceive` consumes
+            // the pending connection — skip the profile re-assignment (which would needlessly rebuild
+            // panels).
+            guard registry.activeProfile.bottomActivePanelID != PanelProfile.PanelID.sql else { return }
+            var profile = registry.activeProfile
+            profile.setDrawer(id: PanelProfile.PanelID.sql)
+            registry.activeProfile = profile
+        }
+
+        openConnectionTextObserver = NotificationCenter.default.addObserver(
+            forName: .simpletonOpenConnectionText, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let self = self, self.view.window?.isKeyWindow == true,
+                let id = note.object as? UUID
+            else { return }
+            let dir = self.appSupportDir
+            Task { [weak self] in
+                let store = ConnectionStore(directory: dir)
+                guard let connection = await store.connection(for: id) else { return }
+                let secret = CredentialStore.secret(for: id)
+                await MainActor.run {
+                    self?.openClientPane(connection: connection, secret: secret, direction: .vertical)
+                }
+            }
+        }
+
         skillPickerShimObserver = NotificationCenter.default.addObserver(
             forName: .simpletonRunSkillPicker, object: nil, queue: .main
         ) { [weak self] notification in
@@ -220,7 +263,8 @@ final class TabContainerController: NSViewController {
     deinit {
         [
             closeObserver, searchObserver, sidebarShimObserver,
-            aiChatShimObserver, skillPickerShimObserver,
+            aiChatShimObserver, skillPickerShimObserver, openConnectionObserver,
+            openConnectionTextObserver,
         ].forEach {
             if let obs = $0 { NotificationCenter.default.removeObserver(obs) }
         }
@@ -264,23 +308,31 @@ final class TabContainerController: NSViewController {
         let split = NSSplitView(frame: frame)
         split.isVertical = true
         split.dividerStyle = .thin
-        split.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(split)
         contentSplit = split
 
         // Terminal is always the first arranged subview in contentSplit
         splitController.rootView.frame = frame
         split.addArrangedSubview(splitController.rootView)
 
+        // Outer split stacks the content split (top) above an optional edge drawer (bottom),
+        // via a horizontal divider. contentSplit becomes its first arranged subview.
+        let outerSplitView = NSSplitView(frame: frame)
+        outerSplitView.isVertical = false
+        outerSplitView.dividerStyle = .thin
+        outerSplitView.translatesAutoresizingMaskIntoConstraints = false
+        outerSplitView.addArrangedSubview(split)
+        container.addSubview(outerSplitView)
+        outerSplit = outerSplitView
+
         if let registry = panelRegistry {
             mountActivityBars(in: container, registry: registry)
         } else {
-            // Fallback: no activity bars — terminal fills the full width
+            // Fallback: no activity bars — content fills the full width
             NSLayoutConstraint.activate([
-                split.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                split.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                split.topAnchor.constraint(equalTo: container.topAnchor),
-                split.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                outerSplitView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                outerSplitView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                outerSplitView.topAnchor.constraint(equalTo: container.topAnchor),
+                outerSplitView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             ])
         }
 
@@ -399,7 +451,7 @@ final class TabContainerController: NSViewController {
         super.viewDidAppear()
         splitController.setFocus(to: splitController.focusedPaneID)
         // Rebind AI Chat panel to this tab's conversation
-        panelRegistry?.rebindAIChat(to: tabConversation)
+        rebindAIChatLocal(to: tabConversation)
     }
 
     /// Ensure the split's current root view is mounted in `contentSplit` at index 0 (the terminal
@@ -422,7 +474,7 @@ final class TabContainerController: NSViewController {
     // MARK: - Activity Bars
 
     private func mountActivityBars(in container: NSView, registry: PanelRegistry) {
-        guard let split = contentSplit else { return }
+        guard let outer = outerSplit else { return }
 
         let leftBar = NSHostingView(
             rootView: ActivityBarView(
@@ -460,11 +512,11 @@ final class TabContainerController: NSViewController {
             rightBar.topAnchor.constraint(equalTo: container.topAnchor),
             rightBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             rightWidth,
-            // Content split between bars
-            split.leadingAnchor.constraint(equalTo: leftBar.trailingAnchor),
-            split.trailingAnchor.constraint(equalTo: rightBar.leadingAnchor),
-            split.topAnchor.constraint(equalTo: container.topAnchor),
-            split.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            // Content (outer split) between bars
+            outer.leadingAnchor.constraint(equalTo: leftBar.trailingAnchor),
+            outer.trailingAnchor.constraint(equalTo: rightBar.leadingAnchor),
+            outer.topAnchor.constraint(equalTo: container.topAnchor),
+            outer.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
 
         updateRightBarVisibility(for: registry.activeProfile)
@@ -474,9 +526,9 @@ final class TabContainerController: NSViewController {
     /// (e.g. after the AI panel moved to a header-only button). It reappears automatically once a
     /// right-side panel is added to the profile.
     private func updateRightBarVisibility(for profile: PanelProfile) {
-        let isEmpty = profile.rightPanelIDs.isEmpty
-        rightBarWidthConstraint?.constant = isEmpty ? 0 : 40
-        rightBarHost?.isHidden = isEmpty
+        let show = config.appearance.showToolLauncher && !profile.rightPanelIDs.isEmpty
+        rightBarWidthConstraint?.constant = show ? 40 : 0
+        rightBarHost?.isHidden = !show
     }
 
     private func rebuildActivityBars() {
@@ -486,10 +538,10 @@ final class TabContainerController: NSViewController {
         leftBarHost = nil
         rightBarHost = nil
 
-        // Remove old split-to-container constraints before remounting
-        if let split = contentSplit {
+        // Remove old outer-split-to-container constraints before remounting
+        if let outer = outerSplit {
             let old = container.constraints.filter {
-                ($0.firstItem as? NSView == split || $0.secondItem as? NSView == split)
+                ($0.firstItem as? NSView == outer || $0.secondItem as? NSView == outer)
                     && ($0.firstItem as? NSView == container || $0.secondItem as? NSView == container)
             }
             NSLayoutConstraint.deactivate(old)
@@ -503,6 +555,7 @@ final class TabContainerController: NSViewController {
         cancellables.removeAll()
         guard let registry = panelRegistry else { return }
         registry.$activeProfile
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] profile in
                 self?.updatePanels(for: profile)
@@ -534,8 +587,10 @@ final class TabContainerController: NSViewController {
         // After teardown, split.arrangedSubviews == [terminal rootView]
 
         // ── 2. Insert left panel at index 0 (before terminal) ──
-        if let id = profile.leftActivePanelID,
-            let vc = panelRegistry?.makeController(for: id, context: makeContext())
+        // A prefersDrawer panel is a GUI client that only ever mounts in the drawer — never a side
+        // slot — so the same cached controller can't be parented into two splits at once.
+        if let id = profile.leftActivePanelID, !panelPrefersDrawer(id),
+            let vc = makePanelController(for: id)
         {
             addChild(vc)
             vc.view.frame = NSRect(x: 0, y: 0, width: profile.leftWidth, height: split.bounds.height)
@@ -545,14 +600,53 @@ final class TabContainerController: NSViewController {
         }
 
         // ── 3. Append right panel at end (after terminal) ──────
-        if let id = profile.rightActivePanelID,
-            let vc = panelRegistry?.makeController(for: id, context: makeContext())
+        if let id = profile.rightActivePanelID, !panelPrefersDrawer(id),
+            let vc = makePanelController(for: id)
         {
             addChild(vc)
             vc.view.frame = NSRect(x: 0, y: 0, width: profile.rightWidth, height: split.bounds.height)
             split.addArrangedSubview(vc.view)
             rightPanelVC = vc
             rightPanelID = id
+        }
+
+        // ── 3b. Drawer (edge-docked GUI client) ────────────────
+        if let vc = drawerPanelVC {
+            drawerHostView?.removeFromSuperview()
+            drawerHostView = nil
+            vc.removeFromParent()
+            drawerPanelVC = nil
+            drawerPanelID = nil
+        }
+        if let id = profile.bottomActivePanelID,
+            let outer = outerSplit,
+            let vc = makePanelController(for: id)
+        {
+            addChild(vc)
+            // Wrap the panel with a small close (✕) button so the drawer can always be dismissed,
+            // even when the launcher rail is hidden or empty.
+            let host = NSView(frame: NSRect(x: 0, y: 0, width: outer.bounds.width, height: profile.drawerSize))
+            vc.view.frame = host.bounds
+            vc.view.autoresizingMask = [.width, .height]
+            host.addSubview(vc.view)
+            let close = NSButton(
+                frame: NSRect(x: host.bounds.width - 24, y: host.bounds.height - 22, width: 18, height: 18))
+            close.autoresizingMask = [.minXMargin, .minYMargin]
+            close.isBordered = false
+            close.bezelStyle = .inline
+            close.image = NSImage(
+                systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Close drawer")
+            close.target = self
+            close.action = #selector(closeDrawerAction)
+            host.addSubview(close)
+            if profile.drawerEdge == .top {
+                outer.insertArrangedSubview(host, at: 0)
+            } else {
+                outer.addArrangedSubview(host)  // .bottom (and .trailing treated as bottom for v1)
+            }
+            drawerPanelVC = vc
+            drawerHostView = host
+            drawerPanelID = id
         }
 
         // ── 4. Set divider positions ───────────────────────────
@@ -567,8 +661,49 @@ final class TabContainerController: NSViewController {
                 let rightPos = split.bounds.width - profile.rightWidth
                 split.setPosition(rightPos, ofDividerAt: dividerIdx)
             }
+            if let outer = self.outerSplit, self.drawerPanelVC != nil {
+                let pos =
+                    profile.drawerEdge == .top
+                    ? profile.drawerSize
+                    : outer.bounds.height - profile.drawerSize
+                outer.setPosition(pos, ofDividerAt: 0)
+            }
             self.splitController.setFocus(to: self.splitController.focusedPaneID)
         }
+    }
+
+    @objc private func closeDrawerAction() {
+        activateDrawer(id: nil)
+    }
+
+    /// Open (or close, with nil) the edge drawer's GUI panel.
+    func activateDrawer(id: String?) {
+        guard let registry = panelRegistry else { return }
+        var profile = registry.activeProfile
+        profile.setDrawer(id: id)
+        registry.activeProfile = profile
+    }
+
+    /// Whether a panel id is a GUI client that docks in the edge drawer (never a side slot).
+    private func panelPrefersDrawer(_ id: String) -> Bool {
+        panelRegistry?.definitions.first(where: { $0.id == id })?.prefersDrawer ?? false
+    }
+
+    /// Build (or reuse this container's cached) controller for a panel id, from the registry's
+    /// definitions. The cache is per-container so panels are not shared across windows/tabs.
+    private func makePanelController(for id: String) -> NSViewController? {
+        if let cached = panelControllers[id] { return cached }
+        guard let def = panelRegistry?.definitions.first(where: { $0.id == id }) else { return nil }
+        let vc = def.make(makeContext())
+        panelControllers[id] = vc
+        return vc
+    }
+
+    /// Rebind this container's cached AI Chat panel to the active tab's conversation.
+    private func rebindAIChatLocal(to conversation: TabConversation?) {
+        guard let controller = panelControllers[PanelProfile.PanelID.aiChat] as? AIChatPanelController
+        else { return }
+        controller.conversation = conversation
     }
 
     // MARK: - Context
@@ -587,6 +722,9 @@ final class TabContainerController: NSViewController {
     func updateConfig(_ newConfig: AppConfig) {
         self.config = newConfig
         applyBackdropTint()  // retint the side-panel backdrop on a live theme change
+        if let registry = panelRegistry {
+            updateRightBarVisibility(for: registry.activeProfile)  // live-toggle the launcher rail
+        }
     }
 
     /// Paint the backdrop with the active theme so transparent side panels read as the theme. For a
@@ -704,6 +842,30 @@ final class TabContainerController: NSViewController {
             integrationEnabled: config.general.shellIntegration,
             bashRcfilePath: AppPaths.shellIntegrationDir.appendingPathComponent("bash-rcfile").path
         )
+    }
+
+    // MARK: - Text (CLI) Clients
+
+    /// Open a data connection as a text client in a new split pane running its CLI.
+    func openClientPane(connection: Connection, secret: ConnectionSecret?, direction: SplitDirection) {
+        let previousFactory = splitController.paneFactory
+        splitController.paneFactory = { [weak self] paneID in
+            guard let self = self else {
+                return PaneController(
+                    id: paneID, frame: .zero,
+                    connectionType: .local(shell: "/bin/zsh", workingDirectory: NSHomeDirectory()))
+            }
+            let cwd = self.splitController.panes[self.splitController.focusedPaneID]?.currentDirectory
+            let pane = self.createPane(id: paneID, inheritedWorkingDirectory: cwd)
+            pane.startClient(connection: connection, secret: secret)
+            return pane
+        }
+        splitController.splitFocusedPane(direction: direction)
+        splitController.paneFactory = previousFactory
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.splitController.setFocus(to: self.splitController.focusedPaneID)
+        }
     }
 
     // MARK: - SSH Connections

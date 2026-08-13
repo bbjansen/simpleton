@@ -64,6 +64,13 @@ public struct Connection: Codable, Identifiable, Equatable, Sendable {
     public var pinned: Bool
     public var createdAt: Date
     public var updatedAt: Date
+    /// Env-safety accent, one of the app accent names (red/orange/yellow/green/blue/purple/pink/graphite).
+    /// Convention: prod = red. Nil = no color.
+    public var color: String?
+    /// Single-level group name (e.g. "prod"). Nil = ungrouped. Nested groups are a later enhancement.
+    public var group: String?
+    /// References an SSH `Bookmark` (by id) to tunnel this connection through a bastion. Nil = direct.
+    public var tunnelBookmarkID: UUID?
 
     public init(
         id: UUID = UUID(),
@@ -76,7 +83,10 @@ public struct Connection: Codable, Identifiable, Equatable, Sendable {
         tags: [String] = [],
         pinned: Bool = false,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        color: String? = nil,
+        group: String? = nil,
+        tunnelBookmarkID: UUID? = nil
     ) {
         self.id = id
         self.name = name
@@ -89,6 +99,9 @@ public struct Connection: Codable, Identifiable, Equatable, Sendable {
         self.pinned = pinned
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.color = color
+        self.group = group
+        self.tunnelBookmarkID = tunnelBookmarkID
     }
 
     /// Tolerant decoding: any key missing from an older connections.json falls back to a default,
@@ -106,6 +119,9 @@ public struct Connection: Codable, Identifiable, Equatable, Sendable {
         pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        color = try c.decodeIfPresent(String.self, forKey: .color)
+        group = try c.decodeIfPresent(String.self, forKey: .group)
+        tunnelBookmarkID = try c.decodeIfPresent(UUID.self, forKey: .tunnelBookmarkID)
     }
 }
 

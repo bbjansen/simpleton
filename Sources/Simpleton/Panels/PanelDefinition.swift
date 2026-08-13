@@ -19,6 +19,8 @@ struct PanelDefinition {
     let description: String
     let defaultSide: PanelSide
     let isBuiltIn: Bool
+    /// When true, clicking this panel's launcher icon docks it in the edge drawer instead of a side.
+    var prefersDrawer: Bool = false
     let make: (PanelContext) -> NSViewController
 }
 

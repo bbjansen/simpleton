@@ -202,4 +202,42 @@ extension PanelDefinition {
     ) { _ in
         NSHostingController(rootView: DockerPanelView())
     }
+
+    static let sql = PanelDefinition(
+        id: PanelProfile.PanelID.sql,
+        name: "SQL",
+        icon: "cylinder.split.1x2",
+        description: "Query databases (SQLite, Postgres, MySQL)",
+        defaultSide: .right,
+        isBuiltIn: true,
+        prefersDrawer: true
+    ) { context in
+        NSHostingController(rootView: SQLPanelView(appSupportDir: context.appSupportDir))
+    }
+
+    static let dataConnections = PanelDefinition(
+        id: PanelProfile.PanelID.dataConnections,
+        name: "Data Connections",
+        icon: "bookmark.fill",
+        description: "Saved database & service connections",
+        defaultSide: .left,
+        isBuiltIn: true
+    ) { context in
+        DataConnectionsHostController(
+            appSupportDir: context.appSupportDir,
+            bookmarkStore: context.bookmarkStore,
+            onLaunch: { connection, mode in
+                switch mode {
+                case .gui:
+                    // Stash the target synchronously so the panel sees it whether it mounts fresh
+                    // (cold) or is already visible (warm); the container observes the notification to
+                    // reveal/mount the SQL panel.
+                    SQLPendingOpen.shared.connectionID = connection.id
+                    NotificationCenter.default.post(
+                        name: .simpletonOpenConnectionGUI, object: connection.id)
+                case .text:
+                    NSLog("SIMP: text client for %@ — implemented in workbench sub-project 2", connection.name)
+                }
+            })
+    }
 }
