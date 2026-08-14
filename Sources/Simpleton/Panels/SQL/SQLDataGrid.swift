@@ -63,7 +63,9 @@ struct SQLDataGrid: NSViewRepresentable {
         table.selectionOverlay = overlay
 
         context.coordinator.table = table
+        context.coordinator.scrollView = scroll
         context.coordinator.observeColumnLayout()
+        context.coordinator.installFrozenGutter()
         context.coordinator.rebuildColumns()
         context.coordinator.applyOrder()
         context.coordinator.applyTheme()
@@ -86,11 +88,18 @@ struct SQLDataGrid: NSViewRepresentable {
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var parent: SQLDataGrid
         weak var table: NSTableView?
+        weak var scrollView: NSScrollView?
+        /// The left-pinned row-number gutter, floated on the horizontal axis so it stays put during
+        /// horizontal scroll while scrolling vertically in lockstep with the rows.
+        private var frozenGutter: FrozenGutterView?
+        private var scrollObserver: NSObjectProtocol?
+        /// Width of the frozen gutter strip; matches the old "#" column width.
+        private let gutterWidth: CGFloat = 44
         /// Original row indices shown on the current page, in display (sorted) order. This is the
         /// per-page slice of the full sorted order; all row math for the visible table uses this.
         private(set) var order: [Int] = []
         /// The current rectangular cell selection in display space (display rows × table-column view
-        /// positions), or nil when only whole rows are selected. Drawn per-row by `GridRowView` and
+        /// positions), or nil when only whole rows are selected. Drawn by `CellSelectionOverlay` and
         /// copied as rectangular TSV on ⌘C. Kept separate from NSTableView's row selection so record
         /// mode and inline editing keep using the row selection unchanged.
         private(set) var cellSelection: CellSelection?
@@ -110,7 +119,7 @@ struct SQLDataGrid: NSViewRepresentable {
         init(_ parent: SQLDataGrid) { self.parent = parent }
 
         deinit {
-            for obs in [resizeObserver, moveObserver].compactMap({ $0 }) {
+            for obs in [resizeObserver, moveObserver, scrollObserver].compactMap({ $0 }) {
                 NotificationCenter.default.removeObserver(obs)
             }
         }
@@ -160,14 +169,14 @@ struct SQLDataGrid: NSViewRepresentable {
             guard let table, let saved = UserDefaults.standard.array(forKey: orderKey()) as? [String] else { return }
             isRestoringLayout = true
             defer { isRestoringLayout = false }
-            // Move each saved identifier into its position; the gutter ("#") stays at index 0.
-            for (target, id) in saved.enumerated() {
-                let to = 1 + target
-                guard to < table.tableColumns.count,
+            // Move each saved identifier into its position. Data columns start at index 0 now that the
+            // gutter is a floating view rather than table column 0. Stale "#" entries are ignored.
+            for (target, id) in saved.filter({ $0 != "#" }).enumerated() {
+                guard target < table.tableColumns.count,
                     let from = table.tableColumns.firstIndex(where: { $0.identifier.rawValue == id }),
-                    from != to
+                    from != target
                 else { continue }
-                table.moveColumn(from, toColumn: to)
+                table.moveColumn(from, toColumn: target)
             }
         }
 
@@ -178,12 +187,8 @@ struct SQLDataGrid: NSViewRepresentable {
         func rebuildColumns() {
             guard let table else { return }
             for col in table.tableColumns { table.removeTableColumn(col) }
-            let gutter = NSTableColumn(identifier: .init("#"))
-            gutter.title = ""
-            gutter.width = 44
-            gutter.minWidth = 32
-            gutter.maxWidth = 80
-            table.addTableColumn(gutter)
+            // The row-number gutter is no longer a table column — it's a left-pinned floating view
+            // (`FrozenGutterView`) with a matching content inset. Data columns start at position 0.
             for i in parent.data.columns.indices {
                 let c = NSTableColumn(identifier: .init(String(i)))
                 c.title = parent.data.columns[i].name
@@ -196,6 +201,7 @@ struct SQLDataGrid: NSViewRepresentable {
             enumCols = parent.data.enumColumns()
             restoreColumnWidths()
             restoreColumnOrder()
+            refreshFrozenGutter()
         }
 
         func applyOrder() {
@@ -219,6 +225,47 @@ struct SQLDataGrid: NSViewRepresentable {
             guard let table else { return }
             table.gridColor = DT.Grid.gridline
             table.headerView?.needsDisplay = true
+            frozenGutter?.needsDisplay = true
+        }
+
+        // MARK: Frozen row-number gutter
+
+        /// Install the left-pinned row-number gutter: a narrow floating view (horizontal axis) plus a
+        /// matching left content inset so data columns never slide under it, and a clip-view bounds
+        /// observer so the numbers redraw as rows scroll into view.
+        func installFrozenGutter() {
+            guard let scrollView, frozenGutter == nil else { return }
+            scrollView.automaticallyAdjustsContentInsets = false
+            scrollView.contentInsets = NSEdgeInsets(top: 0, left: gutterWidth, bottom: 0, right: 0)
+            let gutter = FrozenGutterView()
+            gutter.coordinator = self
+            gutter.frame = NSRect(x: 0, y: 0, width: gutterWidth, height: scrollView.contentView.bounds.height)
+            gutter.autoresizingMask = [.height]
+            scrollView.addFloatingSubview(gutter, for: .horizontal)
+            frozenGutter = gutter
+            let clip = scrollView.contentView
+            clip.postsBoundsChangedNotifications = true
+            scrollObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
+            ) { [weak self] _ in self?.refreshFrozenGutter() }
+        }
+
+        /// Redraw the gutter after the row set changes (reload, sort, page, resize).
+        func refreshFrozenGutter() {
+            guard let gutter = frozenGutter, let scrollView else { return }
+            gutter.frame.size.height = scrollView.contentView.bounds.height
+            gutter.needsDisplay = true
+        }
+
+        /// Absolute (paged) 1-based row number for a display row — what the gutter draws.
+        func rowNumber(forDisplayRow row: Int) -> Int { parent.page.start + row + 1 }
+
+        /// Select the whole row under a gutter click so ⌘C copies the full row (the gutter is no longer
+        /// a table column, so it drives row selection itself). Clears any cell rectangle first.
+        func selectRowFromGutter(displayRow row: Int, extending: Bool) {
+            guard let table, order.indices.contains(row) else { return }
+            clearCellSelection()
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: extending)
         }
 
         /// Reload and restore the table selection from the `selectedRow` binding
@@ -242,6 +289,7 @@ struct SQLDataGrid: NSViewRepresentable {
                 table.addSubview(overlay)
                 overlay.needsDisplay = true
             }
+            refreshFrozenGutter()
         }
 
         private var fontSize: CGFloat { max(10, parent.rowHeight * 0.42) }
@@ -260,11 +308,7 @@ struct SQLDataGrid: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
             let cell = reuseCell(tableView)
             let id = tableColumn?.identifier.rawValue ?? ""
-            if id == "#" {
-                // Gutter shows the absolute (paged) row number so identity stays readable across pages.
-                cell.configureGutter(number: parent.page.start + row + 1)
-                return cell
-            }
+            // Row numbers live in the frozen gutter (a floating view), not a table column.
             guard let colIndex = Int(id) else { return cell }
             let original = order.indices.contains(row) ? order[row] : row
             let coord = CellCoord(row: original, column: colIndex)
@@ -389,7 +433,7 @@ struct SQLDataGrid: NSViewRepresentable {
         }
 
         /// Map an ordered list of table-column view positions to data-column indices (the `Int` in each
-        /// column identifier), skipping the gutter ("#"). Reflects the user's current column order.
+        /// column identifier). Reflects the user's current column order.
         private func dataColumnIndices(forViewPositions positions: [Int]) -> [Int] {
             guard let table else { return [] }
             return positions.compactMap { pos in
@@ -626,11 +670,12 @@ final class GridTableView: NSTableView {
         return min(max(value, 0), last)
     }
 
-    /// Clamp a possibly-`-1` column index to the nearest data column (never the gutter at position 0).
+    /// Clamp a possibly-`-1` column index (drag past a horizontal edge) into the data columns.
     private func clampColumn(_ value: Int) -> Int {
         let last = numberOfColumns - 1
-        if value < 0 { return max(1, last) }
-        return min(max(value, 1), max(1, last))
+        guard last >= 0 else { return 0 }
+        if value < 0 { return last }
+        return min(max(value, 0), last)
     }
 
     /// The cell the last context menu was opened on (row/column in display space), so the menu's
@@ -698,6 +743,73 @@ final class CellSelectionOverlay: NSView {
         let border = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
         border.lineWidth = 1.5
         border.stroke()
+    }
+}
+
+/// The left-pinned, vertically-scrolling row-number gutter. Floated on the horizontal axis so it
+/// stays put during horizontal scroll while AppKit scrolls it vertically in lockstep with the rows.
+/// It draws the absolute (paged) row number for each visible row — reading the table's own row rects
+/// so it stays aligned through sort, paging, density changes, and scrolling — plus a hairline + soft
+/// shadow on its right edge so it reads as a frozen layer. Clicking it selects the whole row.
+final class FrozenGutterView: NSView {
+    weak var coordinator: SQLDataGrid.Coordinator?
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        // A floating subview's drawing context is translated by the scroll offset, so its visible
+        // drawing region is `visibleRect` (which moves with scrolling), not `bounds`. Fill and stroke
+        // against that; position each row number via the shared window coordinate space so it lands
+        // exactly where the row renders.
+        let area = visibleRect
+        DT.Grid.headerBackground.setFill()
+        area.fill()
+        guard let coordinator, let table = coordinator.table else { return }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: DT.Grid.nullText,
+            .font: DT.monoNSFont(size: 10),
+        ]
+        let visible = table.rows(in: table.visibleRect)
+        if visible.length > 0 {
+            for row in visible.location..<(visible.location + visible.length) {
+                let midY = rowMidY(row, in: table)
+                let number = coordinator.rowNumber(forDisplayRow: row) as NSNumber
+                let text = number.stringValue as NSString
+                let size = text.size(withAttributes: attrs)
+                let textRect = NSRect(
+                    x: area.maxX - size.width - 6, y: midY - size.height / 2,
+                    width: size.width, height: size.height)
+                text.draw(in: textRect, withAttributes: attrs)
+            }
+        }
+        // Right-edge hairline + a soft shadow so the gutter reads as a layer above the scrolling data.
+        DT.Grid.gridline.setStroke()
+        let edge = NSBezierPath()
+        edge.move(to: NSPoint(x: area.maxX - 0.5, y: area.minY))
+        edge.line(to: NSPoint(x: area.maxX - 0.5, y: area.maxY))
+        edge.lineWidth = 1
+        edge.stroke()
+        let shadow = NSGradient(colors: [
+            NSColor.black.withAlphaComponent(0.18), NSColor.black.withAlphaComponent(0.0),
+        ])
+        shadow?.draw(in: NSRect(x: area.maxX, y: area.minY, width: 6, height: area.height), angle: 0)
+    }
+
+    /// The on-screen mid-y of a table row, expressed in this floating view's (scroll-translated)
+    /// coordinate space, via the shared window space so it stays aligned through scrolling.
+    private func rowMidY(_ row: Int, in table: NSTableView) -> CGFloat {
+        convert(table.convert(table.rect(ofRow: row), to: nil), from: nil).midY
+    }
+
+    /// A gutter click selects the whole row under the pointer (⇧ extends), so ⌘C copies full rows —
+    /// the behavior the old "#" table column provided.
+    override func mouseDown(with event: NSEvent) {
+        guard let coordinator, let table = coordinator.table else { return }
+        // Map the click through the window into the table's own space to find the row.
+        let inTable = table.convert(event.locationInWindow, from: nil)
+        let row = table.row(at: NSPoint(x: table.bounds.midX, y: inTable.y))
+        guard row >= 0 else { return }
+        coordinator.selectRowFromGutter(displayRow: row, extending: event.modifierFlags.contains(.shift))
     }
 }
 
