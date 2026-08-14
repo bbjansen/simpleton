@@ -317,22 +317,29 @@ struct SQLDataGrid: NSViewRepresentable {
             // Row numbers live in the frozen gutter (a floating view), not a table column.
             guard let colIndex = Int(id) else { return cell }
             let original = order.indices.contains(row) ? order[row] : row
+            configureCell(cell, original: original, column: colIndex)
+            return cell
+        }
+
+        /// Configure a reused `GridCellView` for the cell at (original row, data-column). This is the
+        /// ONE cell-configuration path — the main table and the frozen first-column pane both call it,
+        /// so pills, staged-edit tint, alignment, and fonts stay identical and in sync. The render
+        /// instructions come from `SQLGridData.cellStyle` (pure); this only maps the palette slot to a
+        /// theme color and sets the edit target on the cell.
+        func configureCell(_ cell: GridCellView, original: Int, column colIndex: Int) {
             let coord = CellCoord(row: original, column: colIndex)
-            // A staged edit overrides the underlying value and is shown tinted.
-            let staged = parent.stagedEdits[coord]
-            let value = staged ?? parent.data.value(row: original, column: colIndex)
+            let style = parent.data.cellStyle(
+                row: original, column: colIndex, stagedValue: parent.stagedEdits[coord],
+                enumColumns: enumCols, enumSlots: DT.Grid.enumPalette.count)
             cell.coordinator = self
             cell.coord = coord
             cell.isEditable = parent.editable != nil
             var enumColor: NSColor?
-            if staged == nil, enumCols.contains(colIndex), case .text(let s) = value, !s.isEmpty {
+            if let slot = style.enumSlot {
                 let palette = DT.Grid.enumPalette
-                if !palette.isEmpty { enumColor = palette[parent.data.enumColorIndex(s, slots: palette.count)] }
+                if palette.indices.contains(slot) { enumColor = palette[slot] }
             }
-            cell.configure(
-                with: SQLCellFormatting.present(value), font: DT.monoNSFont(size: fontSize),
-                enumColor: enumColor, staged: staged != nil)
-            return cell
+            cell.configure(with: style, font: DT.monoNSFont(size: fontSize), enumColor: enumColor)
         }
 
         /// Stage a parsed edit for the cell at `coord` (or clear it back to the original value when
@@ -909,6 +916,13 @@ final class GridCellView: NSTableCellView, NSTextFieldDelegate {
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not implemented") }
+
+    /// Render this cell from the shared `GridCellStyle`, so the main grid and the frozen first-column
+    /// pane style identically. The style carries an enum-palette *slot*; the caller maps it to a
+    /// concrete `NSColor` (the palette lives in the app's theme layer) and passes it here.
+    func configure(with style: GridCellStyle, font: NSFont, enumColor: NSColor?) {
+        configure(with: style.presentation, font: font, enumColor: enumColor, staged: style.isStaged)
+    }
 
     func configure(with p: CellPresentation, font: NSFont, enumColor: NSColor? = nil, staged: Bool = false) {
         // Don't clobber the field while the user is typing in it.

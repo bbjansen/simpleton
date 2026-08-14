@@ -80,6 +80,49 @@ func runSQLGridDataChecks(_ t: TestRunner) {
         t.expectEqual(d.enumColorIndex("open", slots: 8), slot, "color slot is deterministic")
     }
 
+    t.suite("SQLGridData.cellStyle (shared cell config)") {
+        let cols = [Column(name: "id"), Column(name: "status")]
+        let rs: [[SQLValue]] = [
+            [.integer(1), .text("open")],
+            [.integer(2), .text("closed")],
+            [.integer(3), .text("open")],
+            [.integer(4), .null],
+        ]
+        let d = SQLGridData(columns: cols, rows: rs)
+        let enums = d.enumColumns(maxDistinct: 3)  // status qualifies; id (numeric) does not
+
+        // A committed enum text cell gets a stable palette slot; the numeric id column never does.
+        let statusStyle = d.cellStyle(row: 0, column: 1, stagedValue: nil, enumColumns: enums, enumSlots: 8)
+        t.expect(statusStyle.enumSlot != nil, "enum text cell gets a palette slot")
+        t.expectEqual(statusStyle.enumSlot, d.enumColorIndex("open", slots: 8), "slot matches enumColorIndex")
+        t.expect(!statusStyle.isStaged, "committed value is not staged")
+        t.expectEqual(statusStyle.presentation.text, "open", "presentation text is the value")
+
+        let idStyle = d.cellStyle(row: 0, column: 0, stagedValue: nil, enumColumns: enums, enumSlots: 8)
+        t.expect(idStyle.enumSlot == nil, "numeric column never gets an enum slot")
+        t.expectEqual(idStyle.presentation.alignment, .trailing, "numbers are trailing-aligned")
+
+        // The same value in both panes yields the identical style (proves shared config can't drift).
+        t.expectEqual(
+            d.cellStyle(row: 2, column: 1, stagedValue: nil, enumColumns: enums, enumSlots: 8),
+            statusStyle, "same value → identical style across panes")
+
+        // A staged edit suppresses the enum pill and flags the staged tint, preferring the staged value.
+        let staged = d.cellStyle(row: 0, column: 1, stagedValue: .text("archived"), enumColumns: enums, enumSlots: 8)
+        t.expect(staged.isStaged, "staged edit flagged")
+        t.expect(staged.enumSlot == nil, "staged edit suppresses the enum pill")
+        t.expectEqual(staged.presentation.text, "archived", "staged value wins over committed")
+
+        // A NULL cell: null presentation, no pill, not staged.
+        let nullStyle = d.cellStyle(row: 3, column: 1, stagedValue: nil, enumColumns: enums, enumSlots: 8)
+        t.expect(nullStyle.presentation.isNull, "null cell presents as null")
+        t.expect(nullStyle.enumSlot == nil, "null cell has no enum pill")
+
+        // enumSlots == 0 (empty palette) → never assigns a slot, even for an enum column.
+        let noPalette = d.cellStyle(row: 0, column: 1, stagedValue: nil, enumColumns: enums, enumSlots: 0)
+        t.expect(noPalette.enumSlot == nil, "empty palette → no slot")
+    }
+
     t.suite("SQLPaging.pageCount") {
         t.expectEqual(SQLPaging.pageCount(total: 0, pageSize: 500), 1, "empty result → 1 page")
         t.expectEqual(SQLPaging.pageCount(total: 100, pageSize: 500), 1, "fits in one page")
