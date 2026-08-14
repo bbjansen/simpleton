@@ -52,6 +52,16 @@ struct SQLDataGrid: NSViewRepresentable {
         scroll.drawsBackground = false
         scroll.backgroundColor = .clear
 
+        // A click-through overlay pinned over the table draws the rubber-band cell rectangle. It
+        // returns nil from hitTest so every click/double-click still reaches the cells beneath it.
+        let overlay = CellSelectionOverlay()
+        overlay.coordinator = context.coordinator
+        overlay.frame = table.bounds
+        overlay.autoresizingMask = [.width, .height]
+        table.addSubview(overlay)
+        context.coordinator.overlay = overlay
+        table.selectionOverlay = overlay
+
         context.coordinator.table = table
         context.coordinator.observeColumnLayout()
         context.coordinator.rebuildColumns()
@@ -79,6 +89,14 @@ struct SQLDataGrid: NSViewRepresentable {
         /// Original row indices shown on the current page, in display (sorted) order. This is the
         /// per-page slice of the full sorted order; all row math for the visible table uses this.
         private(set) var order: [Int] = []
+        /// The current rectangular cell selection in display space (display rows × table-column view
+        /// positions), or nil when only whole rows are selected. Drawn per-row by `GridRowView` and
+        /// copied as rectangular TSV on ⌘C. Kept separate from NSTableView's row selection so record
+        /// mode and inline editing keep using the row selection unchanged.
+        private(set) var cellSelection: CellSelection?
+        /// The sort + page state the current `order` was built from. Used to drop the rectangular cell
+        /// selection only when the order actually changes, not on every unrelated update pass.
+        private var lastOrderStamp: SelectionStamp?
         private var builtColumns: [Column] = []
         private var enumCols: Set<Int> = []
         private var isProgrammaticReload = false
@@ -187,6 +205,14 @@ struct SQLDataGrid: NSViewRepresentable {
             let start = min(max(parent.page.start, 0), full.count)
             let end = min(max(parent.page.end, start), full.count)
             order = Array(full[start..<end])
+            // A rectangular cell selection is display-row addressed, so it stops being meaningful once
+            // the order changes (new sort or a different page). Drop it then — but not on the many
+            // update passes where sort + page are unchanged (e.g. a plain row-selection change).
+            let stamp = SelectionStamp(sortKeys: parent.sortKeys, start: parent.page.start, end: parent.page.end)
+            if stamp != lastOrderStamp {
+                lastOrderStamp = stamp
+                if cellSelection != nil { cellSelection = nil }
+            }
         }
 
         func applyTheme() {
@@ -209,6 +235,13 @@ struct SQLDataGrid: NSViewRepresentable {
                 table.deselectAll(nil)
             }
             isProgrammaticReload = false
+            // reloadData re-inserts row views; keep the selection overlay on top and up to date.
+            if let overlay {
+                overlay.removeFromSuperview()
+                overlay.frame = table.bounds
+                table.addSubview(overlay)
+                overlay.needsDisplay = true
+            }
         }
 
         private var fontSize: CGFloat { max(10, parent.rowHeight * 0.42) }
@@ -332,13 +365,92 @@ struct SQLDataGrid: NSViewRepresentable {
             parent.sortKeys = keys
         }
 
+        /// ⌘C / Copy: when a rectangular cell selection is active, copy that rectangle as TSV (display
+        /// rows → original rows, column view-positions → data-column indices). Otherwise copy the
+        /// selected whole rows — the existing behavior, unchanged.
         func copySelection(withHeader: Bool) {
             guard let table else { return }
+            if let sel = cellSelection {
+                let originals = sel.displayRows.compactMap { order.indices.contains($0) ? order[$0] : nil }
+                let columns = dataColumnIndices(forViewPositions: sel.columnPositions)
+                let tsv = parent.data.tsv(rows: originals, columns: columns, withHeader: withHeader)
+                writeToPasteboard(tsv)
+                return
+            }
             let originals = table.selectedRowIndexes.map { order.indices.contains($0) ? order[$0] : $0 }
             let tsv = parent.data.tsv(rows: originals, withHeader: withHeader)
+            writeToPasteboard(tsv)
+        }
+
+        private func writeToPasteboard(_ tsv: String) {
             guard !tsv.isEmpty else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(tsv, forType: .string)
+        }
+
+        /// Map an ordered list of table-column view positions to data-column indices (the `Int` in each
+        /// column identifier), skipping the gutter ("#"). Reflects the user's current column order.
+        private func dataColumnIndices(forViewPositions positions: [Int]) -> [Int] {
+            guard let table else { return [] }
+            return positions.compactMap { pos in
+                guard table.tableColumns.indices.contains(pos) else { return nil }
+                return Int(table.tableColumns[pos].identifier.rawValue)
+            }
+        }
+
+        // MARK: Rectangular cell selection
+
+        /// Begin a rectangular selection at a data cell (display row, table-column view position).
+        /// Ignores the gutter. Clears any prior rectangle.
+        func beginCellSelection(displayRow row: Int, columnPosition col: Int) {
+            guard isDataColumn(col), order.indices.contains(row) else {
+                clearCellSelection()
+                return
+            }
+            cellSelection = CellSelection(anchorRow: row, anchorCol: col, extentRow: row, extentCol: col)
+            redrawSelection()
+        }
+
+        /// Extend the active rectangle to a data cell (drag or shift-click). No-op if no anchor yet or
+        /// the target is the gutter.
+        func extendCellSelection(displayRow row: Int, columnPosition col: Int) {
+            guard var sel = cellSelection, isDataColumn(col), order.indices.contains(row) else { return }
+            sel.extentRow = row
+            sel.extentCol = col
+            cellSelection = sel
+            redrawSelection()
+        }
+
+        /// Drop the rectangular selection (single click, gutter click, sort/page/edit).
+        func clearCellSelection() {
+            guard cellSelection != nil else { return }
+            cellSelection = nil
+            redrawSelection()
+        }
+
+        private func isDataColumn(_ position: Int) -> Bool {
+            guard let table, table.tableColumns.indices.contains(position) else { return false }
+            return table.tableColumns[position].identifier.rawValue != "#"
+        }
+
+        /// The click-through overlay that draws the rubber-band rectangle over the table.
+        weak var overlay: CellSelectionOverlay?
+
+        /// Mark the overlay for redraw after the rectangle changes.
+        private func redrawSelection() { overlay?.needsDisplay = true }
+
+        /// The union rect (in the table's flipped coordinate space) of the current cell selection, or
+        /// nil when there's no rectangle. Built from the two corner cells so column reordering and
+        /// variable widths are handled by AppKit's own cell frames.
+        func selectionRect() -> NSRect? {
+            guard let table, let sel = cellSelection,
+                order.indices.contains(sel.minRow), order.indices.contains(sel.maxRow),
+                table.tableColumns.indices.contains(sel.minCol), table.tableColumns.indices.contains(sel.maxCol)
+            else { return nil }
+            let topLeft = table.frameOfCell(atColumn: sel.minCol, row: sel.minRow)
+            let bottomRight = table.frameOfCell(atColumn: sel.maxCol, row: sel.maxRow)
+            guard topLeft != .zero, bottomRight != .zero else { return nil }
+            return topLeft.union(bottomRight)
         }
 
         func activateRecord() { parent.onActivateRecord() }
@@ -389,20 +501,136 @@ struct SQLDataGrid: NSViewRepresentable {
     }
 }
 
-/// NSTableView subclass: Cmd-C copy, Space -> record mode, and a copy menu.
+/// Identity of the display order: the sort keys plus the page window. When this changes, a
+/// display-row-addressed cell rectangle no longer maps to the same data and is dropped.
+struct SelectionStamp: Equatable {
+    let sortKeys: [SortKey]
+    let start: Int
+    let end: Int
+}
+
+/// A rectangular cell selection in display space: an anchor cell and an extent cell, each a
+/// (display row, table-column view position) pair. Normalized accessors give the inclusive row and
+/// column ranges so drawing and copy don't care which corner the drag started from.
+struct CellSelection: Equatable {
+    var anchorRow: Int
+    var anchorCol: Int
+    var extentRow: Int
+    var extentCol: Int
+
+    var minRow: Int { min(anchorRow, extentRow) }
+    var maxRow: Int { max(anchorRow, extentRow) }
+    var minCol: Int { min(anchorCol, extentCol) }
+    var maxCol: Int { max(anchorCol, extentCol) }
+
+    /// Display rows covered by the rectangle (inclusive), top to bottom.
+    var displayRows: [Int] { Array(minRow...maxRow) }
+    /// Table-column view positions covered by the rectangle (inclusive), left to right.
+    var columnPositions: [Int] { Array(minCol...maxCol) }
+    /// Whether this rectangle covers `row` (a display row).
+    func covers(row: Int) -> Bool { row >= minRow && row <= maxRow }
+}
+
+/// NSTableView subclass: Cmd-C copy, Space -> record mode, rubber-band cell selection, and a copy menu.
 final class GridTableView: NSTableView {
     weak var coordinator: SQLDataGrid.Coordinator?
+    weak var selectionOverlay: CellSelectionOverlay?
+    /// Points the mouse must move before a press counts as a rubber-band drag (Apple's ~2pt).
+    private let dragThreshold: CGFloat = 2.0
 
     override func keyDown(with event: NSEvent) {
-        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "c" {
-            coordinator?.copySelection(withHeader: false)
-            return
-        }
         if event.charactersIgnoringModifiers == " " {
             coordinator?.activateRecord()
             return
         }
         super.keyDown(with: event)
+    }
+
+    /// ⌘C flows through the responder chain to `copy(_:)`, which also lights up an Edit ▸ Copy menu
+    /// item. When a cell rectangle is active it copies that rectangle; otherwise the selected rows.
+    @objc func copy(_ sender: Any?) { coordinator?.copySelection(withHeader: false) }
+
+    /// Keep inline cell editing working under the custom mouseDown: the table's text field is a valid
+    /// first responder, so double-click/click-to-edit reaches it normally.
+    override func validateProposedFirstResponder(_ responder: NSResponder, for event: NSEvent?) -> Bool {
+        if responder is NSTextField || responder is NSTextView { return true }
+        return super.validateProposedFirstResponder(responder, for: event)
+    }
+
+    /// Peek-then-delegate: decide click vs. drag before handing off. A double-click, right-click, or a
+    /// press on the gutter goes straight to `super` (row selection / doubleAction / editing). A press
+    /// on a data cell starts a rubber-band rectangle only once the mouse moves past the threshold;
+    /// until then it behaves like a normal single click (placing the row selection + a 1×1 rectangle).
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let row = self.row(at: point)
+        let column = self.column(at: point)
+        let isDataCell =
+            row >= 0 && column >= 0 && tableColumns.indices.contains(column)
+            && tableColumns[column].identifier.rawValue != "#"
+        let shift = event.modifierFlags.contains(.shift)
+        let command = event.modifierFlags.contains(.command)
+        // Extend an existing rectangle with shift-click on a data cell.
+        let shiftExtendsRect = shift && isDataCell && coordinator?.cellSelection != nil
+        // Double-clicks, non-data cells (gutter/empty/header), and ⌘/⇧ row-selection gestures (unless
+        // shift is extending a rectangle) keep the built-in behavior — multi-row selection + whole-row
+        // copy stay intact.
+        guard event.clickCount == 1, isDataCell, !command, (!shift || shiftExtendsRect) else {
+            if !shiftExtendsRect { coordinator?.clearCellSelection() }
+            super.mouseDown(with: event)
+            return
+        }
+
+        if shiftExtendsRect {
+            coordinator?.extendCellSelection(displayRow: row, columnPosition: column)
+        } else {
+            coordinator?.beginCellSelection(displayRow: row, columnPosition: column)
+        }
+
+        // Run our own tracking loop. If the mouse never crosses the threshold, treat it as a plain
+        // click: delegate to super so normal row selection still happens (record mode + editing rely
+        // on it). If it drags, we own the loop and extend the rectangle.
+        let start = point
+        var dragged = false
+        trackingLoop: while let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+            switch next.type {
+            case .leftMouseDragged:
+                let p = convert(next.locationInWindow, from: nil)
+                if !dragged, abs(p.x - start.x) <= dragThreshold, abs(p.y - start.y) <= dragThreshold {
+                    continue
+                }
+                dragged = true
+                autoscroll(with: next)
+                let clampedRow = clampRow(self.row(at: p), point: p)
+                let clampedCol = clampColumn(self.column(at: p))
+                coordinator?.extendCellSelection(displayRow: clampedRow, columnPosition: clampedCol)
+            case .leftMouseUp:
+                break trackingLoop
+            default:
+                break trackingLoop
+            }
+        }
+        if !dragged, !shiftExtendsRect {
+            // A plain click: keep the 1×1 cell rectangle and also perform the normal row selection so
+            // record mode / editing see the same row. selectRowIndexes drives the delegate callback.
+            selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+    }
+
+    /// Clamp a possibly-`-1` row index (drag past a vertical edge) into range. `row(at:)` returns -1
+    /// both above the first row and below the last, so use the point's y to pick the near edge.
+    private func clampRow(_ value: Int, point: NSPoint) -> Int {
+        let last = numberOfRows - 1
+        guard last >= 0 else { return 0 }
+        if value < 0 { return point.y <= visibleRect.minY ? 0 : last }
+        return min(max(value, 0), last)
+    }
+
+    /// Clamp a possibly-`-1` column index to the nearest data column (never the gutter at position 0).
+    private func clampColumn(_ value: Int) -> Int {
+        let last = numberOfColumns - 1
+        if value < 0 { return max(1, last) }
+        return min(max(value, 1), max(1, last))
     }
 
     /// The cell the last context menu was opened on (row/column in display space), so the menu's
@@ -449,6 +677,27 @@ final class GridTableView: NSTableView {
     @objc private func setNull() {
         guard let c = menuCell else { return }
         coordinator?.setNullClicked(displayRow: c.row, column: c.column)
+    }
+}
+
+/// A click-through overlay pinned over the table that draws the rubber-band cell rectangle. It never
+/// intercepts mouse events (`hitTest` returns nil), so single-click, double-click, and inline editing
+/// all reach the cells beneath it. The rectangle is drawn as a translucent themed fill plus a solid
+/// edge so cell text underneath stays legible.
+final class CellSelectionOverlay: NSView {
+    weak var coordinator: SQLDataGrid.Coordinator?
+
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let rect = coordinator?.selectionRect() else { return }
+        DT.Grid.selectionFill.withAlphaComponent(0.22).setFill()
+        rect.fill()
+        DT.Grid.selectionFill.withAlphaComponent(0.9).setStroke()
+        let border = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+        border.lineWidth = 1.5
+        border.stroke()
     }
 }
 
