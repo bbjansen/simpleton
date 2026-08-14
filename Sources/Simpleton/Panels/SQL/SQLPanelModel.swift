@@ -76,15 +76,18 @@ final class SQLPanelModel: ObservableObject {
     var availability: ClientAvailability {
         if isConnecting { return .loading }
         if isConnected { return .ready }
-        if let errorMessage {
+        // Only show the add-a-connection empty state when there are genuinely no saved SQL
+        // connections. When connections exist but we are not connected, fall through to `.ready` so the
+        // connection bar (picker + Connect) stays visible — otherwise a saved connection is
+        // unreachable from the UI.
+        if connections.isEmpty {
             return .unavailable(
-                icon: "cylinder.split.1x2", title: "Not connected", message: errorMessage,
-                actionLabel: "Connections", action: { [weak self] in self?.showingEditor = true })
+                icon: "cylinder.split.1x2", title: "No connections",
+                message: errorMessage ?? "Add a SQL connection to get started.",
+                actionLabel: "New connection",
+                action: { [weak self] in self?.showingEditor = true })
         }
-        return .unavailable(
-            icon: "cylinder.split.1x2", title: "No connection",
-            message: "Pick a SQL connection or add one.", actionLabel: "New connection",
-            action: { [weak self] in self?.showingEditor = true })
+        return .ready
     }
 
     func reload() async {
