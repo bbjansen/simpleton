@@ -7,9 +7,55 @@ import SimpletonCore
 enum AMQPTab: String, CaseIterable, Identifiable {
     case queues = "Queues"
     case exchanges = "Exchanges"
+    case bindings = "Bindings"
     case connections = "Connections"
     case channels = "Channels"
+    case nodes = "Nodes"
     var id: String { rawValue }
+}
+
+/// Input for the New Queue sheet, carrying the optional TTL / dead-letter policy args. Kept in the
+/// model so the sheet stays a pure form and the model owns the argument-map construction.
+struct NewQueueSpec {
+    var name = ""
+    var durable = true
+    var autoDelete = false
+    /// Message TTL in milliseconds (`x-message-ttl`); blank = unset.
+    var messageTTL = ""
+    /// Dead-letter exchange (`x-dead-letter-exchange`); blank = unset.
+    var deadLetterExchange = ""
+    /// Dead-letter routing key (`x-dead-letter-routing-key`); blank = unset.
+    var deadLetterRoutingKey = ""
+
+    /// Build the RabbitMQ `arguments` map from the filled-in policy fields. Empty fields are omitted;
+    /// a non-numeric TTL is dropped rather than sent as a bad value.
+    var arguments: [String: QueueArgument] {
+        var args: [String: QueueArgument] = [:]
+        let ttl = messageTTL.trimmingCharacters(in: .whitespaces)
+        if !ttl.isEmpty, let ms = Int(ttl) { args["x-message-ttl"] = .int(ms) }
+        let dlx = deadLetterExchange.trimmingCharacters(in: .whitespaces)
+        if !dlx.isEmpty { args["x-dead-letter-exchange"] = .string(dlx) }
+        let dlrk = deadLetterRoutingKey.trimmingCharacters(in: .whitespaces)
+        if !dlrk.isEmpty { args["x-dead-letter-routing-key"] = .string(dlrk) }
+        return args
+    }
+}
+
+/// Input for the New Exchange sheet.
+struct NewExchangeSpec {
+    var name = ""
+    var type = "direct"
+    var durable = true
+    var autoDelete = false
+
+    static let types = ["direct", "topic", "fanout", "headers"]
+}
+
+/// Input for the New Binding sheet (queue ← exchange).
+struct NewBindingSpec {
+    var source = ""
+    var destination = ""
+    var routingKey = ""
 }
 
 @MainActor
@@ -25,8 +71,10 @@ final class AMQPPanelModel: ObservableObject {
     @Published var overview: Overview?
     @Published var queues: [QueueInfo] = []
     @Published var exchanges: [ExchangeInfo] = []
+    @Published var bindings: [BindingInfo] = []
     @Published var brokerConnections: [ConnectionInfo] = []
     @Published var channels: [ChannelInfo] = []
+    @Published var nodes: [NodeInfo] = []
 
     /// Sheet state for a queue's peeked messages.
     @Published var messagePreview: [MessagePreview]?
@@ -35,6 +83,13 @@ final class AMQPPanelModel: ObservableObject {
     @Published var publishTarget: QueueInfo?
     /// Confirmation state for purging.
     @Published var purgeTarget: QueueInfo?
+    /// Sheet presentation for the New Queue / New Exchange / New Binding forms.
+    @Published var showingNewQueue = false
+    @Published var showingNewExchange = false
+    @Published var showingNewBinding = false
+    /// Confirmation state for deleting a queue / an exchange.
+    @Published var deleteQueueTarget: QueueInfo?
+    @Published var deleteExchangeTarget: ExchangeInfo?
 
     private let store: ConnectionStore
     private var backend: AMQPManagementBackend?
@@ -113,8 +168,10 @@ final class AMQPPanelModel: ObservableObject {
         overview = nil
         queues = []
         exchanges = []
+        bindings = []
         brokerConnections = []
         channels = []
+        nodes = []
     }
 
     /// Reload every table (called by connect, the scaffold's manual refresh, and auto-refresh).
@@ -125,8 +182,10 @@ final class AMQPPanelModel: ObservableObject {
             overview = try await backend.overview()
             queues = try await backend.queues(vhost: vhost)
             exchanges = try await backend.exchanges(vhost: vhost)
+            bindings = try await backend.bindings(vhost: vhost)
             brokerConnections = try await backend.connections()
             channels = try await backend.channels()
+            nodes = try await backend.nodes()
         } catch {
             errorMessage = Self.describe(error)
         }
@@ -162,6 +221,69 @@ final class AMQPPanelModel: ObservableObject {
         do {
             try await backend.purge(vhost: queue.vhost, queue: queue.name)
             purgeTarget = nil
+            await refresh()
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    // MARK: - Create / delete actions
+
+    func createQueue(_ spec: NewQueueSpec) async {
+        guard let backend else { return }
+        do {
+            try await backend.createQueue(
+                vhost: vhost, name: spec.name, durable: spec.durable, autoDelete: spec.autoDelete,
+                arguments: spec.arguments)
+            showingNewQueue = false
+            await refresh()
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    func deleteQueue(_ queue: QueueInfo) async {
+        guard let backend else { return }
+        do {
+            try await backend.deleteQueue(vhost: queue.vhost, name: queue.name)
+            deleteQueueTarget = nil
+            await refresh()
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    func createExchange(_ spec: NewExchangeSpec) async {
+        guard let backend else { return }
+        do {
+            try await backend.createExchange(
+                vhost: vhost, name: spec.name, type: spec.type, durable: spec.durable,
+                autoDelete: spec.autoDelete)
+            showingNewExchange = false
+            await refresh()
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    func deleteExchange(_ exchange: ExchangeInfo) async {
+        guard let backend else { return }
+        do {
+            try await backend.deleteExchange(vhost: exchange.vhost, name: exchange.name)
+            deleteExchangeTarget = nil
+            await refresh()
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    func createBinding(_ spec: NewBindingSpec) async {
+        guard let backend else { return }
+        do {
+            try await backend.createBinding(
+                vhost: vhost, source: spec.source, destination: spec.destination,
+                routingKey: spec.routingKey)
+            showingNewBinding = false
             await refresh()
         } catch {
             errorMessage = Self.describe(error)
