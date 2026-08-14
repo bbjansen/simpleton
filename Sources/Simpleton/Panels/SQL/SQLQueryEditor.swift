@@ -1,4 +1,5 @@
 // Sources/Simpleton/Panels/SQL/SQLQueryEditor.swift
+import AppKit
 import SimpletonCore
 import SimpletonSQL
 import SwiftUI
@@ -58,6 +59,7 @@ struct SQLQueryEditor: View {
                 Text(summary).font(DT.monoFont(size: 10)).foregroundColor(DT.textTertiary)
                     .help("Rows returned and query time")
             }
+            savedQueriesMenu
             if !model.historyItems.isEmpty {
                 Menu {
                     ForEach(model.historyItems, id: \.self) { item in
@@ -72,6 +74,51 @@ struct SQLQueryEditor: View {
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!model.isConnected)
         }
+    }
+
+    /// The bookmark menu: apply a saved query (click its name), save the current editor text under a
+    /// name, or delete a saved query. Disabled until connected (saves are per-database).
+    private var savedQueriesMenu: some View {
+        Menu {
+            if model.savedQueries.isEmpty {
+                Text("No saved queries")
+            } else {
+                ForEach(model.savedQueries, id: \.name) { q in
+                    Button(q.name) { model.queryText = q.sql }
+                }
+                Divider()
+                Menu("Delete") {
+                    ForEach(model.savedQueries, id: \.name) { q in
+                        Button(q.name) { Task { await model.removeSavedQuery(name: q.name) } }
+                    }
+                }
+            }
+            Divider()
+            Button("Save current query…") { promptAndSaveQuery() }
+                .disabled(model.queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } label: {
+            Image(systemName: "bookmark")
+        }
+        .menuStyle(.borderlessButton).fixedSize().help("Saved queries")
+        .disabled(!model.isConnected)
+    }
+
+    /// Prompt for a name (an `NSAlert` with a text field) and save the current editor text under it.
+    /// Runs modally on the main thread; a blank name cancels the save.
+    private func promptAndSaveQuery() {
+        let alert = NSAlert()
+        alert.messageText = "Save Query"
+        alert.informativeText = "Name this query to reuse it on this connection."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.placeholderString = "Query name"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        Task { await model.saveCurrentQuery(name: name) }
     }
 }
 

@@ -44,6 +44,9 @@ final class SQLPanelModel: ObservableObject {
     @Published var historyItems: [String] = []
     @Published var tables: [TableInfo] = []
     @Published var columnsByTable: [String: [ColumnInfo]] = [:]
+    /// Named, reusable queries the user saved for the connected database (see `SQLSavedQueryStore`).
+    /// Loaded on connect, cleared on disconnect; the editor's bookmark menu applies/manages them.
+    @Published var savedQueries: [SavedQuery] = []
     /// Non-nil exactly when the current result is a single-table SELECT with a primary key we can
     /// UPDATE by. The grid shows the edit affordance only while this is set. Recomputed on every
     /// `runQuery`; cleared on disconnect or any non-editable result.
@@ -61,6 +64,7 @@ final class SQLPanelModel: ObservableObject {
 
     private let store: ConnectionStore
     private let history: SQLQueryHistoryStore
+    private let savedStore: SQLSavedQueryStore
     private var driver: SQLDriver?
 
     /// The SQL kinds this panel manages.
@@ -69,6 +73,7 @@ final class SQLPanelModel: ObservableObject {
     init(appSupportDir: URL) {
         self.store = ConnectionStore(directory: appSupportDir)
         self.history = SQLQueryHistoryStore(directory: appSupportDir)
+        self.savedStore = SQLSavedQueryStore(directory: appSupportDir)
     }
 
     var selectedConnection: Connection? {
@@ -147,6 +152,7 @@ final class SQLPanelModel: ObservableObject {
             driver = d
             isConnected = true
             historyItems = await history.history(for: connection.id)
+            savedQueries = await savedStore.saved(for: connection.id)
             await loadSchema()
         } catch {
             errorMessage = Self.describe(error)
@@ -162,6 +168,7 @@ final class SQLPanelModel: ObservableObject {
         foreignKeyMatches = [:]
         lastCommit = nil
         lastQueryDuration = nil
+        savedQueries = []
         tables = []
         columnsByTable = [:]
     }
@@ -312,6 +319,21 @@ final class SQLPanelModel: ObservableObject {
 
     func pickTable(_ table: String) {
         queryText = "SELECT * FROM \(table) LIMIT 100"
+    }
+
+    /// Save the current editor text as a named favorite for the connected database, then refresh the
+    /// published list. No-ops when there's no selected connection, or the name/SQL is blank.
+    func saveCurrentQuery(name: String) async {
+        guard let id = selectedConnection?.id else { return }
+        await savedStore.save(name: name, sql: queryText, for: id)
+        savedQueries = await savedStore.saved(for: id)
+    }
+
+    /// Delete a saved favorite by name for the connected database, then refresh the published list.
+    func removeSavedQuery(name: String) async {
+        guard let id = selectedConnection?.id else { return }
+        await savedStore.remove(name: name, for: id)
+        savedQueries = await savedStore.saved(for: id)
     }
 
     /// Heuristic: a non-SELECT/EXPLAIN/PRAGMA/WITH statement modifies data.

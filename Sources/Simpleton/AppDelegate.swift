@@ -1004,14 +1004,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             model.queryText = "SELECT id, name FROM t"
             await model.runQuery()  // restore a clean state so the summary line's error=nil holds
 
+            // 5. Saved queries: saving the current text persists + republishes; removing drops it.
+            await model.saveCurrentQuery(name: "fav")
+            let savedOK = model.savedQueries.contains { $0.name == "fav" && $0.sql == "SELECT id, name FROM t" }
+            await model.removeSavedQuery(name: "fav")
+            let removedOK = !model.savedQueries.contains { $0.name == "fav" }
+
             let ok =
                 connected && editableDetected && aggregateNotEditable && committedOK && wroteValue
-                && timedOK && clearedOnError
+                && timedOK && clearedOnError && savedOK && removedOK
             NSLog(
                 "SIMP-SQLE2E RESULT %@: connected=%@ editable=%@ aggNotEditable=%@ committed=%@ wrote=%@ "
-                    + "timed=%@ clearedOnErr=%@ error=%@",
+                    + "timed=%@ clearedOnErr=%@ saved=%@ removed=%@ error=%@",
                 ok ? "PASS" : "FAIL", "\(connected)", "\(editableDetected)", "\(aggregateNotEditable)",
-                "\(committedOK)", "\(wroteValue)", "\(timedOK)", "\(clearedOnError)", model.errorMessage ?? "nil")
+                "\(committedOK)", "\(wroteValue)", "\(timedOK)", "\(clearedOnError)", "\(savedOK)", "\(removedOK)",
+                model.errorMessage ?? "nil")
             NSApp.terminate(nil)
         }
     }
