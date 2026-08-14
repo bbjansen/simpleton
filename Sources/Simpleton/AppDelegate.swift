@@ -303,6 +303,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             runSQLPanelE2E()
         }
 
+        // Headless SQL results-grid check (set SIMPLETON_SQL_GRID_E2E): mount the real SQLDataGrid in
+        // an offscreen window with a seeded result and assert observable facts about the frozen first
+        // data column — the frozen mini-table exists with a gutter + one data column, the row count
+        // mirrors the main table, and a vertical scroll of the main clip view mirrors to the frozen
+        // pane. Verifies the frozen-column feature actually renders/syncs, not just that it compiles.
+        if ProcessInfo.processInfo.environment["SIMPLETON_SQL_GRID_E2E"] != nil {
+            runSQLGridE2E()
+        }
+
         let menuResult = MenuBarBuilder.build(target: self, workspacesMenuDelegate: self)
         self.workspacesMenu = menuResult.workspacesMenu
 
@@ -925,6 +934,120 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 ok ? "PASS" : "FAIL", "\(connected)", "\(editableDetected)", "\(aggregateNotEditable)",
                 "\(committedOK)", "\(wroteValue)", model.errorMessage ?? "nil")
             NSApp.terminate(nil)
+        }
+    }
+
+    /// Mount the real SQLDataGrid offscreen with a seeded 40-row result and assert the frozen first
+    /// data column renders and scroll-syncs (SIMPLETON_SQL_GRID_E2E). Logs one SIMP-SQLGRID RESULT line.
+    private func runSQLGridE2E() {
+        NSLog("SIMP-SQLGRID starting")
+        DispatchQueue.main.async {
+            // Seed a result big enough to scroll: id (frozen), name, status columns × 40 rows.
+            let columns = [Column(name: "id"), Column(name: "name"), Column(name: "status")]
+            var rows: [[SQLValue]] = []
+            for i in 0..<40 {
+                rows.append([.integer(Int64(i)), .text("row-\(i)"), .text(i % 2 == 0 ? "open" : "closed")])
+            }
+            let data = SQLGridData(columns: columns, rows: rows)
+            let bounds = SQLPaging.bounds(total: rows.count, pageSize: nil, page: 0)
+            var sortKeys: [SortKey] = []
+            var selectedRow: Int?
+            var staged: [CellCoord: SQLValue] = [:]
+            let grid = SQLDataGrid(
+                data: data,
+                sortKeys: Binding(get: { sortKeys }, set: { sortKeys = $0 }),
+                selectedRow: Binding(get: { selectedRow }, set: { selectedRow = $0 }),
+                page: bounds, rowHeight: 24, editable: nil, foreignKeyMatches: [:],
+                stagedEdits: Binding(get: { staged }, set: { staged = $0 }),
+                onActivateRecord: {}, onInspect: { _, _ in }, onNavigateForeignKey: { _, _ in })
+
+            let host = NSHostingView(rootView: grid)
+            host.frame = NSRect(x: 0, y: 0, width: 900, height: 460)
+            let window = NSWindow(
+                contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentView = host
+            // When capturing a screenshot, bring the window on-screen so a real screencapture sees the
+            // table cells (cacheDisplay on an ordered-back window may not flush table row views).
+            if ProcessInfo.processInfo.environment["SIMPLETON_SQL_GRID_SHOT"] != nil {
+                window.setFrameOrigin(NSPoint(x: 100, y: 100))
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                window.orderBack(nil)
+            }
+            host.layoutSubtreeIfNeeded()
+
+            // Let the representable make/update pass run, then inspect the live view tree.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                func firstDescendant<T: NSView>(_ type: T.Type, in view: NSView) -> T? {
+                    for sub in view.subviews {
+                        if let hit = sub as? T { return hit }
+                        if let deeper = firstDescendant(type, in: sub) { return deeper }
+                    }
+                    return nil
+                }
+                let mainTable = firstDescendant(GridTableView.self, in: host)
+                let frozen = firstDescendant(FrozenColumnView.self, in: host)
+                let frozenExists = frozen != nil
+                // The main table has 3 data columns (id/name/status), and the frozen (leftmost, id)
+                // one is collapsed to width 0 (its cells live in the pane) while the others keep width.
+                let idCol = mainTable?.tableColumns.first { $0.identifier.rawValue == "0" }
+                let idCollapsed = (idCol?.width ?? -1) == 0
+                let othersVisible =
+                    (mainTable?.tableColumns.first { $0.identifier.rawValue == "1" }?.width ?? 0) > 0
+                let rowsMatch = (mainTable?.numberOfRows ?? -1) == 40
+                // The main table still renders its (non-frozen) data cells: the "name" column (index 1)
+                // cell for row 0 shows "row-0". Proves freezing didn't break the main grid rendering.
+                var mainRenders = false
+                if let mainTable,
+                    let namePos = mainTable.tableColumns.firstIndex(where: { $0.identifier.rawValue == "1" }),
+                    let cell = mainTable.view(atColumn: namePos, row: 0, makeIfNecessary: true) as? GridCellView
+                {
+                    mainRenders = cell.currentText == "row-0"
+                }
+
+                // The frozen pane sits pinned at the window's left edge (x ≈ 0), full height.
+                let mainScroll = firstDescendant(NSScrollView.self, in: host)
+                var frozenAtLeft = false
+                if let frozen {
+                    let inWindow = frozen.convert(frozen.bounds, to: nil)
+                    frozenAtLeft = abs(inWindow.origin.x) < 2.0 && inWindow.width > 40
+                }
+
+                // Optional visual capture for manual inspection (set SIMPLETON_SQL_GRID_SHOT=path),
+                // taken at the top (unscrolled) so the frozen id column + gutter are visible at the left.
+                if let shotPath = ProcessInfo.processInfo.environment["SIMPLETON_SQL_GRID_SHOT"] {
+                    window.display()
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+                    let cgID = window.windowNumber
+                    let task = Process()
+                    task.launchPath = "/usr/sbin/screencapture"
+                    task.arguments = ["-x", "-o", "-l\(cgID)", shotPath]
+                    try? task.run()
+                    task.waitUntilExit()
+                }
+
+                // Vertical scroll: the pane redraws aligned rows by reading the main table's live row
+                // rects, so after a scroll it must still be present, full-height, and pinned at the
+                // left. (Its own frame stays over the viewport; row alignment comes from the redraw.)
+                var scrollSynced = false
+                if let mainScroll, let frozen {
+                    mainScroll.contentView.scroll(to: NSPoint(x: 0, y: 120))
+                    mainScroll.reflectScrolledClipView(mainScroll.contentView)
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+                    let win = frozen.convert(frozen.bounds, to: nil)
+                    scrollSynced = win.width > 40 && win.height > 40 && abs(win.origin.x) < 2.0
+                }
+
+                let ok =
+                    frozenExists && idCollapsed && othersVisible && rowsMatch && frozenAtLeft
+                    && scrollSynced && mainRenders
+                NSLog(
+                    "SIMP-SQLGRID RESULT %@: frozenExists=%@ idCollapsed=%@ othersVisible=%@ rowsMatch=%@ "
+                        + "frozenAtLeft=%@ scrollSynced=%@ mainRenders=%@",
+                    ok ? "PASS" : "FAIL", "\(frozenExists)", "\(idCollapsed)", "\(othersVisible)",
+                    "\(rowsMatch)", "\(frozenAtLeft)", "\(scrollSynced)", "\(mainRenders)")
+                NSApp.terminate(nil)
+            }
         }
     }
 

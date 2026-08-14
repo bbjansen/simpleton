@@ -111,6 +111,25 @@ public struct PageBounds: Sendable, Hashable {
     public var lastRowNumber: Int { end }
 }
 
+/// Pure geometry + column-mapping for the frozen left pane (row-number gutter + the first data
+/// column). Split out so the layout math is unit-tested without AppKit. The frozen data column is
+/// whatever sits at view position 0 (the leftmost column), so it tracks the user's column reordering.
+public enum FrozenColumnGeometry {
+    /// The total width of the frozen pane: the gutter strip plus the frozen data column's width. This
+    /// is the left content inset the main table needs so its columns never slide under the pane.
+    public static func paneWidth(gutter: CGFloat, frozenColumnWidth: CGFloat) -> CGFloat {
+        max(0, gutter) + max(0, frozenColumnWidth)
+    }
+
+    /// Whether a table column at `viewPosition` is the frozen one (always the leftmost, position 0).
+    /// The main table hides this column and the frozen pane renders it, so they never both draw it.
+    public static func isFrozen(viewPosition: Int) -> Bool { viewPosition == 0 }
+
+    /// The x-origin of the frozen data column inside the pane (just right of the gutter). The gutter
+    /// occupies `[0, gutter)`; the frozen data column occupies `[gutter, gutter + width)`.
+    public static func frozenColumnOriginX(gutter: CGFloat) -> CGFloat { max(0, gutter) }
+}
+
 /// Pure pagination math over a sorted row order. A page size of `nil` (or ≤ 0) means "All rows on one
 /// page". The page index is clamped into `[0, pageCount)`, so an out-of-range page (e.g. after the
 /// result shrinks) resolves to the last valid page rather than trapping.

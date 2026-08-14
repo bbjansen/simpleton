@@ -123,6 +123,25 @@ func runSQLGridDataChecks(_ t: TestRunner) {
         t.expect(noPalette.enumSlot == nil, "empty palette → no slot")
     }
 
+    t.suite("FrozenColumnGeometry") {
+        // Pane width is gutter + frozen column width, clamping negatives to 0.
+        t.expectEqual(
+            FrozenColumnGeometry.paneWidth(gutter: 44, frozenColumnWidth: 140), 184, "gutter + column")
+        t.expectEqual(
+            FrozenColumnGeometry.paneWidth(gutter: 44, frozenColumnWidth: 0), 44, "collapsed column → gutter only")
+        t.expectEqual(
+            FrozenColumnGeometry.paneWidth(gutter: -10, frozenColumnWidth: -5), 0, "negatives clamp to 0")
+
+        // Only view position 0 (the leftmost column) is frozen.
+        t.expect(FrozenColumnGeometry.isFrozen(viewPosition: 0), "position 0 is frozen")
+        t.expect(!FrozenColumnGeometry.isFrozen(viewPosition: 1), "position 1 is not frozen")
+        t.expect(!FrozenColumnGeometry.isFrozen(viewPosition: 5), "position 5 is not frozen")
+
+        // The frozen data column starts just right of the gutter.
+        t.expectEqual(FrozenColumnGeometry.frozenColumnOriginX(gutter: 44), 44, "column origin = gutter width")
+        t.expectEqual(FrozenColumnGeometry.frozenColumnOriginX(gutter: -3), 0, "negative gutter clamps to 0")
+    }
+
     t.suite("SQLPaging.pageCount") {
         t.expectEqual(SQLPaging.pageCount(total: 0, pageSize: 500), 1, "empty result → 1 page")
         t.expectEqual(SQLPaging.pageCount(total: 100, pageSize: 500), 1, "fits in one page")

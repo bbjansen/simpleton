@@ -154,6 +154,9 @@ enum DT {
         }
         private static var chrome: ChromeColors { ThemeSettings.shared.theme.chrome }
 
+        /// The grid's base surface — used to make the frozen pinned pane opaque so the main table's
+        /// columns don't bleed through it during horizontal scroll.
+        static var base: NSColor { ns(chrome.base) }
         static var headerBackground: NSColor { ns(chrome.surface) }
         static var headerText: NSColor { ns(chrome.textSecondary) }
         static var gridline: NSColor { ns(chrome.border).withAlphaComponent(0.5) }
