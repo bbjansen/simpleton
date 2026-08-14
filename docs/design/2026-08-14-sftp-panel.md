@@ -47,6 +47,47 @@ Auth is read from `Connection` + `ConnectionSecret`:
   `ConnectionSecret.passphrase`.
 - No secrets ever go into `params`.
 
+## Key-type support
+
+Identity-file key types are detected up front with `SSHKeyDetection.detectPrivateKeyType`
+(Citadel) and dispatched in `CitadelSFTPBackend.makeAuthentication`:
+
+| Key type            | Unencrypted | Passphrase-protected | How                                                                                                   |
+| ------------------- | ----------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
+| ed25519             | ✅          | ✅                   | `Curve25519.Signing.PrivateKey(sshEd25519:decryptionKey:)` → `SSHAuthenticationMethod.ed25519`        |
+| RSA                 | ✅          | ✅                   | `Insecure.RSA.PrivateKey(sshRsa:decryptionKey:)` → `SSHAuthenticationMethod.rsa`                       |
+| ECDSA P-256/384/521 | ✅          | ❌ (see below)       | `OpenSSHECDSAKey.parse` → `P256/P384/P521.Signing.PrivateKey` → `SSHAuthenticationMethod.p256/384/521` |
+
+**ECDSA — why a local parser.** swift-nio-ssh (the Citadel 0.12.1 fork,
+`Wellz26/swift-nio-ssh` 0.3.6) has full ECDSA client-auth signing: `NIOSSHPrivateKey`'s
+`BackingKey` has `ecdsaP256/384/521` cases and both `sign(_:)` paths dispatch them
+(`NIOSSHPrivateKey.swift`), and Citadel exposes `SSHAuthenticationMethod.p256/.p384/.p521`
+(`SSHAuthenticationMethod.swift:58-76`). The one gap is **loading** the key: Citadel's OpenSSH
+private-key parser (`OpenSSHKey.swift`) is generic over `OpenSSHPrivateKey`, but its
+`OpenSSH.KeyType` enum only has `sshRSA`/`sshED25519` (lines 287-290) — an
+`ecdsa-sha2-nistp*` blob is rejected by `OpenSSH.KeyType(consuming:)` with
+`unsupportedFeature(.unsupportedPublicKeyType)` before any dispatch, and only
+`Curve25519.Signing.PrivateKey` and `Insecure.RSA.PrivateKey` conform to `OpenSSHPrivateKey`
+(no P-256/384/521 conformance, no `sshECDSA:` init in `SSHCert.swift`). So `SimpletonSFTP`
+provides `OpenSSHECDSAKey`, a small self-contained OpenSSH-v1 container reader that extracts
+the private scalar `d` (an SSH `mpint`, normalized to swift-crypto's exact
+`coordinateByteCount`) and builds `P256/P384/P521.Signing.PrivateKey(rawRepresentation:)`,
+which the Citadel factories then accept. Correctness is proven in CoreChecks by deriving each
+key's public point (`x963Representation`) and matching it against the `ssh-keygen` `.pub`
+fixture, plus a sign/self-verify round-trip.
+
+**Encrypted ECDSA is not supported.** OpenSSH encrypts private keys with the `bcrypt` KDF
+(`bcrypt_pbkdf`) + AES-CTR. Citadel does this internally in `OpenSSHKey.swift`
+(`OpenSSH.KDF.bcrypt`, `citadel_bcrypt_pbkdf` from the internal `CCitadelBcrypt` C target),
+but that KDF is **not public API** — `CCitadelBcrypt` is not a Citadel product, and neither
+swift-crypto's `Crypto` nor `_CryptoExtras` ships `bcrypt_pbkdf` (only PBKDF2). Reimplementing
+the Provos–Mazières `bcrypt_pbkdf` is a security-sensitive undertaking out of scope here, so
+`OpenSSHECDSAKey.parse` detects the non-`none` cipher/KDF and throws
+`ParseError.encryptedUnsupported`; `makeAuthentication` turns that into a precise `.auth`
+error telling the user to use an unencrypted ECDSA key or an ed25519/RSA key (both of which do
+support passphrases). If Citadel later exposes a public ECDSA OpenSSH init or its bcrypt KDF,
+this local parser can be dropped or extended accordingly.
+
 ## Host-key verification (TOFU)
 
 Production must not `acceptAnything()`. `KnownHostsValidator` implements Trust-On-First-Use
@@ -96,6 +137,10 @@ rejection) and an inline error line (per-op failures).
   `CitadelSFTPBackend`, `.postgres` → `.unsupported`), and an env-gated live test
   (`SIMPLETON_SFTP_TEST_HOST` / `_USER` / `_PASSWORD`) that connects and lists `.`; otherwise
   prints "SFTP live checks skipped".
+- CoreChecks `SFTPECDSAKeyChecks`: real `ssh-keygen` ECDSA fixtures (P-256/384/521) — key-type
+  detection, `OpenSSHECDSAKey.parse` public-point round-trip against the `.pub` files, a
+  sign/self-verify round-trip, precise rejection of a bcrypt-encrypted ECDSA key
+  (`.encryptedUnsupported`) and of non-ECDSA / malformed input.
 - Gates: `swift build`, `swift run CoreChecks`, `swift format lint --strict`.
 </content>
 </invoke>
