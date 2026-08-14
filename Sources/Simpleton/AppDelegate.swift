@@ -162,12 +162,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panelRegistry.register(.git)
         panelRegistry.register(.docker)
         panelRegistry.register(.sql)
+        panelRegistry.register(.sftp)
         panelRegistry.register(.s3)
         panelRegistry.register(.amqp)
         panelRegistry.register(.dataConnections)
         // Map connection kinds to their GUI client panel so Data Connections can launch them.
         GUIClientRegistry.shared.register(
             kinds: Array(SQLPanelModel.sqlKinds), panelID: PanelProfile.PanelID.sql)
+        GUIClientRegistry.shared.register(
+            kinds: [.sftp], panelID: PanelProfile.PanelID.sftp)
         GUIClientRegistry.shared.register(
             kinds: Array(S3PanelModel.s3Kinds), panelID: PanelProfile.PanelID.s3)
         GUIClientRegistry.shared.register(

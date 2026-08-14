@@ -13,6 +13,7 @@ let package = Package(
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
         .package(url: "https://github.com/vapor/postgres-nio.git", exact: "1.33.1"),
         .package(url: "https://github.com/vapor/mysql-nio.git", exact: "1.9.1"),
+        .package(url: "https://github.com/orlandos-nl/Citadel.git", exact: "0.12.1"),
         .package(url: "https://github.com/soto-project/soto.git", exact: "7.15.0"),
     ],
     targets: [
@@ -27,6 +28,14 @@ let package = Package(
                 "SimpletonCore",
                 .product(name: "PostgresNIO", package: "postgres-nio"),
                 .product(name: "MySQLNIO", package: "mysql-nio"),
+            ]
+        ),
+        // SFTP client data layer. Isolates the SwiftNIO-SSH / Citadel stack from SimpletonCore and the app.
+        .target(
+            name: "SimpletonSFTP",
+            dependencies: [
+                "SimpletonCore",
+                .product(name: "Citadel", package: "Citadel"),
             ]
         ),
         // S3 client data layer. Isolates the Soto AWS SDK (S3 only) from SimpletonCore and the app;
@@ -48,7 +57,7 @@ let package = Package(
         .executableTarget(
             name: "Simpleton",
             dependencies: [
-                "SimpletonCore", "SimpletonSQL", "SimpletonS3", "SimpletonAMQP", "SwiftTerm",
+                "SimpletonCore", "SimpletonSQL", "SimpletonSFTP", "SimpletonS3", "SimpletonAMQP", "SwiftTerm",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             resources: [.process("Resources")],
@@ -62,7 +71,7 @@ let package = Package(
         // so runnable checks live in a plain executable target (see Tests/CoreChecks).
         .executableTarget(
             name: "CoreChecks",
-            dependencies: ["SimpletonCore", "SimpletonSQL", "SimpletonS3", "SimpletonAMQP"],
+            dependencies: ["SimpletonCore", "SimpletonSQL", "SimpletonSFTP", "SimpletonS3", "SimpletonAMQP"],
             path: "Tests/CoreChecks"
         ),
     ]

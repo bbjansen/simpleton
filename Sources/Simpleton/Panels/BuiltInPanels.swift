@@ -215,6 +215,18 @@ extension PanelDefinition {
         NSHostingController(rootView: SQLPanelView(appSupportDir: context.appSupportDir))
     }
 
+    static let sftp = PanelDefinition(
+        id: PanelProfile.PanelID.sftp,
+        name: "SFTP",
+        icon: "folder.badge.gearshape",
+        description: "Browse remote files over SFTP",
+        defaultSide: .right,
+        isBuiltIn: true,
+        prefersDrawer: true
+    ) { context in
+        NSHostingController(rootView: SFTPPanelView(appSupportDir: context.appSupportDir))
+    }
+
     static let s3 = PanelDefinition(
         id: PanelProfile.PanelID.s3,
         name: "S3",
