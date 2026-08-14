@@ -95,6 +95,40 @@ public final class SotoS3Backend: S3Backend, @unchecked Sendable {
         }
     }
 
+    public func upload(
+        bucket: String, key: String, fileURL: URL,
+        progress: @escaping @Sendable (Double) async throws -> Void
+    ) async throws {
+        do {
+            let fileSize = try Self.fileSize(of: fileURL)
+            if S3Upload.shouldUseMultipart(fileSize: fileSize) {
+                // Soto streams the file from disk in `partSize` chunks (FileByteBufferAsyncSequence),
+                // uploads parts concurrently, and calls `progress` with a 0…1 fraction after each part.
+                // `NIOThreadPool.singleton` matches Soto's own default and needs no separate lifecycle.
+                let request = S3.CreateMultipartUploadRequest(bucket: bucket, key: key)
+                _ = try await s3.multipartUpload(
+                    request,
+                    partSize: S3Upload.partSize(forFileSize: fileSize),
+                    filename: fileURL.path,
+                    progress: progress)
+            } else {
+                // Small file: stream the whole (bounded) file as a single PUT. Reading a < 8 MiB file
+                // into a buffer is cheap and avoids the multipart round-trips.
+                let data = try Data(contentsOf: fileURL)
+                _ = try await s3.putObject(
+                    body: .init(bytes: data),
+                    bucket: bucket,
+                    contentLength: Int64(data.count),
+                    key: key)
+                try await progress(1.0)
+            }
+        } catch let e as S3Error {
+            throw e
+        } catch {
+            throw Self.map(error)
+        }
+    }
+
     public func delete(bucket: String, key: String) async throws {
         do {
             _ = try await s3.deleteObject(bucket: bucket, key: key)
@@ -127,6 +161,16 @@ public final class SotoS3Backend: S3Backend, @unchecked Sendable {
     }
 
     // MARK: - helpers
+
+    /// The size in bytes of the file at `url`, read from the filesystem. Throws `S3Error` if the file
+    /// is missing or its size can't be read, so the upload path never proceeds with an unknown size.
+    private static func fileSize(of url: URL) throws -> Int64 {
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, let size = values.fileSize else {
+            throw S3Error.notFound("not a readable file: \(url.path)")
+        }
+        return Int64(size)
+    }
 
     /// Percent-encode each path segment of an object key for the presign URL, preserving the `/`
     /// separators (they must stay literal so the path structure survives signing).
