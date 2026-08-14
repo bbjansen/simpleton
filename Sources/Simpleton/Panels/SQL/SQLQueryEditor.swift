@@ -54,6 +54,10 @@ struct SQLQueryEditor: View {
                     .font(.system(size: 10)).foregroundColor(DT.accentRed)
             }
             Spacer()
+            if let summary = model.lastRunSummary {
+                Text(summary).font(DT.monoFont(size: 10)).foregroundColor(DT.textTertiary)
+                    .help("Rows returned and query time")
+            }
             if !model.historyItems.isEmpty {
                 Menu {
                     ForEach(model.historyItems, id: \.self) { item in
