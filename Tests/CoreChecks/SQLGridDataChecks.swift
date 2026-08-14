@@ -80,6 +80,76 @@ func runSQLGridDataChecks(_ t: TestRunner) {
         t.expectEqual(d.enumColorIndex("open", slots: 8), slot, "color slot is deterministic")
     }
 
+    t.suite("SQLPaging.pageCount") {
+        t.expectEqual(SQLPaging.pageCount(total: 0, pageSize: 500), 1, "empty result → 1 page")
+        t.expectEqual(SQLPaging.pageCount(total: 100, pageSize: 500), 1, "fits in one page")
+        t.expectEqual(SQLPaging.pageCount(total: 500, pageSize: 500), 1, "exact multiple, one page")
+        t.expectEqual(SQLPaging.pageCount(total: 501, pageSize: 500), 2, "one over → two pages")
+        t.expectEqual(SQLPaging.pageCount(total: 1200, pageSize: 500), 3, "partial last page")
+        t.expectEqual(SQLPaging.pageCount(total: 1200, pageSize: nil), 1, "nil size → All → 1 page")
+        t.expectEqual(SQLPaging.pageCount(total: 1200, pageSize: 0), 1, "zero size → All → 1 page")
+    }
+
+    t.suite("SQLPaging.bounds") {
+        let b0 = SQLPaging.bounds(total: 1200, pageSize: 500, page: 0)
+        t.expectEqual(b0.start, 0, "page 0 start")
+        t.expectEqual(b0.end, 500, "page 0 end")
+        t.expectEqual(b0.count, 500, "page 0 count")
+        t.expectEqual(b0.firstRowNumber, 1, "page 0 first row #")
+        t.expectEqual(b0.lastRowNumber, 500, "page 0 last row #")
+
+        let b2 = SQLPaging.bounds(total: 1200, pageSize: 500, page: 2)
+        t.expectEqual(b2.start, 1000, "last page start")
+        t.expectEqual(b2.end, 1200, "last page end clamps to total")
+        t.expectEqual(b2.count, 200, "last page partial count")
+
+        // Out-of-range page clamps to the last valid page (result shrank / stale index).
+        let over = SQLPaging.bounds(total: 1200, pageSize: 500, page: 9)
+        t.expectEqual(over.page, 2, "over-range page clamps to last")
+        t.expectEqual(over.start, 1000, "clamped page start")
+
+        // Negative page clamps to 0.
+        let neg = SQLPaging.bounds(total: 1200, pageSize: 500, page: -3)
+        t.expectEqual(neg.page, 0, "negative page clamps to first")
+
+        // "All" (nil / 0) → whole range on page 0.
+        let all = SQLPaging.bounds(total: 1200, pageSize: nil, page: 5)
+        t.expectEqual(all.start, 0, "All start")
+        t.expectEqual(all.end, 1200, "All end = total")
+        t.expectEqual(all.page, 0, "All page index is 0")
+
+        // Empty result → empty page.
+        let empty = SQLPaging.bounds(total: 0, pageSize: 500, page: 0)
+        t.expect(empty.isEmpty, "empty result → empty page")
+        t.expectEqual(empty.firstRowNumber, 0, "empty page first row # is 0")
+    }
+
+    t.suite("SQLGridData.tsv rectangular") {
+        let cols = [Column(name: "id"), Column(name: "name"), Column(name: "note")]
+        let rs: [[SQLValue]] = [
+            [.integer(1), .text("alpha"), .null],
+            [.integer(2), .text("beta"), .text("hi")],
+            [.integer(3), .text("gamma"), .text("yo")],
+        ]
+        let d = SQLGridData(columns: cols, rows: rs)
+        // Rows 1,2 (original) × columns 1,2 — a rubber-band rectangle, no header.
+        let rect = d.tsv(rows: [1, 2], columns: [1, 2], withHeader: false)
+        t.expectEqual(rect, "beta\thi\ngamma\tyo", "rectangular subset, ordered")
+        // NULL cell stays an empty field inside the rectangle.
+        let withNull = d.tsv(rows: [0], columns: [1, 2], withHeader: false)
+        t.expectEqual(withNull, "alpha\t", "rectangular null → empty field")
+        // Header uses only the selected columns.
+        let hdr = d.tsv(rows: [0], columns: [0, 2], withHeader: true)
+        t.expectEqual(hdr, "id\tnote\n1\t", "rectangular header = selected columns only")
+        // Out-of-range column indices are skipped.
+        let clamped = d.tsv(rows: [1], columns: [1, 9], withHeader: false)
+        t.expectEqual(clamped, "beta", "out-of-range column skipped")
+        // Whole-column set matches the whole-row tsv overload.
+        t.expectEqual(
+            d.tsv(rows: [0, 1], columns: [0, 1, 2], withHeader: true),
+            d.tsv(rows: [0, 1], withHeader: true), "full column set == whole-row tsv")
+    }
+
     t.suite("SQLGridData.columnSignature") {
         let a = SQLGridData(columns: [Column(name: "id"), Column(name: "name")], rows: [])
         let a2 = SQLGridData(columns: [Column(name: "id"), Column(name: "name")], rows: [[.integer(1)]])

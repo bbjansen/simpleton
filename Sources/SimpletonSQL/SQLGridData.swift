@@ -65,6 +65,56 @@ public struct SortKey: Sendable, Hashable {
     }
 }
 
+/// Half-open bounds of a display page over an ordered row list: `[start, end)`, plus the total row
+/// count and the resolved (clamped) page index. `count` is the number of rows on the page.
+public struct PageBounds: Sendable, Hashable {
+    public let start: Int
+    public let end: Int
+    public let total: Int
+    public let page: Int
+    public init(start: Int, end: Int, total: Int, page: Int) {
+        self.start = start
+        self.end = end
+        self.total = total
+        self.page = page
+    }
+
+    /// Rows on this page (`end - start`).
+    public var count: Int { end - start }
+    /// Whether the page is empty (no rows in range).
+    public var isEmpty: Bool { count <= 0 }
+    /// 1-based index of the first row on the page (0 when empty) — for "Rows X–Y of N".
+    public var firstRowNumber: Int { isEmpty ? 0 : start + 1 }
+    /// 1-based index of the last row on the page (0 when empty).
+    public var lastRowNumber: Int { end }
+}
+
+/// Pure pagination math over a sorted row order. A page size of `nil` (or ≤ 0) means "All rows on one
+/// page". The page index is clamped into `[0, pageCount)`, so an out-of-range page (e.g. after the
+/// result shrinks) resolves to the last valid page rather than trapping.
+public enum SQLPaging {
+    /// Number of pages for `total` rows at `pageSize` (`nil`/≤0 → 1 page). Always ≥ 1.
+    public static func pageCount(total: Int, pageSize: Int?) -> Int {
+        guard let size = pageSize, size > 0, total > 0 else { return 1 }
+        return (total + size - 1) / size
+    }
+
+    /// Resolve the half-open bounds of `page` (0-based) over `total` sorted rows at `pageSize`.
+    /// `pageSize == nil` (or ≤ 0) yields the whole range `[0, total)`. The page is clamped so callers
+    /// never index out of range.
+    public static func bounds(total: Int, pageSize: Int?, page: Int) -> PageBounds {
+        guard total > 0 else { return PageBounds(start: 0, end: 0, total: 0, page: 0) }
+        guard let size = pageSize, size > 0 else {
+            return PageBounds(start: 0, end: total, total: total, page: 0)
+        }
+        let pages = pageCount(total: total, pageSize: size)
+        let clamped = min(max(page, 0), pages - 1)
+        let start = clamped * size
+        let end = min(start + size, total)
+        return PageBounds(start: start, end: end, total: total, page: clamped)
+    }
+}
+
 /// The data brain of the results grid: holds the materialized result and
 /// derives display order, cell lookups, and TSV export. Pure and headless —
 /// the AppKit grid Coordinator is thin glue over this.
@@ -164,12 +214,21 @@ public struct SQLGridData: Sendable {
     /// NULL -> empty field; a field containing tab, newline, or a double-quote
     /// is wrapped in double quotes with internal quotes doubled (RFC 4180).
     public func tsv(rows rowIndices: [Int], withHeader: Bool) -> String {
+        tsv(rows: rowIndices, columns: Array(columns.indices), withHeader: withHeader)
+    }
+
+    /// Rectangular TSV: the given original row indices (already ordered) crossed with the given column
+    /// indices (already ordered). Powers cell-range copy — a rubber-band selection maps to a set of
+    /// display rows (→ original rows) and a contiguous column span. Out-of-range column indices are
+    /// skipped; NULL/quoting rules match the whole-row `tsv`.
+    public func tsv(rows rowIndices: [Int], columns columnIndices: [Int], withHeader: Bool) -> String {
+        let cols = columnIndices.filter { columns.indices.contains($0) }
         var lines: [String] = []
         if withHeader {
-            lines.append(columns.map { escape($0.name) }.joined(separator: "\t"))
+            lines.append(cols.map { escape(columns[$0].name) }.joined(separator: "\t"))
         }
         for r in rowIndices {
-            let fields = columns.indices.map { c -> String in
+            let fields = cols.map { c -> String in
                 let v = value(row: r, column: c)
                 if case .null = v { return "" }
                 return escape(SQLCellFormatting.present(v).text)
