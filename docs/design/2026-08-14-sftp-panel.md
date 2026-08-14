@@ -56,7 +56,7 @@ Identity-file key types are detected up front with `SSHKeyDetection.detectPrivat
 | ------------------- | ----------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
 | ed25519             | ✅          | ✅                   | `Curve25519.Signing.PrivateKey(sshEd25519:decryptionKey:)` → `SSHAuthenticationMethod.ed25519`        |
 | RSA                 | ✅          | ✅                   | `Insecure.RSA.PrivateKey(sshRsa:decryptionKey:)` → `SSHAuthenticationMethod.rsa`                       |
-| ECDSA P-256/384/521 | ✅          | ❌ (see below)       | `OpenSSHECDSAKey.parse` → `P256/P384/P521.Signing.PrivateKey` → `SSHAuthenticationMethod.p256/384/521` |
+| ECDSA P-256/384/521 | ✅          | ✅ (see below)       | `OpenSSHECDSAKey.parse` → `P256/P384/P521.Signing.PrivateKey` → `SSHAuthenticationMethod.p256/384/521` |
 
 **ECDSA — why a local parser.** swift-nio-ssh (the Citadel 0.12.1 fork,
 `Wellz26/swift-nio-ssh` 0.3.6) has full ECDSA client-auth signing: `NIOSSHPrivateKey`'s
@@ -76,17 +76,33 @@ which the Citadel factories then accept. Correctness is proven in CoreChecks by 
 key's public point (`x963Representation`) and matching it against the `ssh-keygen` `.pub`
 fixture, plus a sign/self-verify round-trip.
 
-**Encrypted ECDSA is not supported.** OpenSSH encrypts private keys with the `bcrypt` KDF
-(`bcrypt_pbkdf`) + AES-CTR. Citadel does this internally in `OpenSSHKey.swift`
-(`OpenSSH.KDF.bcrypt`, `citadel_bcrypt_pbkdf` from the internal `CCitadelBcrypt` C target),
-but that KDF is **not public API** — `CCitadelBcrypt` is not a Citadel product, and neither
-swift-crypto's `Crypto` nor `_CryptoExtras` ships `bcrypt_pbkdf` (only PBKDF2). Reimplementing
-the Provos–Mazières `bcrypt_pbkdf` is a security-sensitive undertaking out of scope here, so
-`OpenSSHECDSAKey.parse` detects the non-`none` cipher/KDF and throws
-`ParseError.encryptedUnsupported`; `makeAuthentication` turns that into a precise `.auth`
-error telling the user to use an unencrypted ECDSA key or an ed25519/RSA key (both of which do
-support passphrases). If Citadel later exposes a public ECDSA OpenSSH init or its bcrypt KDF,
-this local parser can be dropped or extended accordingly.
+**Encrypted ECDSA is supported.** OpenSSH encrypts private keys with the `bcrypt` KDF
+(`bcrypt_pbkdf`) + an AES cipher. Citadel does this internally for ed25519/RSA
+(`OpenSSH.KDF.bcrypt`, `citadel_bcrypt_pbkdf` from the internal `CCitadelBcrypt` C target), but
+that KDF is **not public API** and Citadel's OpenSSH parser never dispatches ECDSA key types, so
+`SimpletonSFTP` ships its own decryption path:
+
+- `Blowfish.swift` — the EksBlowfish core (Provos–Mazières), a faithful port of the OpenBSD
+  reference `blowfish.c` (init state from the digits of π, `Blowfish_expandstate` /
+  `Blowfish_expand0state`, `blf_enc`).
+- `BcryptPBKDF.swift` — the OpenBSD/OpenSSH `bcrypt_pbkdf` (SHA-512 collapse of password/salt,
+  the fixed-cost `bcrypt_hash` over the magic string "OxychromaticBlowfishSwatDynamite", the
+  PBKDF2-style XOR-accumulating outer loop with non-linear byte scatter). Ported from
+  `openbsd-compat/bcrypt_pbkdf.c`.
+- `OpenSSHCipher.swift` — AES decryption via the platform CommonCrypto (`CCCryptorCreateWithMode`
+  for `kCCModeCTR`, `CCCrypt` for CBC), covering `aes256-ctr` (OpenSSH's default), `aes128-ctr`,
+  and `aes256-cbc`.
+
+`OpenSSHECDSAKey.parse(pem:passphrase:)` reads the `bcrypt` kdfoptions (salt + rounds), derives
+`key‖IV` with `bcrypt_pbkdf` (`keyLen = cipher.keyLength + cipher.ivLength`), decrypts the private
+section, and verifies the two OpenSSH check-ints — a mismatch is OpenSSH's own wrong-passphrase
+test and surfaces as `ParseError.incorrectPassphrase`. `makeAuthentication` passes
+`ConnectionSecret.passphrase` through and maps a wrong/absent passphrase to a precise `.auth`
+error. Correctness is proven in CoreChecks by (a) byte-exact `bcrypt_pbkdf` / `bcrypt_hash`
+known-answer tests against the published OpenBSD reference vectors and (b) decrypting real
+`ssh-keygen -N` fixtures (P-256 and P-384, across all three ciphers) and matching the derived
+public point to the `.pub` fixture, plus a wrong-passphrase rejection. Any other cipher/KDF (e.g.
+a `chacha20-poly1305` AEAD key) is reported as `ParseError.unsupportedCipher`.
 
 ## Host-key verification (TOFU)
 
@@ -139,8 +155,12 @@ rejection) and an inline error line (per-op failures).
   prints "SFTP live checks skipped".
 - CoreChecks `SFTPECDSAKeyChecks`: real `ssh-keygen` ECDSA fixtures (P-256/384/521) — key-type
   detection, `OpenSSHECDSAKey.parse` public-point round-trip against the `.pub` files, a
-  sign/self-verify round-trip, precise rejection of a bcrypt-encrypted ECDSA key
-  (`.encryptedUnsupported`) and of non-ECDSA / malformed input.
+  sign/self-verify round-trip, and — for bcrypt-encrypted fixtures across `aes256-ctr`,
+  `aes128-ctr`, and `aes256-cbc` — decryption to the correct public point with the right
+  passphrase, plus precise rejection of a wrong passphrase (`.incorrectPassphrase`), an absent
+  passphrase (`.passphraseRequired`), and of non-ECDSA / malformed input.
+- CoreChecks `BcryptPBKDFChecks`: byte-exact known-answer tests for `bcrypt_pbkdf` and its inner
+  `bcrypt_hash` against the published OpenBSD reference vectors, plus an AES-CTR round-trip.
 - Gates: `swift build`, `swift run CoreChecks`, `swift format lint --strict`.
 </content>
 </invoke>
