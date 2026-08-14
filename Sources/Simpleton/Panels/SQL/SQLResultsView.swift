@@ -16,6 +16,16 @@ enum GridDensity: String, CaseIterable {
     var label: String { rawValue.capitalized }
 }
 
+/// Display page size for the results grid. `.all` shows every row on one page; the numeric cases cap
+/// the page window. Persisted as its `rawValue` via `@AppStorage`.
+enum GridPageSize: Int, CaseIterable, Identifiable {
+    case p500 = 500, p1000 = 1000, p5000 = 5000, all = 0
+    var id: Int { rawValue }
+    /// The page size passed to `SQLPaging` (`nil` = All rows on one page).
+    var size: Int? { self == .all ? nil : rawValue }
+    var label: String { self == .all ? "All" : String(rawValue) }
+}
+
 /// The SQL results area: handles empty/status states and hosts the interactive body for a `.rows`
 /// result. Editable when `editable` is non-nil (double-click a cell to edit, staged with a commit
 /// bar); read-only otherwise. The interactive body is keyed by result identity so its
@@ -80,9 +90,31 @@ private struct SQLRowsView: View {
     @State private var inspected: InspectedCell?
     @State private var stagedEdits: [CellCoord: SQLValue] = [:]
     @State private var isCommitting = false
+    /// Current display page (0-based) over the sorted order. Reset to 0 when the result changes (the
+    /// view is recreated via `.id(...)`) or when the page size changes; preserved across re-sorting.
+    @State private var page = 0
     @AppStorage("sql.grid.density") private var density: GridDensity = .comfortable
+    @AppStorage("sql.grid.pageSize") private var pageSizeRaw = GridPageSize.p1000.rawValue
+
+    private var pageSize: GridPageSize { GridPageSize(rawValue: pageSizeRaw) ?? .p1000 }
 
     private var data: SQLGridData { SQLGridData(columns: columns, rows: rows) }
+
+    /// Clamped bounds of the current page over the full row count (independent of sort, which only
+    /// reorders within the same total).
+    private var pageBounds: PageBounds {
+        SQLPaging.bounds(total: rows.count, pageSize: pageSize.size, page: page)
+    }
+
+    /// Original row indices on the current page, in display (sorted) order — the same slice the grid
+    /// shows, so record-mode stepping stays within the page and matches the grid.
+    private var pagedOrder: [Int] {
+        let full = data.sortedIndex(by: sortKeys)
+        let b = pageBounds
+        let start = min(max(b.start, 0), full.count)
+        let end = min(max(b.end, start), full.count)
+        return Array(full[start..<end])
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,6 +125,7 @@ private struct SQLRowsView: View {
                     data: data,
                     sortKeys: $sortKeys,
                     selectedRow: $selectedRow,
+                    page: pageBounds,
                     rowHeight: density.rowHeight,
                     editable: editable,
                     stagedEdits: $stagedEdits,
@@ -107,7 +140,7 @@ private struct SQLRowsView: View {
                 SQLRecordView(
                     columns: columns,
                     rows: rows,
-                    order: data.sortedIndex(by: sortKeys),
+                    order: pagedOrder,
                     selectedRow: $selectedRow,
                     onExit: { mode = .grid }
                 )
@@ -155,8 +188,7 @@ private struct SQLRowsView: View {
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             Spacer()
-            Text("\(rowCount) row\(rowCount == 1 ? "" : "s")")
-                .font(DT.monoFont(size: 11)).foregroundColor(DT.textTertiary)
+            pagination(rowCount: rowCount)
             Menu {
                 ForEach(GridDensity.allCases, id: \.self) { d in
                     Button(d.label) { density = d }
@@ -167,5 +199,43 @@ private struct SQLRowsView: View {
             .menuStyle(.borderlessButton).fixedSize().help("Row density")
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
+    }
+
+    /// Page-size picker + prev/next + "Rows X–Y of N". Changing the page size resets to page 0 (so the
+    /// user isn't stranded past the new last page); prev/next are disabled at the ends.
+    @ViewBuilder private func pagination(rowCount: Int) -> some View {
+        let bounds = pageBounds
+        let pageCount = SQLPaging.pageCount(total: rowCount, pageSize: pageSize.size)
+        Picker("", selection: pageSizeBinding) {
+            ForEach(GridPageSize.allCases) { Text($0.label).tag($0) }
+        }
+        .labelsHidden().fixedSize().help("Rows per page")
+        if pageCount > 1 {
+            Button {
+                page = max(0, bounds.page - 1)
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .buttonStyle(.plain).disabled(bounds.page <= 0).help("Previous page")
+            Button {
+                page = min(pageCount - 1, bounds.page + 1)
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .buttonStyle(.plain).disabled(bounds.page >= pageCount - 1).help("Next page")
+        }
+        Text("Rows \(bounds.firstRowNumber)–\(bounds.lastRowNumber) of \(rowCount)")
+            .font(DT.monoFont(size: 11)).foregroundColor(DT.textTertiary)
+    }
+
+    /// Writes the persisted page size and resets to page 0 on change, so switching to a coarser size
+    /// never leaves `page` past the new last page.
+    private var pageSizeBinding: Binding<GridPageSize> {
+        Binding(
+            get: { pageSize },
+            set: { newValue in
+                pageSizeRaw = newValue.rawValue
+                page = 0
+            })
     }
 }
