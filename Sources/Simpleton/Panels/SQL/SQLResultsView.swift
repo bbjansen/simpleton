@@ -1,6 +1,8 @@
 // Sources/Simpleton/Panels/SQL/SQLResultsView.swift
+import AppKit
 import SimpletonSQL
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum ResultsMode: String, CaseIterable, Hashable { case grid = "Grid", record = "Record" }
 
@@ -215,8 +217,41 @@ private struct SQLRowsView: View {
                 Image(systemName: "arrow.up.and.down.text.horizontal")
             }
             .menuStyle(.borderlessButton).fixedSize().help("Row density")
+            exportMenu
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
+    }
+
+    /// Export / copy the full result set (all rows, in query order — independent of the display page).
+    private var exportMenu: some View {
+        Menu {
+            Button("Copy as CSV") { copyToPasteboard(SQLResultExporter.csv(columns: columns, rows: rows)) }
+            Button("Copy as JSON") { copyToPasteboard(SQLResultExporter.json(columns: columns, rows: rows)) }
+            Divider()
+            Button("Save as CSV…") {
+                saveToFile("csv", .commaSeparatedText, SQLResultExporter.csv(columns: columns, rows: rows))
+            }
+            Button("Save as JSON…") { saveToFile("json", .json, SQLResultExporter.json(columns: columns, rows: rows)) }
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+        }
+        .menuStyle(.borderlessButton).fixedSize().help("Export results")
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func saveToFile(_ ext: String, _ type: UTType, _ content: String) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "results.\(ext)"
+        panel.allowedContentTypes = [type]
+        panel.isExtensionHidden = false
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? content.write(to: url, atomically: true, encoding: .utf8)
+        }
     }
 
     /// Page-size picker + prev/next + "Rows X–Y of N". Changing the page size resets to page 0 (so the
