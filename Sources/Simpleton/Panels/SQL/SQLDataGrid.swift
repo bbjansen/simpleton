@@ -13,6 +13,8 @@ struct SQLDataGrid: NSViewRepresentable {
     @Binding var selectedRow: Int?
     let rowHeight: CGFloat
     var onActivateRecord: () -> Void
+    /// Double-click a data cell → inspect (originalRow, columnIndex).
+    var onInspect: (Int, Int) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -31,6 +33,8 @@ struct SQLDataGrid: NSViewRepresentable {
         table.backgroundColor = .clear
         table.dataSource = context.coordinator
         table.delegate = context.coordinator
+        table.target = context.coordinator
+        table.doubleAction = #selector(Coordinator.cellDoubleClicked(_:))
 
         let scroll = NSScrollView()
         scroll.documentView = table
@@ -183,6 +187,17 @@ struct SQLDataGrid: NSViewRepresentable {
         }
 
         func activateRecord() { parent.onActivateRecord() }
+
+        /// Double-click on a data cell → inspect its full value. Ignores the gutter and header.
+        @objc func cellDoubleClicked(_ sender: NSTableView) {
+            let r = sender.clickedRow
+            let c = sender.clickedColumn
+            guard r >= 0, c >= 0, sender.tableColumns.indices.contains(c),
+                let colIndex = Int(sender.tableColumns[c].identifier.rawValue)
+            else { return }
+            let original = order.indices.contains(r) ? order[r] : r
+            parent.onInspect(original, colIndex)
+        }
     }
 }
 

@@ -59,4 +59,28 @@ func runSQLCellFormattingChecks(_ t: TestRunner) {
             SQLCellFormatting.compare(.integer(Int64.max), .integer(Int64.max - 1)),
             .orderedDescending, "Int64.max > max-1")
     }
+
+    t.suite("SQLCellFormatting.prettyJSON") {
+        let pretty = SQLCellFormatting.prettyJSON("{\"b\":1,\"a\":2}")
+        t.expect(pretty != nil, "valid JSON object pretty-printed")
+        t.expect(pretty?.contains("\n") ?? false, "pretty output is multi-line")
+        // sortedKeys → "a" before "b"
+        if let p = pretty, let ai = p.range(of: "\"a\""), let bi = p.range(of: "\"b\"") {
+            t.expect(ai.lowerBound < bi.lowerBound, "keys sorted (a before b)")
+        } else {
+            t.expect(false, "expected both keys present")
+        }
+        t.expect(SQLCellFormatting.prettyJSON("[1, 2, 3]") != nil, "JSON array pretty-printed")
+        t.expect(SQLCellFormatting.prettyJSON("hello world") == nil, "plain text → nil")
+        t.expect(SQLCellFormatting.prettyJSON("{not json}") == nil, "malformed → nil")
+        t.expect(SQLCellFormatting.prettyJSON("42") == nil, "bare number → nil (not object/array)")
+    }
+
+    t.suite("SQLCellFormatting.hexDump") {
+        let dump = SQLCellFormatting.hexDump(Data([0x48, 0x69, 0x00, 0xff]))
+        t.expect(dump.hasPrefix("00000000  48 69 00 ff"), "hex bytes at offset 0")
+        t.expect(dump.contains("Hi.."), "ascii column (non-printable → .)")
+        let big = SQLCellFormatting.hexDump(Data(repeating: 0, count: 5000), maxBytes: 4096)
+        t.expect(big.contains("904 more bytes"), "truncation note for oversized blob")
+    }
 }

@@ -70,6 +70,7 @@ private struct SQLRowsView: View {
     @State private var sortColumn: Int?
     @State private var ascending = true
     @State private var selectedRow: Int?
+    @State private var inspected: InspectedCell?
     @AppStorage("sql.grid.density") private var density: GridDensity = .comfortable
 
     private var data: SQLGridData { SQLGridData(columns: columns, rows: rows) }
@@ -85,7 +86,12 @@ private struct SQLRowsView: View {
                     ascending: $ascending,
                     selectedRow: $selectedRow,
                     rowHeight: density.rowHeight,
-                    onActivateRecord: { mode = .record }
+                    onActivateRecord: { mode = .record },
+                    onInspect: { original, col in
+                        inspected = InspectedCell(
+                            column: columns.indices.contains(col) ? columns[col].name : "",
+                            value: data.value(row: original, column: col))
+                    }
                 )
             } else {
                 SQLRecordView(
@@ -97,6 +103,7 @@ private struct SQLRowsView: View {
                 )
             }
         }
+        .sheet(item: $inspected) { CellDetailSheet(cell: $0) }
     }
 
     private func toolbar(rowCount: Int) -> some View {

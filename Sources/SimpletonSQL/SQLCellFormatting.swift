@@ -101,4 +101,36 @@ public enum SQLCellFormatting {
         default: return 0
         }
     }
+
+    /// If `text` is a JSON object or array, return it pretty-printed (sorted keys); else nil.
+    /// Used by the cell inspector to render JSON columns readably.
+    public static func prettyJSON(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first, first == "{" || first == "[" else { return nil }
+        guard let data = trimmed.data(using: .utf8),
+            let obj = try? JSONSerialization.jsonObject(with: data),
+            let pretty = try? JSONSerialization.data(
+                withJSONObject: obj, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
+            let out = String(data: pretty, encoding: .utf8)
+        else { return nil }
+        return out
+    }
+
+    /// A classic `offset  hex  ascii` dump of `data`, truncated to `maxBytes` with a trailing note.
+    public static func hexDump(_ data: Data, maxBytes: Int = 4096) -> String {
+        let bytes = Array(data.prefix(maxBytes))
+        var lines: [String] = []
+        var offset = 0
+        while offset < bytes.count {
+            let chunk = bytes[offset..<min(offset + 16, bytes.count)]
+            let hex = chunk.map { String(format: "%02x", $0) }.joined(separator: " ")
+            let hexPadded = hex.padding(toLength: 47, withPad: " ", startingAt: 0)
+            let ascii = chunk.map { (32...126).contains($0) ? String(UnicodeScalar($0)) : "." }.joined()
+            lines.append("\(String(format: "%08x", offset))  \(hexPadded)  \(ascii)")
+            offset += 16
+        }
+        var out = lines.joined(separator: "\n")
+        if data.count > maxBytes { out += "\n… (\(data.count - maxBytes) more bytes)" }
+        return out
+    }
 }
