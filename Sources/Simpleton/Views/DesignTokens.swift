@@ -161,6 +161,12 @@ enum DT {
         static var rowTextSecondary: NSColor { ns(chrome.textSecondary) }
         static var nullText: NSColor { ns(chrome.textFaint) }
         static var selectionFill: NSColor { ns(chrome.selected) }
+
+        /// Distinct hues for categorical (enum) cell pills; a value maps to a
+        /// stable slot via `SQLGridData.enumColorIndex`.
+        static let enumPalette: [NSColor] = [
+            "#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6", "#9ca3af",
+        ].compactMap { NSColor(hex: $0) }
     }
 
     /// The configured mono font as an NSFont (tabular digits; matches the
