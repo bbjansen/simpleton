@@ -312,6 +312,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             runSQLGridE2E()
         }
 
+        // Headless panel-profiles persistence check (set SIMPLETON_PROFILES_E2E): edit a built-in
+        // default + activate a non-default profile + set a width against a real PanelRegistry, then
+        // reload from disk with a SECOND registry (simulated relaunch) and assert everything stuck.
+        // Logs one "SIMP-PROFILE RESULT PASS/FAIL …" line then quits. A no-op unless the env var is set.
+        if ProcessInfo.processInfo.environment["SIMPLETON_PROFILES_E2E"] != nil {
+            runProfilesE2E()
+        }
+
         let menuResult = MenuBarBuilder.build(target: self, workspacesMenuDelegate: self)
         self.workspacesMenu = menuResult.workspacesMenu
 
@@ -1126,6 +1134,86 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
             }
+        }
+    }
+
+    /// Headless e2e for panel-profile persistence (SIMPLETON_PROFILES_E2E). Drives a real PanelRegistry
+    /// against an isolated temp profiles dir: activates a non-default profile, edits a built-in default
+    /// (appends a panel id + changes leftWidth), sets a width, and persists. Then builds a SECOND
+    /// registry on the same dir and `loadProfiles()` (a simulated relaunch) and asserts the active id
+    /// stuck, the built-in edit + width restored, a user profile survived, and the seeded Developer
+    /// profile ships s3/sftp/amqp. Logs one `SIMP-PROFILE RESULT …` line, cleans up, and quits.
+    private func runProfilesE2E() {
+        NSLog("SIMP-PROFILE starting")
+        MainActor.assumeIsolated {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("profe2e-\(UUID().uuidString)")
+                .appendingPathComponent("profiles")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+            // ── 1. First registry: edit + persist. ──────────────────────────────────────────────
+            let first = PanelRegistry(profilesDir: dir)
+            first.loadProfiles()  // fresh dir → code defaults
+
+            let generalID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!  // built-in "General"
+            let developerID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!  // built-in "Developer"
+
+            // Create + persist a user profile (must survive the round-trip).
+            var userProfile = PanelProfile(name: "My Custom", leftPanelIDs: ["connections"])
+            let userProfileID = userProfile.id
+            userProfile.leftActivePanelID = "connections"
+            try? first.saveProfile(userProfile)
+
+            // Activate a NON-default profile (the user profile) — its id must be restored on relaunch.
+            first.activateProfile(userProfile)
+
+            // Edit a BUILT-IN default: append a panel id to "General" and change its leftWidth, and set
+            // a width — all via the runtime funnel that a UI edit would use isn't applicable here since
+            // General isn't active, so edit it directly through saveProfile (the editor's path).
+            guard var general = first.profiles.first(where: { $0.id == generalID }) else {
+                NSLog("SIMP-PROFILE RESULT FAIL: General default missing")
+                NSApp.terminate(nil)
+                return
+            }
+            general.leftPanelIDs.append("git")
+            general.leftWidth = 275
+            try? first.saveProfile(general)
+
+            // Also exercise the runtime funnel: activate General, then updateActiveProfile a width.
+            first.activateProfile(general)
+            first.updateActiveProfile { $0.rightWidth = 410 }
+
+            // Re-activate the user profile so THAT is the persisted active selection to assert on.
+            first.activateProfile(userProfile)
+
+            // ── 2. Second registry on the same dir: simulated relaunch. ──────────────────────────
+            let second = PanelRegistry(profilesDir: dir)
+            second.loadProfiles()
+
+            // ── 3. Assertions. ──────────────────────────────────────────────────────────────────
+            let activeRestored = second.activeProfile.id == userProfileID
+            let reloadedGeneral = second.profiles.first(where: { $0.id == generalID })
+            let builtInEditPersisted =
+                (reloadedGeneral?.leftPanelIDs.contains("git") ?? false)
+                && (reloadedGeneral?.leftWidth == 275)
+            let widthPersisted = reloadedGeneral?.rightWidth == 410
+            let userSurvived = second.profiles.contains { $0.id == userProfileID && $0.name == "My Custom" }
+            let developer = second.profiles.first(where: { $0.id == developerID })
+            let seededClients =
+                (developer?.rightPanelIDs.contains("sftp") ?? false)
+                && (developer?.rightPanelIDs.contains("s3") ?? false)
+                && (developer?.rightPanelIDs.contains("amqp") ?? false)
+
+            let ok =
+                activeRestored && builtInEditPersisted && widthPersisted && userSurvived && seededClients
+            NSLog(
+                "SIMP-PROFILE RESULT %@: activeRestored=%@ builtInEdit=%@ widthPersisted=%@ "
+                    + "userSurvived=%@ seededClients=%@",
+                ok ? "PASS" : "FAIL", "\(activeRestored)", "\(builtInEditPersisted)",
+                "\(widthPersisted)", "\(userSurvived)", "\(seededClients)")
+
+            try? FileManager.default.removeItem(at: dir.deletingLastPathComponent())
+            NSApp.terminate(nil)
         }
     }
 
