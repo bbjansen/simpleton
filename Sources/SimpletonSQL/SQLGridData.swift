@@ -16,6 +16,17 @@ public struct SQLGridData: Sendable {
     public var rowCount: Int { rows.count }
     public var columnCount: Int { columns.count }
 
+    /// A stable, launch-independent signature of the column set (FNV-1a over the
+    /// column names). Used to key persisted per-result column widths so a query
+    /// with the same columns restores them, and a different query does not.
+    public var columnSignature: String {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in columns.map(\.name).joined(separator: "\u{1}").utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x100_0000_01b3
+        }
+        return String(hash, radix: 16)
+    }
+
     /// Original row indices in display order. `nil` sortColumn -> identity.
     /// Stable: equal keys keep original order (tie-broken by original index).
     public func sortedIndex(sortColumn: Int?, ascending: Bool) -> [Int] {

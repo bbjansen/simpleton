@@ -44,6 +44,7 @@ struct SQLDataGrid: NSViewRepresentable {
         scroll.backgroundColor = .clear
 
         context.coordinator.table = table
+        context.coordinator.observeColumnResize()
         context.coordinator.rebuildColumns()
         context.coordinator.applyOrder()
         context.coordinator.applyTheme()
@@ -69,10 +70,47 @@ struct SQLDataGrid: NSViewRepresentable {
         private(set) var order: [Int] = []
         private var builtColumns: [Column] = []
         private var isProgrammaticReload = false
+        private var isRestoringWidths = false
+        private var resizeObserver: NSObjectProtocol?
         private let cellID = NSUserInterfaceItemIdentifier("gridCell")
         private let rowID = NSUserInterfaceItemIdentifier("gridRow")
 
         init(_ parent: SQLDataGrid) { self.parent = parent }
+
+        deinit {
+            if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+        }
+
+        /// Persist a column's width (keyed by its stable identifier) whenever the user resizes it,
+        /// so widths survive switching between queries with the same columns.
+        func observeColumnResize() {
+            guard let table else { return }
+            resizeObserver = NotificationCenter.default.addObserver(
+                forName: NSTableView.columnDidResizeNotification, object: table, queue: .main
+            ) { [weak self] _ in self?.saveColumnWidths() }
+        }
+
+        private func widthsKey() -> String { "sql.grid.widths.\(parent.data.columnSignature)" }
+
+        func saveColumnWidths() {
+            guard !isRestoringWidths, let table else { return }
+            var widths: [String: Double] = [:]
+            for col in table.tableColumns where col.identifier.rawValue != "#" {
+                widths[col.identifier.rawValue] = Double(col.width)
+            }
+            UserDefaults.standard.set(widths, forKey: widthsKey())
+        }
+
+        func restoreColumnWidths() {
+            guard let table,
+                let saved = UserDefaults.standard.dictionary(forKey: widthsKey()) as? [String: Double]
+            else { return }
+            isRestoringWidths = true
+            defer { isRestoringWidths = false }
+            for col in table.tableColumns where col.identifier.rawValue != "#" {
+                if let w = saved[col.identifier.rawValue] { col.width = CGFloat(w) }
+            }
+        }
 
         /// Rebuild when the column identity changes — not merely the count, or a
         /// new query with the same column count keeps the previous headers.
@@ -96,6 +134,7 @@ struct SQLDataGrid: NSViewRepresentable {
                 table.addTableColumn(c)
             }
             builtColumns = parent.data.columns
+            restoreColumnWidths()
         }
 
         func applyOrder() {

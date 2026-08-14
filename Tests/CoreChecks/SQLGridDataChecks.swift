@@ -39,4 +39,13 @@ func runSQLGridDataChecks(_ t: TestRunner) {
         let cr = SQLGridData(columns: [Column(name: "c")], rows: [[.text("a\rb")]])
         t.expectEqual(cr.tsv(rows: [0], withHeader: false), "\"a\rb\"", "carriage-return value quoted")
     }
+
+    t.suite("SQLGridData.columnSignature") {
+        let a = SQLGridData(columns: [Column(name: "id"), Column(name: "name")], rows: [])
+        let a2 = SQLGridData(columns: [Column(name: "id"), Column(name: "name")], rows: [[.integer(1)]])
+        let b = SQLGridData(columns: [Column(name: "name"), Column(name: "id")], rows: [])
+        t.expectEqual(a.columnSignature, a2.columnSignature, "signature ignores rows, same columns")
+        t.expect(a.columnSignature != b.columnSignature, "column order changes the signature")
+        t.expect(!a.columnSignature.isEmpty, "signature non-empty")
+    }
 }
