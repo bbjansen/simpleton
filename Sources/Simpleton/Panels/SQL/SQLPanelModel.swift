@@ -55,6 +55,9 @@ final class SQLPanelModel: ObservableObject {
     @Published var foreignKeyMatches: [Int: SQLForeignKeyMatcher.Match] = [:]
     /// Result of the most recent commit, surfaced to the UI (success count or an error to display).
     @Published var lastCommit: CommitOutcome?
+    /// Monotonic wall-clock duration of the most recent successful query. nil before any run and after
+    /// a failed run (the error is the signal then). Drives the editor's "N rows · X ms" readout.
+    @Published var lastQueryDuration: TimeInterval?
 
     private let store: ConnectionStore
     private let history: SQLQueryHistoryStore
@@ -71,6 +74,25 @@ final class SQLPanelModel: ObservableObject {
     var selectedConnection: Connection? {
         guard let selectedID else { return nil }
         return connections.first { $0.id == selectedID }
+    }
+
+    /// A compact "N rows · 12 ms" (or "N affected · …") readout for the most recent successful run,
+    /// or nil when there hasn't been one. Pairs `lastQueryDuration` with the current result shape.
+    var lastRunSummary: String? {
+        guard let seconds = lastQueryDuration else { return nil }
+        switch result {
+        case .rows(_, let rows):
+            return SQLRunStats.summary(count: rows.count, noun: .rows, seconds: seconds)
+        case .status(let affected, _):
+            return SQLRunStats.summary(count: affected, noun: .affected, seconds: seconds)
+        case .none:
+            return SQLRunStats.timeText(seconds)
+        }
+    }
+
+    /// Monotonic elapsed seconds since `start` (immune to wall-clock adjustments, unlike `Date()`).
+    private static func elapsed(since start: DispatchTime) -> TimeInterval {
+        Double(DispatchTime.now().uptimeNanoseconds &- start.uptimeNanoseconds) / 1_000_000_000
     }
 
     var availability: ClientAvailability {
@@ -139,6 +161,7 @@ final class SQLPanelModel: ObservableObject {
         editable = nil
         foreignKeyMatches = [:]
         lastCommit = nil
+        lastQueryDuration = nil
         tables = []
         columnsByTable = [:]
     }
@@ -164,8 +187,10 @@ final class SQLPanelModel: ObservableObject {
         let sql = (overrideSQL ?? queryText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sql.isEmpty else { return }
         errorMessage = nil
+        let start = DispatchTime.now()
         do {
             let queryResult = try await driver.run(sql)
+            lastQueryDuration = Self.elapsed(since: start)
             result = queryResult
             editable = await detectEditable(sql: sql, result: queryResult, driver: driver)
             foreignKeyMatches = await detectForeignKeys(result: queryResult, editable: editable, driver: driver)
@@ -174,6 +199,7 @@ final class SQLPanelModel: ObservableObject {
                 historyItems = await history.history(for: id)
             }
         } catch {
+            lastQueryDuration = nil
             editable = nil
             foreignKeyMatches = [:]
             errorMessage = Self.describe(error)
@@ -210,8 +236,10 @@ final class SQLPanelModel: ObservableObject {
             "SELECT * FROM \(dialect.quoteIdentifier(referencedTable)) "
             + "WHERE \(dialect.quoteIdentifier(referencedColumn)) = \(dialect.placeholder(1))"
         queryText = sql
+        let start = DispatchTime.now()
         do {
             let queryResult = try await driver.execute(sql, [value])
+            lastQueryDuration = Self.elapsed(since: start)
             result = queryResult
             editable = await detectEditable(sql: sql, result: queryResult, driver: driver)
             foreignKeyMatches = await detectForeignKeys(result: queryResult, editable: editable, driver: driver)
@@ -220,6 +248,7 @@ final class SQLPanelModel: ObservableObject {
                 historyItems = await history.history(for: id)
             }
         } catch {
+            lastQueryDuration = nil
             editable = nil
             foreignKeyMatches = [:]
             errorMessage = Self.describe(error)

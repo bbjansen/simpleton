@@ -996,11 +996,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 wroteValue = editedRow[nameIdx] == .text("edited")
             }
 
-            let ok = connected && editableDetected && aggregateNotEditable && committedOK && wroteValue
+            // 4. Timing: a successful run records a duration + readout summary; a failed run clears it.
+            let timedOK = model.lastQueryDuration != nil && model.lastRunSummary != nil
+            model.queryText = "SELECT * FROM no_such_table_xyz"
+            await model.runQuery()
+            let clearedOnError = model.lastQueryDuration == nil
+            model.queryText = "SELECT id, name FROM t"
+            await model.runQuery()  // restore a clean state so the summary line's error=nil holds
+
+            let ok =
+                connected && editableDetected && aggregateNotEditable && committedOK && wroteValue
+                && timedOK && clearedOnError
             NSLog(
-                "SIMP-SQLE2E RESULT %@: connected=%@ editable=%@ aggNotEditable=%@ committed=%@ wrote=%@ error=%@",
+                "SIMP-SQLE2E RESULT %@: connected=%@ editable=%@ aggNotEditable=%@ committed=%@ wrote=%@ "
+                    + "timed=%@ clearedOnErr=%@ error=%@",
                 ok ? "PASS" : "FAIL", "\(connected)", "\(editableDetected)", "\(aggregateNotEditable)",
-                "\(committedOK)", "\(wroteValue)", model.errorMessage ?? "nil")
+                "\(committedOK)", "\(wroteValue)", "\(timedOK)", "\(clearedOnError)", model.errorMessage ?? "nil")
             NSApp.terminate(nil)
         }
     }
