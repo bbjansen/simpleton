@@ -44,12 +44,17 @@ struct ProfilesPreferencesTab: View {
                         profile: profile,
                         allPanels: registry.definitions,
                         isActive: registry.activeProfile.id == profile.id,
-                        isDefault: PanelProfile.defaultProfiles.contains(where: { $0.id == profile.id }),
+                        isBuiltIn: PanelProfile.defaultProfiles.contains(where: { $0.id == profile.id }),
                         onSave: { updated in
                             editingProfile = updated
                             try? registry.saveProfile(updated)
                         },
                         onActivate: { registry.activateProfile(profile) },
+                        onReset: {
+                            try? registry.resetProfileToDefault(id: profile.id)
+                            // Reflect the reset code-default back into the editor.
+                            editingProfile = registry.profiles.first(where: { $0.id == profile.id })
+                        },
                         onDelete: {
                             try? registry.deleteProfile(id: profile.id)
                             selectedProfileID = nil
@@ -121,26 +126,18 @@ struct ProfileEditor: View {
     @State var profile: PanelProfile
     let allPanels: [PanelDefinition]
     let isActive: Bool
-    let isDefault: Bool
+    let isBuiltIn: Bool
     let onSave: (PanelProfile) -> Void
     let onActivate: () -> Void
+    let onReset: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if isDefault {
-                    Text("Built-in profile — read only")
-                        .font(.system(size: 11)).foregroundColor(.secondary)
-                        .padding(8)
-                        .background(DT.surface)
-                        .cornerRadius(6)
-                }
-
                 fieldGroup("Name") {
                     TextField("Profile name", text: $profile.name)
-                        .disabled(isDefault)
-                        .onChange(of: profile.name) { _ in if !isDefault { onSave(profile) } }
+                        .onChange(of: profile.name) { _ in onSave(profile) }
                 }
 
                 fieldGroup("Left bar panels") {
@@ -159,8 +156,7 @@ struct ProfileEditor: View {
                         }
                     }
                     .labelsHidden()
-                    .disabled(isDefault)
-                    .onChange(of: profile.leftActivePanelID) { _ in if !isDefault { onSave(profile) } }
+                    .onChange(of: profile.leftActivePanelID) { _ in onSave(profile) }
                 }
 
                 fieldGroup("Default open: right") {
@@ -171,15 +167,22 @@ struct ProfileEditor: View {
                         }
                     }
                     .labelsHidden()
-                    .disabled(isDefault)
-                    .onChange(of: profile.rightActivePanelID) { _ in if !isDefault { onSave(profile) } }
+                    .onChange(of: profile.rightActivePanelID) { _ in onSave(profile) }
                 }
 
                 HStack(spacing: 8) {
                     Button(isActive ? "Active" : "Set as Active") { onActivate() }
                         .buttonStyle(.borderedProminent)
                         .disabled(isActive)
-                    if !isDefault {
+                    if isBuiltIn {
+                        // Built-ins are non-deletable; offer a reset to the pristine code default instead.
+                        Button("Reset to Default") {
+                            onReset()
+                            // Re-seed the local @State editor copy from the restored default.
+                            profile = PanelProfile.defaultProfiles.first(where: { $0.id == profile.id }) ?? profile
+                        }
+                        .buttonStyle(.plain)
+                    } else {
                         Button("Delete") { onDelete() }
                             .foregroundColor(.red)
                             .buttonStyle(.plain)
@@ -197,37 +200,33 @@ struct ProfileEditor: View {
                     Image(systemName: panelIcon(id)).font(.system(size: 11)).frame(width: 16)
                     Text(panelName(id)).font(.system(size: 11))
                     Spacer()
-                    if !isDefault {
-                        Button(action: {
-                            ids.wrappedValue.removeAll { $0 == id }
-                            onSave(profile)
-                        }) {
-                            Image(systemName: "minus.circle")
-                                .foregroundColor(.red)
-                                .font(.system(size: 11))
-                        }
-                        .buttonStyle(.plain)
+                    Button(action: {
+                        ids.wrappedValue.removeAll { $0 == id }
+                        onSave(profile)
+                    }) {
+                        Image(systemName: "minus.circle")
+                            .foregroundColor(.red)
+                            .font(.system(size: 11))
                     }
+                    .buttonStyle(.plain)
                 }
                 .padding(6)
                 .background(DT.surface)
                 .cornerRadius(4)
             }
-            if !isDefault {
-                let unassigned = allPanels.filter { p in
-                    !ids.wrappedValue.contains(p.id) && !otherIDs.contains(p.id)
-                }
-                if !unassigned.isEmpty {
-                    Menu("Add panel…") {
-                        ForEach(unassigned, id: \.id) { p in
-                            Button(p.name) {
-                                ids.wrappedValue.append(p.id)
-                                onSave(profile)
-                            }
+            let unassigned = allPanels.filter { p in
+                !ids.wrappedValue.contains(p.id) && !otherIDs.contains(p.id)
+            }
+            if !unassigned.isEmpty {
+                Menu("Add panel…") {
+                    ForEach(unassigned, id: \.id) { p in
+                        Button(p.name) {
+                            ids.wrappedValue.append(p.id)
+                            onSave(profile)
                         }
                     }
-                    .font(.system(size: 11))
                 }
+                .font(.system(size: 11))
             }
         }
     }
@@ -255,34 +254,18 @@ struct ProfileTemplatePickerView: View {
     let onCreate: ([String], String) -> Void
     let onCancel: () -> Void
 
-    @State private var selectedTemplate: TemplateOption = .blank
+    /// Template choices are driven by the real code defaults plus a "Blank" option — nil means Blank.
+    @State private var selectedTemplateID: UUID?
     @State private var profileName = "New Profile"
+    /// User-tunable checklist of which registered panels to include (seeded from the chosen template).
+    @State private var includedPanelIDs: Set<String> = []
 
-    enum TemplateOption: String, CaseIterable, Identifiable {
-        case blank = "Blank"
-        case general = "General"
-        case developer = "Developer"
-        case devops = "DevOps"
-        var id: String { rawValue }
-    }
-
-    private var templatePanelIDs: [String] {
-        switch selectedTemplate {
-        case .blank:
+    /// Panel ids that the selected template starts with (empty for Blank).
+    private func templatePanelIDs(for id: UUID?) -> [String] {
+        guard let id, let profile = PanelProfile.defaultProfiles.first(where: { $0.id == id }) else {
             return []
-        case .general:
-            return (PanelProfile.defaultProfiles.first(where: { $0.name == "General" })).map {
-                $0.leftPanelIDs + $0.rightPanelIDs
-            } ?? []
-        case .developer:
-            return (PanelProfile.defaultProfiles.first(where: { $0.name == "Developer" })).map {
-                $0.leftPanelIDs + $0.rightPanelIDs
-            } ?? []
-        case .devops:
-            return (PanelProfile.defaultProfiles.first(where: { $0.name == "DevOps" })).map {
-                $0.leftPanelIDs + $0.rightPanelIDs
-            } ?? []
         }
+        return profile.leftPanelIDs + profile.rightPanelIDs
     }
 
     var body: some View {
@@ -293,19 +276,32 @@ struct ProfileTemplatePickerView: View {
             Divider()
             Form {
                 TextField("Name", text: $profileName)
-                Picker("Start from", selection: $selectedTemplate) {
-                    ForEach(TemplateOption.allCases) { option in
-                        Text(option.rawValue).tag(option)
+                Picker("Start from", selection: $selectedTemplateID) {
+                    Text("Blank").tag(Optional<UUID>.none)
+                    ForEach(PanelProfile.defaultProfiles) { profile in
+                        Text(profile.name).tag(Optional(profile.id))
                     }
                 }
                 .pickerStyle(.radioGroup)
-                if selectedTemplate != .blank {
-                    Section("Included panels") {
-                        ForEach(templatePanelIDs, id: \.self) { id in
-                            if let panel = allPanels.first(where: { $0.id == id }) {
-                                Label(panel.name, systemImage: panel.icon)
-                                    .font(.caption)
-                            }
+                .onChange(of: selectedTemplateID) { newValue in
+                    includedPanelIDs = Set(templatePanelIDs(for: newValue))
+                }
+                // Registry-driven checklist: any registered panel can be included at creation time.
+                Section("Included panels") {
+                    ForEach(allPanels, id: \.id) { panel in
+                        Toggle(
+                            isOn: Binding(
+                                get: { includedPanelIDs.contains(panel.id) },
+                                set: { on in
+                                    if on {
+                                        includedPanelIDs.insert(panel.id)
+                                    } else {
+                                        includedPanelIDs.remove(panel.id)
+                                    }
+                                })
+                        ) {
+                            Label(panel.name, systemImage: panel.icon)
+                                .font(.caption)
                         }
                     }
                 }
@@ -316,13 +312,18 @@ struct ProfileTemplatePickerView: View {
                 Button("Cancel") { onCancel() }
                 Spacer()
                 Button("Create") {
-                    onCreate(templatePanelIDs, profileName)
+                    // Preserve the template's panel order, then append any extra checked panels.
+                    let ordered = templatePanelIDs(for: selectedTemplateID).filter { includedPanelIDs.contains($0) }
+                    let extras = allPanels.map(\.id).filter {
+                        includedPanelIDs.contains($0) && !ordered.contains($0)
+                    }
+                    onCreate(ordered + extras, profileName)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(profileName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding()
         }
-        .frame(width: 360, height: 400)
+        .frame(width: 360, height: 460)
     }
 }
