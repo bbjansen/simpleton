@@ -23,6 +23,11 @@ public protocol SQLDriver: AnyObject, Sendable {
     /// values can never reach the SQL text. Drivers map every `SQLValue` case to a native bind.
     func execute(_ sql: String, _ params: [SQLValue]) async throws -> QueryResult
     func close() async
+    /// Switch the active database on the *live* connection when the engine supports it (MySQL `USE`),
+    /// returning `true`. Engines that cannot switch in place (Postgres — isolated databases; SQLite —
+    /// single file) return `false`, signalling the caller to reconnect to reach `name` instead. `name`
+    /// comes from `databases()` (the engine's own catalog), and is identifier-quoted, not interpolated.
+    func useDatabase(_ name: String) async throws -> Bool
     /// The placeholder dialect for `execute`, so callers build `UPDATE … WHERE …` with the correct
     /// placeholder syntax and identifier quoting for this engine.
     var dialect: SQLDialect { get }

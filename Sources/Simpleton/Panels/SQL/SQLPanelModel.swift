@@ -47,6 +47,13 @@ final class SQLPanelModel: ObservableObject {
     /// Named, reusable queries the user saved for the connected database (see `SQLSavedQueryStore`).
     /// Loaded on connect, cleared on disconnect; the editor's bookmark menu applies/manages them.
     @Published var savedQueries: [SavedQuery] = []
+    /// The databases available on the current connection (`driver.databases()`), driving the toolbar's
+    /// database switcher. Populated on connect, cleared on disconnect. A single entry (e.g. SQLite's
+    /// "main") hides the switcher — there is nothing to switch to.
+    @Published var databases: [String] = []
+    /// The active database. Seeded from the connection's `database` param on connect, updated by
+    /// `selectDatabase`. nil when unknown.
+    @Published var selectedDatabase: String?
     /// Non-nil exactly when the current result is a single-table SELECT with a primary key we can
     /// UPDATE by. The grid shows the edit affordance only while this is set. Recomputed on every
     /// `runQuery`; cleared on disconnect or any non-editable result.
@@ -151,9 +158,60 @@ final class SQLPanelModel: ObservableObject {
             try await d.connect()
             driver = d
             isConnected = true
-            historyItems = await history.history(for: connection.id)
-            savedQueries = await savedStore.saved(for: connection.id)
-            await loadSchema()
+            await loadAfterConnect(
+                connectionID: connection.id, driver: d, activeDatabase: connection.params["database"])
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    /// Populate per-connection state once a driver has connected: history, saved queries, the database
+    /// list for the switcher, the active database, and the schema. Shared by the initial connect and
+    /// the database-switch reconnect so both leave the model in the same shape. `driver` must already
+    /// be assigned to `self.driver` (loadSchema reads it).
+    private func loadAfterConnect(connectionID: UUID, driver d: SQLDriver, activeDatabase: String?) async {
+        historyItems = await history.history(for: connectionID)
+        savedQueries = await savedStore.saved(for: connectionID)
+        databases = (try? await d.databases()) ?? []
+        selectedDatabase = activeDatabase ?? databases.first
+        await loadSchema()
+    }
+
+    /// Switch the active database. Engines that can switch a live connection (MySQL `USE`) do so and
+    /// reload the schema; engines that cannot (Postgres — isolated databases) reconnect to `name`. A
+    /// no-op when the target is already active or there is no live driver.
+    func selectDatabase(_ name: String) async {
+        guard let driver, name != selectedDatabase else { return }
+        errorMessage = nil
+        do {
+            if try await driver.useDatabase(name) {
+                selectedDatabase = name
+                await loadSchema()
+            } else {
+                await reconnect(toDatabase: name)
+            }
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    /// Rebuild the driver against the current connection with its `database` param overridden — a
+    /// transient switch that is never persisted (the saved connection keeps its original database).
+    /// Used when the engine cannot switch a live connection (Postgres).
+    private func reconnect(toDatabase name: String) async {
+        guard !isConnecting, let connection = selectedConnection else { return }
+        isConnecting = true
+        defer { isConnecting = false }
+        var overridden = connection
+        overridden.params["database"] = name
+        let secret = CredentialStore.secret(for: connection.id)
+        await disconnect()
+        do {
+            let d = try SQLDriverFactory.make(overridden, secret: secret)
+            try await d.connect()
+            driver = d
+            isConnected = true
+            await loadAfterConnect(connectionID: connection.id, driver: d, activeDatabase: name)
         } catch {
             errorMessage = Self.describe(error)
         }
@@ -169,6 +227,8 @@ final class SQLPanelModel: ObservableObject {
         lastCommit = nil
         lastQueryDuration = nil
         savedQueries = []
+        databases = []
+        selectedDatabase = nil
         tables = []
         columnsByTable = [:]
     }

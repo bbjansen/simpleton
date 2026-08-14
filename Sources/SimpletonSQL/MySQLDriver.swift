@@ -92,6 +92,21 @@ public final class MySQLDriver: SQLDriver, @unchecked Sendable {
         return rows.compactMap { $0.first?.displayString }
     }
 
+    /// Switch the live connection's default database with `USE`. The name (from `databases()`) is
+    /// identifier-quoted, never interpolated as a value; afterwards `SHOW TABLES` and the
+    /// `DATABASE()`-scoped introspection follow the new database with no reconnect. `USE` is sent over
+    /// the **text protocol** (`simpleQuery`): it is not a preparable statement, so the driver's normal
+    /// `run`/`execute` prepared-statement path cannot carry it.
+    public func useDatabase(_ name: String) async throws -> Bool {
+        guard let connection else { throw SQLDriverError.notConnected }
+        do {
+            _ = try await connection.simpleQuery("USE " + dialect.quoteIdentifier(name)).get()
+            return true
+        } catch {
+            throw SQLDriverError.queryFailed("\(error)")
+        }
+    }
+
     public func tables(in database: String?) async throws -> [TableInfo] {
         guard case .rows(_, let rows) = try await run("SHOW FULL TABLES") else { return [] }
         return rows.compactMap { row in

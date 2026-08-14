@@ -1010,15 +1010,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             await model.removeSavedQuery(name: "fav")
             let removedOK = !model.savedQueries.contains { $0.name == "fav" }
 
+            // 6. Database switcher: connect loads the database list; SQLite exposes "main" as active.
+            let dbLoaded = model.databases.contains("main") && model.selectedDatabase == "main"
+
             let ok =
                 connected && editableDetected && aggregateNotEditable && committedOK && wroteValue
-                && timedOK && clearedOnError && savedOK && removedOK
+                && timedOK && clearedOnError && savedOK && removedOK && dbLoaded
             NSLog(
                 "SIMP-SQLE2E RESULT %@: connected=%@ editable=%@ aggNotEditable=%@ committed=%@ wrote=%@ "
-                    + "timed=%@ clearedOnErr=%@ saved=%@ removed=%@ error=%@",
+                    + "timed=%@ clearedOnErr=%@ saved=%@ removed=%@ dbLoaded=%@ error=%@",
                 ok ? "PASS" : "FAIL", "\(connected)", "\(editableDetected)", "\(aggregateNotEditable)",
                 "\(committedOK)", "\(wroteValue)", "\(timedOK)", "\(clearedOnError)", "\(savedOK)", "\(removedOK)",
-                model.errorMessage ?? "nil")
+                "\(dbLoaded)", model.errorMessage ?? "nil")
             NSApp.terminate(nil)
         }
     }
