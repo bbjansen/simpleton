@@ -18,12 +18,18 @@ struct SQLDataGrid: NSViewRepresentable {
     /// Non-nil when this result can be edited in place (drives the double-click = edit gesture and
     /// the "Set NULL" menu item). Read-only when nil.
     let editable: EditableTarget?
+    /// Navigable FK cells keyed by result-column index. A right-click on a cell in one of these
+    /// columns (unless NULL) offers "Go to <referencedTable>".
+    let foreignKeyMatches: [Int: SQLForeignKeyMatcher.Match]
     /// Staged (uncommitted) edits keyed by original-row/column. The grid renders these tinted and
     /// prefers them over the underlying value.
     @Binding var stagedEdits: [CellCoord: SQLValue]
     var onActivateRecord: () -> Void
     /// "Inspect Value…" — always available (right-click), and the double-click action when read-only.
     var onInspect: (Int, Int) -> Void
+    /// "Go to <referencedTable>" — jump from an FK cell (original row, result-column index) to the
+    /// referenced row. Only wired when the column is an FK and the cell is non-NULL.
+    var onNavigateForeignKey: (Int, Int) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -533,6 +539,39 @@ struct SQLDataGrid: NSViewRepresentable {
             stageNull(CellCoord(row: original, column: colIndex))
         }
 
+        /// The FK jump available on the cell at a table-column view position, or nil if that column is
+        /// not a foreign key. Resolves the view position to the underlying data-column index first, so
+        /// it stays correct after the user reorders columns.
+        func foreignKeyMatch(forColumnPosition c: Int) -> SQLForeignKeyMatcher.Match? {
+            guard let table, table.tableColumns.indices.contains(c),
+                let colIndex = Int(table.tableColumns[c].identifier.rawValue)
+            else { return nil }
+            return parent.foreignKeyMatches[colIndex]
+        }
+
+        /// The value shown in the cell at (displayRow, column view-position), preferring any staged
+        /// edit — the same value FK navigation filters by. Used to gate the "Go to …" menu item so it
+        /// hides on NULL (nothing to match).
+        func cellValue(displayRow r: Int, columnPosition c: Int) -> SQLValue? {
+            guard let table, order.indices.contains(r), table.tableColumns.indices.contains(c),
+                let colIndex = Int(table.tableColumns[c].identifier.rawValue)
+            else { return nil }
+            let original = order[r]
+            return parent.stagedEdits[CellCoord(row: original, column: colIndex)]
+                ?? parent.data.value(row: original, column: colIndex)
+        }
+
+        /// Right-click → "Go to <referencedTable>": navigate the FK cell at (displayRow, column). Maps
+        /// the view position to the data-column index and hands the original row + column to the
+        /// callback, which reads the (possibly staged) value and runs the parameterized lookup.
+        func navigateForeignKeyClicked(displayRow r: Int, column c: Int) {
+            guard let table, r >= 0, c >= 0, order.indices.contains(r),
+                table.tableColumns.indices.contains(c),
+                let colIndex = Int(table.tableColumns[c].identifier.rawValue)
+            else { return }
+            parent.onNavigateForeignKey(order[r], colIndex)
+        }
+
         /// Put the cell at (displayRow, column) into inline-edit mode: seed its text field, make it
         /// editable + first responder. Enter stages the value, Esc cancels.
         func beginEditing(displayRow r: Int, column c: Int) {
@@ -697,6 +736,17 @@ final class GridTableView: NSTableView {
             tableColumns[column].identifier.rawValue != "#"
         {
             menu.addItem(withTitle: "Inspect Value…", action: #selector(inspectValue), keyEquivalent: "")
+            // Foreign-key jump: offered only when the clicked column references another table and the
+            // clicked cell is non-NULL (a NULL FK has nothing to look up).
+            if let match = coordinator?.foreignKeyMatch(forColumnPosition: column),
+                let value = coordinator?.cellValue(displayRow: row, columnPosition: column),
+                !value.isNull
+            {
+                let item = NSMenuItem(
+                    title: "Go to \(match.referencedTable)", action: #selector(navigateForeignKey),
+                    keyEquivalent: "")
+                menu.addItem(item)
+            }
             if coordinator?.parent.editable != nil {
                 menu.addItem(withTitle: "Edit Value", action: #selector(editValue), keyEquivalent: "")
                 menu.addItem(withTitle: "Set NULL", action: #selector(setNull), keyEquivalent: "")
@@ -722,6 +772,10 @@ final class GridTableView: NSTableView {
     @objc private func setNull() {
         guard let c = menuCell else { return }
         coordinator?.setNullClicked(displayRow: c.row, column: c.column)
+    }
+    @objc private func navigateForeignKey() {
+        guard let c = menuCell else { return }
+        coordinator?.navigateForeignKeyClicked(displayRow: c.row, column: c.column)
     }
 }
 

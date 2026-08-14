@@ -48,6 +48,11 @@ final class SQLPanelModel: ObservableObject {
     /// UPDATE by. The grid shows the edit affordance only while this is set. Recomputed on every
     /// `runQuery`; cleared on disconnect or any non-editable result.
     @Published var editable: EditableTarget?
+    /// The navigable foreign-key cells for the current result, keyed by result-column index. Non-empty
+    /// only when the result maps to a known source table (via editable detection) that declares
+    /// single-column foreign keys whose columns are visible in the grid. Drives the grid's right-click
+    /// "Go to <referencedTable>" action; recomputed on every query, cleared with the result.
+    @Published var foreignKeyMatches: [Int: SQLForeignKeyMatcher.Match] = [:]
     /// Result of the most recent commit, surfaced to the UI (success count or an error to display).
     @Published var lastCommit: CommitOutcome?
 
@@ -129,6 +134,7 @@ final class SQLPanelModel: ObservableObject {
         isConnected = false
         result = nil
         editable = nil
+        foreignKeyMatches = [:]
         lastCommit = nil
         tables = []
         columnsByTable = [:]
@@ -152,12 +158,60 @@ final class SQLPanelModel: ObservableObject {
             let queryResult = try await driver.run(sql)
             result = queryResult
             editable = await detectEditable(sql: sql, result: queryResult, driver: driver)
+            foreignKeyMatches = await detectForeignKeys(result: queryResult, editable: editable, driver: driver)
             if let id = selectedConnection?.id {
                 await history.record(sql, for: id)
                 historyItems = await history.history(for: id)
             }
         } catch {
             editable = nil
+            foreignKeyMatches = [:]
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    /// Compute the navigable FK cells for `result`. The source table is known only when editable
+    /// detection resolved one (the same conservative single-table parse), so FKs are offered exactly
+    /// then. Reads the table's declared foreign keys from the driver and matches them, by name, to the
+    /// result columns via the pure `SQLForeignKeyMatcher`. Returns a column-index → match map for the
+    /// grid; empty when there is no source table or no matching single-column FK.
+    private func detectForeignKeys(
+        result: QueryResult, editable: EditableTarget?, driver: SQLDriver
+    ) async -> [Int: SQLForeignKeyMatcher.Match] {
+        guard case .rows(let columns, _) = result, let editable else { return [:] }
+        let fks = (try? await driver.foreignKeys(of: editable.table, in: nil)) ?? []
+        guard !fks.isEmpty else { return [:] }
+        let matches = SQLForeignKeyMatcher.matches(resultColumns: columns.map(\.name), foreignKeys: fks)
+        return Dictionary(uniqueKeysWithValues: matches.map { ($0.columnIndex, $0) })
+    }
+
+    /// Navigate a foreign-key cell: set the query to `SELECT * FROM <refTable> WHERE <refCol> = ?` and
+    /// run it with `value` BOUND as a parameter (never interpolated), then publish the referenced row.
+    /// Identifiers are quoted per dialect; only the value crosses as a bind. NULL cells are skipped by
+    /// the caller (there's nothing to match), so `value` here is always a concrete key. Records the
+    /// generated SQL in the editor + history so the jump is transparent and reusable.
+    func navigateForeignKey(referencedTable: String, referencedColumn: String, value: SQLValue) async {
+        guard let driver else { return }
+        if case .null = value { return }
+        lastCommit = nil
+        errorMessage = nil
+        let dialect = driver.dialect
+        let sql =
+            "SELECT * FROM \(dialect.quoteIdentifier(referencedTable)) "
+            + "WHERE \(dialect.quoteIdentifier(referencedColumn)) = \(dialect.placeholder(1))"
+        queryText = sql
+        do {
+            let queryResult = try await driver.execute(sql, [value])
+            result = queryResult
+            editable = await detectEditable(sql: sql, result: queryResult, driver: driver)
+            foreignKeyMatches = await detectForeignKeys(result: queryResult, editable: editable, driver: driver)
+            if let id = selectedConnection?.id {
+                await history.record(sql, for: id)
+                historyItems = await history.history(for: id)
+            }
+        } catch {
+            editable = nil
+            foreignKeyMatches = [:]
             errorMessage = Self.describe(error)
         }
     }

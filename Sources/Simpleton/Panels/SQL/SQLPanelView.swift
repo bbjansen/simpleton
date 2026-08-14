@@ -63,7 +63,13 @@ struct SQLPanelView: View {
             SQLResultsView(
                 result: model.result,
                 editable: model.editable,
-                onCommit: { staged in await commit(staged) }
+                foreignKeyMatches: model.foreignKeyMatches,
+                onCommit: { staged in await commit(staged) },
+                onNavigateForeignKey: { match, value in
+                    await model.navigateForeignKey(
+                        referencedTable: match.referencedTable,
+                        referencedColumn: match.referencedColumn, value: value)
+                }
             )
         }
     }

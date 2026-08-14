@@ -115,6 +115,27 @@ public final class MySQLDriver: SQLDriver, @unchecked Sendable {
         }
     }
 
+    public func foreignKeys(of table: String, in database: String?) async throws -> [ForeignKeyInfo] {
+        // KEY_COLUMN_USAGE lists every key column; FK rows are exactly those with a non-null
+        // REFERENCED_TABLE_NAME. Scope to the connection's schema (DATABASE()) so a table of the same
+        // name in another schema can't leak in. The table name is bound as a `?` parameter, never
+        // spliced into the SQL. Rows come back in ordinal order so composite FKs stay grouped.
+        let sql =
+            "SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME "
+            + "FROM information_schema.KEY_COLUMN_USAGE "
+            + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? "
+            + "AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY ORDINAL_POSITION"
+        guard case .rows(_, let rows) = try await execute(sql, [.text(table)]) else { return [] }
+        return rows.compactMap { row in
+            guard row.count >= 3 else { return nil }
+            let column = row[0].displayString
+            let refTable = row[1].displayString
+            let refColumn = row[2].displayString
+            guard !column.isEmpty, !refTable.isEmpty, !refColumn.isEmpty else { return nil }
+            return ForeignKeyInfo(column: column, referencedTable: refTable, referencedColumn: refColumn)
+        }
+    }
+
     // Generic cell → SQLValue. MySQLData renders any type as a string; SQL NULL surfaces via its
     // description. (MVP note: values are text-typed for the grid; refine typing in a later slice.)
     private static func value(_ row: MySQLRow, _ name: String) -> SQLValue {

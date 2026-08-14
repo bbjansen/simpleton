@@ -140,6 +140,42 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
         }
     }
 
+    public func foreignKeys(of table: String, in database: String?) async throws -> [ForeignKeyInfo] {
+        guard let connection else { throw SQLDriverError.notConnected }
+        do {
+            // Join the three information_schema views that describe a foreign-key constraint: the
+            // owning column (key_column_usage), the referenced column (constraint_column_usage), and
+            // the constraint metadata (referential_constraints ties the two together by name).
+            // `table` is bound as `$1` (a typed parameter), never interpolated into SQL.
+            let seq = try await connection.query(
+                """
+                SELECT kcu.column_name, ccu.table_name AS referenced_table, \
+                ccu.column_name AS referenced_column \
+                FROM information_schema.table_constraints tc \
+                JOIN information_schema.key_column_usage kcu \
+                ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema \
+                JOIN information_schema.constraint_column_usage ccu \
+                ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema \
+                WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public' \
+                AND tc.table_name = \(table) ORDER BY kcu.ordinal_position
+                """, logger: logger)
+            var out: [ForeignKeyInfo] = []
+            for try await row in seq {
+                let cells = Array(row)
+                guard cells.count >= 3 else { continue }
+                let column = (try? cells[0].decode(String.self)) ?? ""
+                let refTable = (try? cells[1].decode(String.self)) ?? ""
+                let refColumn = (try? cells[2].decode(String.self)) ?? ""
+                guard !column.isEmpty, !refTable.isEmpty, !refColumn.isEmpty else { continue }
+                out.append(
+                    ForeignKeyInfo(column: column, referencedTable: refTable, referencedColumn: refColumn))
+            }
+            return out
+        } catch {
+            throw SQLDriverError.queryFailed("\(error)")
+        }
+    }
+
     /// The primary-key column names for `table` (public schema), read from the system catalogs.
     /// `table` is bound as `$1` (a typed parameter), never interpolated into SQL. Editability hinges
     /// on this being correct, so it comes from `pg_index.indisprimary`, not a heuristic.
