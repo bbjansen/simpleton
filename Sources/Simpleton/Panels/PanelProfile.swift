@@ -76,6 +76,8 @@ extension PanelProfile {
         static let docker = "docker"
         static let sql = "sql"
         static let sftp = "sftp"
+        static let s3 = "s3"
+        static let amqp = "amqp"
         static let dataConnections = "data-connections"
     }
 }

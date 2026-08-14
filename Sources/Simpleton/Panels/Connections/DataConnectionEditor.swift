@@ -20,16 +20,24 @@ struct DataConnectionEditor: View {
     @State private var password = ""
     @State private var database = ""
     @State private var sqlitePath = ""
+    @State private var vhost = "/"
     @State private var useTLS = false
     @State private var identityFile = ""
     @State private var passphrase = ""
+    // S3 fields
+    @State private var s3Endpoint = ""
+    @State private var s3Region = "us-east-1"
+    @State private var s3Bucket = ""
+    @State private var s3AccessKey = ""
+    @State private var s3SecretKey = ""
+    @State private var s3PathStyle = true
     @State private var color: String?
     @State private var group = ""
     @State private var tagsText = ""
     @State private var tunnelBookmarkID: UUID?
     @State private var didLoad = false
 
-    private let kinds: [ConnectionKind] = [.postgres, .mysql, .sqlite, .sftp]
+    private let kinds: [ConnectionKind] = [.postgres, .mysql, .sqlite, .sftp, .s3, .amqp]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -38,7 +46,7 @@ struct DataConnectionEditor: View {
             Picker("Type", selection: $kind) {
                 ForEach(kinds, id: \.self) { Text($0.displayName).tag($0) }
             }
-            .onChange(of: kind) { if port.isEmpty, let p = kind.defaultPort { port = String(p) } }
+            .onChange(of: kind) { if port.isEmpty, let p = defaultPort(for: kind) { port = String(p) } }
             TextField("Name", text: $name).textFieldStyle(.roundedBorder)
 
             if kind == .sqlite {
@@ -63,6 +71,19 @@ struct DataConnectionEditor: View {
                     text: $passphrase
                 )
                 .textFieldStyle(.roundedBorder)
+                tunnelPicker
+            } else if kind == .s3 {
+                s3Fields
+            } else if kind == .amqp {
+                HStack {
+                    TextField("Host", text: $host).textFieldStyle(.roundedBorder)
+                    TextField("Port", text: $port).textFieldStyle(.roundedBorder).frame(width: 80)
+                }
+                TextField("Virtual host", text: $vhost).textFieldStyle(.roundedBorder)
+                TextField("User", text: $username).textFieldStyle(.roundedBorder)
+                SecureField(existing == nil ? "Password" : "Password (blank = unchanged)", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                Toggle("Use TLS", isOn: $useTLS)
                 tunnelPicker
             } else {
                 HStack {
@@ -89,6 +110,23 @@ struct DataConnectionEditor: View {
         .padding(16).frame(width: 400)
         .background(DT.base)  // theme the sheet with the active appearance, matching the app chrome
         .onAppear(perform: loadExisting)
+    }
+
+    private var s3Fields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField("Endpoint (AWS default)", text: $s3Endpoint).textFieldStyle(.roundedBorder)
+            HStack {
+                TextField("Region", text: $s3Region).textFieldStyle(.roundedBorder)
+                TextField("Default bucket (optional)", text: $s3Bucket).textFieldStyle(.roundedBorder)
+            }
+            TextField("Access Key ID", text: $s3AccessKey).textFieldStyle(.roundedBorder)
+            SecureField(
+                existing == nil ? "Secret Access Key" : "Secret Access Key (blank = unchanged)",
+                text: $s3SecretKey
+            )
+            .textFieldStyle(.roundedBorder)
+            Toggle("Path-style addressing (MinIO / S3-compatible)", isOn: $s3PathStyle)
+        }
     }
 
     private var colorPicker: some View {
@@ -152,12 +190,28 @@ struct DataConnectionEditor: View {
         username = c.username ?? ""
         database = c.params["database"] ?? ""
         sqlitePath = c.params["path"] ?? ""
+        vhost = c.params["vhost"] ?? "/"
         useTLS = c.params["useTLS"] == "true"
         identityFile = c.params["identityFile"] ?? ""
+        s3Endpoint = c.params["endpoint"] ?? ""
+        s3Region = c.params["region"] ?? "us-east-1"
+        s3Bucket = c.params["bucket"] ?? ""
+        s3PathStyle = (c.params["pathStyle"] ?? "true") != "false"
+        // Access Key ID lives in the Keychain secret alongside the secret key; load it so an edit
+        // preserves it without re-typing (the secret key stays blank = unchanged).
+        s3AccessKey = CredentialStore.secret(for: c.id)?.accessKey ?? ""
         color = c.color
         group = c.group ?? ""
         tagsText = c.tags.joined(separator: ", ")
         tunnelBookmarkID = c.tunnelBookmarkID
+    }
+
+    /// The port prefilled when a kind is picked. AMQP connections here target the RabbitMQ
+    /// *Management HTTP API* (15672 / 15671 for TLS), not the AMQP protocol port (5672), so the
+    /// editor overrides `ConnectionKind.defaultPort` for `.amqp`.
+    private func defaultPort(for kind: ConnectionKind) -> Int? {
+        if kind == .amqp { return useTLS ? 15671 : 15672 }
+        return kind.defaultPort
     }
 
     private func chooseFile() {
@@ -186,6 +240,14 @@ struct DataConnectionEditor: View {
         case .sftp:
             let trimmed = identityFile.trimmingCharacters(in: .whitespaces)
             if !trimmed.isEmpty { params["identityFile"] = trimmed }
+        case .s3:
+            params["endpoint"] = s3Endpoint.trimmingCharacters(in: .whitespaces)
+            params["region"] = s3Region.trimmingCharacters(in: .whitespaces)
+            params["bucket"] = s3Bucket.trimmingCharacters(in: .whitespaces)
+            params["pathStyle"] = s3PathStyle ? "true" : "false"
+        case .amqp:
+            params["vhost"] = vhost.isEmpty ? "/" : vhost
+            params["useTLS"] = useTLS ? "true" : "false"
         default:
             params["database"] = database
             params["useTLS"] = useTLS ? "true" : "false"
@@ -193,24 +255,25 @@ struct DataConnectionEditor: View {
         let tags = tagsText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter {
             !$0.isEmpty
         }
+        // S3 has no host/port/username/tunnel (the endpoint lives in params); SQLite is file-based.
+        let usesServer = kind != .sqlite && kind != .s3
         let connection = Connection(
             id: existing?.id ?? UUID(),
             name: name, kind: kind,
-            host: kind == .sqlite ? nil : host,
-            port: kind == .sqlite ? nil : Int(port),
-            username: kind == .sqlite ? nil : username,
+            host: usesServer ? host : nil,
+            port: usesServer ? Int(port) : nil,
+            username: usesServer ? username : nil,
             params: params, tags: tags, pinned: existing?.pinned ?? false,
             createdAt: existing?.createdAt ?? Date(),
             color: color, group: group.isEmpty ? nil : group,
-            tunnelBookmarkID: kind == .sqlite ? nil : tunnelBookmarkID)
-        let secret = buildSecret()
-        onSave(connection, secret)
+            tunnelBookmarkID: usesServer ? tunnelBookmarkID : nil)
+        onSave(connection, buildSecret())
         dismiss()
     }
 
-    /// Build the Keychain secret for the current kind: SQLite has none; SFTP carries an optional
-    /// password and/or passphrase; the SQL server kinds carry a password. Empty fields → nil so an
-    /// edit that leaves a secret blank does not overwrite the stored value.
+    /// Build the `ConnectionSecret` to persist, or nil to leave the stored secret unchanged. SQLite
+    /// has no secret. SFTP carries an optional password and/or passphrase. S3 stores access key +
+    /// secret key. Server kinds store a password. A blank field on edit keeps the stored value.
     private func buildSecret() -> ConnectionSecret? {
         switch kind {
         case .sqlite:
@@ -220,6 +283,12 @@ struct DataConnectionEditor: View {
             let pp = passphrase.isEmpty ? nil : passphrase
             guard pw != nil || pp != nil else { return nil }
             return ConnectionSecret(password: pw, passphrase: pp)
+        case .s3:
+            let existingSecret = existing.flatMap { CredentialStore.secret(for: $0.id) }
+            let secretKey = s3SecretKey.isEmpty ? existingSecret?.secretKey : s3SecretKey
+            // Nothing to store yet (new connection with no keys typed) → leave the Keychain untouched.
+            if s3AccessKey.isEmpty && (secretKey ?? "").isEmpty && existingSecret == nil { return nil }
+            return ConnectionSecret(accessKey: s3AccessKey, secretKey: secretKey)
         default:
             return password.isEmpty ? nil : ConnectionSecret(password: password)
         }

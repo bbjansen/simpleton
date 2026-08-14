@@ -227,6 +227,30 @@ extension PanelDefinition {
         NSHostingController(rootView: SFTPPanelView(appSupportDir: context.appSupportDir))
     }
 
+    static let s3 = PanelDefinition(
+        id: PanelProfile.PanelID.s3,
+        name: "S3",
+        icon: "externaldrive.connected.to.line.below",
+        description: "Browse S3 & S3-compatible object storage",
+        defaultSide: .right,
+        isBuiltIn: true,
+        prefersDrawer: true
+    ) { context in
+        NSHostingController(rootView: S3PanelView(appSupportDir: context.appSupportDir))
+    }
+
+    static let amqp = PanelDefinition(
+        id: PanelProfile.PanelID.amqp,
+        name: "AMQP",
+        icon: "arrow.left.arrow.right",
+        description: "Manage RabbitMQ (queues, exchanges, messages)",
+        defaultSide: .right,
+        isBuiltIn: true,
+        prefersDrawer: true
+    ) { context in
+        NSHostingController(rootView: AMQPPanelView(appSupportDir: context.appSupportDir))
+    }
+
     static let dataConnections = PanelDefinition(
         id: PanelProfile.PanelID.dataConnections,
         name: "Data Connections",
