@@ -39,4 +39,34 @@ func runSQLGridDataChecks(_ t: TestRunner) {
         let cr = SQLGridData(columns: [Column(name: "c")], rows: [[.text("a\rb")]])
         t.expectEqual(cr.tsv(rows: [0], withHeader: false), "\"a\rb\"", "carriage-return value quoted")
     }
+
+    t.suite("SQLGridData.sortedIndex(by:) multi-key") {
+        // group asc, then value desc within group.
+        let cols = [Column(name: "g"), Column(name: "v")]
+        let rs: [[SQLValue]] = [
+            [.text("b"), .integer(1)],  // 0
+            [.text("a"), .integer(2)],  // 1
+            [.text("a"), .integer(5)],  // 2
+            [.text("b"), .integer(9)],  // 3
+        ]
+        let d = SQLGridData(columns: cols, rows: rs)
+        // g asc: a group (rows 1,2), b group (rows 0,3). v desc within: a→[5,2]=(2,1), b→[9,1]=(3,0)
+        let keys = [SortKey(column: 0, ascending: true), SortKey(column: 1, ascending: false)]
+        t.expectEqual(d.sortedIndex(by: keys), [2, 1, 3, 0], "g asc, then v desc within group")
+        // empty keys → identity
+        t.expectEqual(d.sortedIndex(by: []), [0, 1, 2, 3], "no keys → identity")
+        // single key matches the convenience overload
+        t.expectEqual(
+            d.sortedIndex(by: [SortKey(column: 1, ascending: true)]),
+            d.sortedIndex(sortColumn: 1, ascending: true), "multi wrapper == single")
+    }
+
+    t.suite("SQLGridData.columnSignature") {
+        let a = SQLGridData(columns: [Column(name: "id"), Column(name: "name")], rows: [])
+        let a2 = SQLGridData(columns: [Column(name: "id"), Column(name: "name")], rows: [[.integer(1)]])
+        let b = SQLGridData(columns: [Column(name: "name"), Column(name: "id")], rows: [])
+        t.expectEqual(a.columnSignature, a2.columnSignature, "signature ignores rows, same columns")
+        t.expect(a.columnSignature != b.columnSignature, "column order changes the signature")
+        t.expect(!a.columnSignature.isEmpty, "signature non-empty")
+    }
 }
