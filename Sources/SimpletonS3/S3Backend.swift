@@ -15,6 +15,14 @@ public protocol S3Backend: AnyObject, Sendable {
     func list(bucket: String, prefix: String, continuationToken: String?) async throws -> S3ListPage
     func download(bucket: String, key: String) async throws -> Data
     func upload(bucket: String, key: String, data: Data) async throws
+    /// Upload a local file at `fileURL`, streamed from disk so multi-GB files never load fully into
+    /// memory. Files at or above `S3Upload.multipartThreshold` go through S3 multipart upload (parts
+    /// uploaded concurrently); smaller files use a single `putObject`. `progress` reports the fraction
+    /// complete (0…1) and is called after each part; for the small-file path it is invoked once with
+    /// `1.0` on success. The backend maps every failure to `S3Error`.
+    func upload(
+        bucket: String, key: String, fileURL: URL,
+        progress: @escaping @Sendable (Double) async throws -> Void) async throws
     func delete(bucket: String, key: String) async throws
     /// A time-limited presigned GET URL for `key`, usable by any HTTP client without credentials.
     func presignGetURL(bucket: String, key: String, expires: TimeInterval) async throws -> URL
@@ -82,6 +90,39 @@ public enum S3Error: Error, Sendable, Equatable {
     case connectionFailed(String)
     /// The connection is not an S3 connection (factory rejects non-`.s3` kinds).
     case unsupported(String)
+}
+
+/// Pure, side-effect-free upload policy: the size threshold that switches an upload from a single
+/// `putObject` to a multipart upload, and the per-part size used for multipart. Kept free of any SDK
+/// type so the decision is unit-testable (see CoreChecks) and shared by every backend.
+public enum S3Upload {
+    /// At or above this many bytes an upload uses S3 multipart; below it a single `putObject` is used.
+    /// 8 MiB — comfortably above S3's 5 MiB minimum part size so a multipart upload always has at
+    /// least one full-size part.
+    public static let multipartThreshold: Int64 = 8 * 1024 * 1024
+
+    /// S3 requires every multipart part except the last to be at least 5 MiB.
+    public static let minimumPartSize: Int64 = 5 * 1024 * 1024
+
+    /// S3 allows at most 10,000 parts per upload.
+    public static let maximumPartCount: Int64 = 10_000
+
+    /// Whether a file of `fileSize` bytes should use multipart upload. Zero/negative sizes never do.
+    public static func shouldUseMultipart(fileSize: Int64) -> Bool {
+        fileSize >= multipartThreshold
+    }
+
+    /// The part size (bytes) to use for a multipart upload of `fileSize` bytes. Starts at the 5 MiB
+    /// minimum and grows just enough that the file fits within `maximumPartCount` parts, so even very
+    /// large files (> 50 GiB) stay under the 10,000-part cap. Always ≥ `minimumPartSize`.
+    public static func partSize(forFileSize fileSize: Int64) -> Int {
+        guard fileSize > 0 else { return Int(minimumPartSize) }
+        // ceil(fileSize / maximumPartCount), then rounded up to the next whole MiB, floored at 5 MiB.
+        let needed = (fileSize + maximumPartCount - 1) / maximumPartCount
+        let mib: Int64 = 1024 * 1024
+        let roundedToMiB = ((needed + mib - 1) / mib) * mib
+        return Int(max(minimumPartSize, roundedToMiB))
+    }
 }
 
 /// Byte-size formatting shared by the model and the panel, so table rows and the CoreChecks test use
