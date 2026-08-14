@@ -8,6 +8,8 @@ enum AMQPTab: String, CaseIterable, Identifiable {
     case queues = "Queues"
     case exchanges = "Exchanges"
     case bindings = "Bindings"
+    case graph = "Graph"
+    case policies = "Policies"
     case connections = "Connections"
     case channels = "Channels"
     case nodes = "Nodes"
@@ -58,6 +60,49 @@ struct NewBindingSpec {
     var routingKey = ""
 }
 
+/// Input for the New Policy sheet. A policy applies its `definition` (TTL / DLX / max-length) to
+/// every object matching `pattern` in `applyTo` — the correct way to set TTL/DLX on *existing*
+/// queues (queue arguments are immutable after declaration). Empty / non-numeric definition rows are
+/// dropped exactly like the New Queue sheet does, so a blank field never sends a bad value.
+struct NewPolicySpec {
+    var name = ""
+    /// Regex matched against object names (`.*` = everything, `^orders\\.` = a prefix, …).
+    var pattern = ".*"
+    /// `queues`, `exchanges`, or `all`.
+    var applyTo = "queues"
+    var priority = "0"
+    /// Message TTL in milliseconds (`message-ttl`); blank = unset.
+    var messageTTL = ""
+    /// Dead-letter exchange (`dead-letter-exchange`); blank = unset.
+    var deadLetterExchange = ""
+    /// Dead-letter routing key (`dead-letter-routing-key`); blank = unset.
+    var deadLetterRoutingKey = ""
+    /// Max queue length (`max-length`); blank = unset.
+    var maxLength = ""
+
+    static let applyToOptions = ["queues", "exchanges", "all"]
+
+    /// The parsed priority (defaults to 0 if blank / non-numeric).
+    var priorityValue: Int {
+        Int(priority.trimmingCharacters(in: .whitespaces)) ?? 0
+    }
+
+    /// Build the RabbitMQ policy `definition` map from the filled-in fields. Empty fields are omitted;
+    /// a non-numeric TTL / max-length is dropped rather than sent as a bad value.
+    var definition: [String: PolicyValue] {
+        var def: [String: PolicyValue] = [:]
+        let ttl = messageTTL.trimmingCharacters(in: .whitespaces)
+        if !ttl.isEmpty, let ms = Int(ttl) { def["message-ttl"] = .int(ms) }
+        let dlx = deadLetterExchange.trimmingCharacters(in: .whitespaces)
+        if !dlx.isEmpty { def["dead-letter-exchange"] = .string(dlx) }
+        let dlrk = deadLetterRoutingKey.trimmingCharacters(in: .whitespaces)
+        if !dlrk.isEmpty { def["dead-letter-routing-key"] = .string(dlrk) }
+        let maxLen = maxLength.trimmingCharacters(in: .whitespaces)
+        if !maxLen.isEmpty, let n = Int(maxLen) { def["max-length"] = .int(n) }
+        return def
+    }
+}
+
 @MainActor
 final class AMQPPanelModel: ObservableObject {
     @Published var connections: [Connection] = []
@@ -75,6 +120,10 @@ final class AMQPPanelModel: ObservableObject {
     @Published var brokerConnections: [ConnectionInfo] = []
     @Published var channels: [ChannelInfo] = []
     @Published var nodes: [NodeInfo] = []
+    @Published var policies: [PolicyInfo] = []
+    /// Rolling per-node metrics history (memory / fd), sampled on every refresh. In-memory only —
+    /// resets when the panel closes; that is intentional for a live monitor (see NodeMetricsHistory).
+    @Published var metricsHistory = NodeMetricsHistory(capacity: 60)
 
     /// Sheet state for a queue's peeked messages.
     @Published var messagePreview: [MessagePreview]?
@@ -83,13 +132,15 @@ final class AMQPPanelModel: ObservableObject {
     @Published var publishTarget: QueueInfo?
     /// Confirmation state for purging.
     @Published var purgeTarget: QueueInfo?
-    /// Sheet presentation for the New Queue / New Exchange / New Binding forms.
+    /// Sheet presentation for the New Queue / New Exchange / New Binding / New Policy forms.
     @Published var showingNewQueue = false
     @Published var showingNewExchange = false
     @Published var showingNewBinding = false
-    /// Confirmation state for deleting a queue / an exchange.
+    @Published var showingNewPolicy = false
+    /// Confirmation state for deleting a queue / an exchange / a policy.
     @Published var deleteQueueTarget: QueueInfo?
     @Published var deleteExchangeTarget: ExchangeInfo?
+    @Published var deletePolicyTarget: PolicyInfo?
 
     private let store: ConnectionStore
     private var backend: AMQPManagementBackend?
@@ -172,6 +223,8 @@ final class AMQPPanelModel: ObservableObject {
         brokerConnections = []
         channels = []
         nodes = []
+        policies = []
+        metricsHistory = NodeMetricsHistory(capacity: 60)
     }
 
     /// Reload every table (called by connect, the scaffold's manual refresh, and auto-refresh).
@@ -183,12 +236,37 @@ final class AMQPPanelModel: ObservableObject {
             queues = try await backend.queues(vhost: vhost)
             exchanges = try await backend.exchanges(vhost: vhost)
             bindings = try await backend.bindings(vhost: vhost)
+            policies = try await backend.policies(vhost: vhost)
             brokerConnections = try await backend.connections()
             channels = try await backend.channels()
             nodes = try await backend.nodes()
+            recordMetrics(from: nodes)
         } catch {
             errorMessage = Self.describe(error)
         }
+    }
+
+    /// Append one metrics sample per node to the rolling history. Called after every successful
+    /// refresh so the Nodes charts accumulate a live memory / fd time series.
+    private func recordMetrics(from nodes: [NodeInfo]) {
+        for node in nodes {
+            metricsHistory.record(node: node.name, memUsed: node.memUsed, fdUsed: node.fdUsed)
+        }
+    }
+
+    /// The deterministic bindings-graph layout for the Graph tab, built from the current
+    /// exchanges / queues / bindings. Recomputed on demand (cheap, pure) so it always reflects the
+    /// latest refresh.
+    var graphLayout: AMQPBindingsGraph.Layout {
+        AMQPBindingsGraph.build(
+            exchangeNames: exchanges.map(\.name),
+            queueNames: queues.map(\.name),
+            bindings: bindings.map {
+                (
+                    source: $0.source, destination: $0.destination,
+                    destinationType: $0.destinationType, routingKey: $0.routingKey
+                )
+            })
     }
 
     // MARK: - Queue row actions
@@ -284,6 +362,30 @@ final class AMQPPanelModel: ObservableObject {
                 vhost: vhost, source: spec.source, destination: spec.destination,
                 routingKey: spec.routingKey)
             showingNewBinding = false
+            await refresh()
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    func createPolicy(_ spec: NewPolicySpec) async {
+        guard let backend else { return }
+        do {
+            try await backend.putPolicy(
+                vhost: vhost, name: spec.name, pattern: spec.pattern, applyTo: spec.applyTo,
+                definition: spec.definition, priority: spec.priorityValue)
+            showingNewPolicy = false
+            await refresh()
+        } catch {
+            errorMessage = Self.describe(error)
+        }
+    }
+
+    func deletePolicy(_ policy: PolicyInfo) async {
+        guard let backend else { return }
+        do {
+            try await backend.deletePolicy(vhost: policy.vhost, name: policy.name)
+            deletePolicyTarget = nil
             await refresh()
         } catch {
             errorMessage = Self.describe(error)

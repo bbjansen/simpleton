@@ -65,6 +65,13 @@ struct AMQPPanelView: View {
                 primaryButton: .destructive(Text("Delete")) { Task { await model.deleteExchange(exchange) } },
                 secondaryButton: .cancel())
         }
+        .alert(item: $model.deletePolicyTarget) { policy in
+            Alert(
+                title: Text("Delete policy \(policy.name)?"),
+                message: Text("This removes the policy; its TTL / dead-letter / limit settings stop applying."),
+                primaryButton: .destructive(Text("Delete")) { Task { await model.deletePolicy(policy) } },
+                secondaryButton: .cancel())
+        }
         .sheet(isPresented: $model.showingNewQueue) {
             AMQPNewQueueSheet(onCreate: { spec in Task { await model.createQueue(spec) } })
         }
@@ -75,6 +82,9 @@ struct AMQPPanelView: View {
             AMQPNewBindingSheet(
                 exchanges: model.exchanges.map(\.name), queues: model.queues.map(\.name),
                 onCreate: { spec in Task { await model.createBinding(spec) } })
+        }
+        .sheet(isPresented: $model.showingNewPolicy) {
+            AMQPNewPolicySheet(onCreate: { spec in Task { await model.createPolicy(spec) } })
         }
         .onReceive(NotificationCenter.default.publisher(for: .simpletonOpenConnectionGUI)) { _ in
             Task { await model.consumePendingOpen() }  // warm: panel already mounted
@@ -194,7 +204,9 @@ struct AMQPPanelView: View {
             return AddAction(help: "New exchange") { model.showingNewExchange = true }
         case .bindings:
             return AddAction(help: "New binding") { model.showingNewBinding = true }
-        case .connections, .channels, .nodes:
+        case .policies:
+            return AddAction(help: "New policy") { model.showingNewPolicy = true }
+        case .graph, .connections, .channels, .nodes:
             return nil
         }
     }
@@ -205,6 +217,8 @@ struct AMQPPanelView: View {
         case .queues: queuesTable
         case .exchanges: exchangesTable
         case .bindings: bindingsTable
+        case .graph: graphView
+        case .policies: policiesTable
         case .connections: connectionsTable
         case .channels: channelsTable
         case .nodes: nodesTable
@@ -339,6 +353,41 @@ struct AMQPPanelView: View {
         }
     }
 
+    private var policiesTable: some View {
+        listOrEmpty(model.policies, empty: "No policies in this vhost.") { p in
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(p.name).font(DT.monoFont(size: 11)).fontWeight(.semibold)
+                        .foregroundColor(DT.textPrimary).lineLimit(1)
+                    tag(p.applyTo)
+                    Spacer()
+                    metric("priority", "\(p.priority)")
+                    Button {
+                        model.deletePolicyTarget = p
+                    } label: {
+                        Image(systemName: "trash").foregroundColor(DT.accentRed)
+                    }
+                    .buttonStyle(.plain).help("Delete policy")
+                }
+                HStack(spacing: 8) {
+                    metric("pattern", p.pattern)
+                    if !p.definitionSummary.isEmpty { metric("def", p.definitionSummary) }
+                }
+            }
+            .contextMenu {
+                Button(role: .destructive) {
+                    model.deletePolicyTarget = p
+                } label: {
+                    Label("Delete policy", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private var graphView: some View {
+        AMQPBindingsGraphView(layout: model.graphLayout)
+    }
+
     private var nodesTable: some View {
         listOrEmpty(model.nodes, empty: "No nodes reported.") { n in
             VStack(alignment: .leading, spacing: 3) {
@@ -359,6 +408,7 @@ struct AMQPPanelView: View {
                     if let sockets = n.socketsUsed { metric("sockets", "\(sockets)") }
                     if let procs = n.procUsed { metric("procs", "\(procs)") }
                 }
+                AMQPNodeMetricsChart(samples: model.metricsHistory.samples(for: n.name))
             }
         }
     }
@@ -726,5 +776,78 @@ struct AMQPNewBindingSheet: View {
         }
         .padding(16).frame(width: 420)
         .background(DT.base)
+    }
+}
+
+/// Create a policy — the correct way to set TTL / dead-letter / max-length on *existing* queues (queue
+/// arguments are immutable after declaration). Definition rows that are blank / non-numeric are
+/// dropped, exactly like the New Queue sheet, so a partly-filled form never sends a bad value.
+struct AMQPNewPolicySheet: View {
+    let onCreate: (NewPolicySpec) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var themeSettings = ThemeSettings.shared
+
+    @State private var spec = NewPolicySpec()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New policy").font(.headline).foregroundColor(DT.textPrimary)
+            field("Name") {
+                TextField("policy name", text: $spec.name).textFieldStyle(.roundedBorder)
+            }
+            field("Pattern (regex matched against object names)") {
+                TextField(".*", text: $spec.pattern).textFieldStyle(.roundedBorder)
+            }
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Apply to").font(.system(size: 11)).foregroundColor(DT.textSecondary)
+                    Picker("", selection: $spec.applyTo) {
+                        ForEach(NewPolicySpec.applyToOptions, id: \.self) { Text($0).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.segmented)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Priority").font(.system(size: 11)).foregroundColor(DT.textSecondary)
+                    TextField("0", text: $spec.priority).textFieldStyle(.roundedBorder).frame(width: 60)
+                }
+            }
+            ThemedDivider()
+            Text("Definition (optional — blank rows are dropped)").font(.system(size: 11, weight: .semibold))
+                .foregroundColor(DT.textSecondary)
+            field("Message TTL (ms) — message-ttl") {
+                TextField("e.g. 60000", text: $spec.messageTTL).textFieldStyle(.roundedBorder)
+            }
+            field("Dead-letter exchange — dead-letter-exchange") {
+                TextField("exchange name", text: $spec.deadLetterExchange).textFieldStyle(.roundedBorder)
+            }
+            field("Dead-letter routing key — dead-letter-routing-key") {
+                TextField("routing key", text: $spec.deadLetterRoutingKey).textFieldStyle(.roundedBorder)
+            }
+            field("Max length — max-length") {
+                TextField("e.g. 10000", text: $spec.maxLength).textFieldStyle(.roundedBorder)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Create") {
+                    onCreate(spec)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction).tint(DT.accent)
+                .disabled(
+                    spec.name.trimmingCharacters(in: .whitespaces).isEmpty
+                        || spec.pattern.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(16).frame(width: 460)
+        .background(DT.base)
+    }
+
+    @ViewBuilder
+    private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.system(size: 11)).foregroundColor(DT.textSecondary)
+            content()
+        }
     }
 }
