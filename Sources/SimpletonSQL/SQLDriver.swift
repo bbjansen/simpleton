@@ -9,8 +9,48 @@ public protocol SQLDriver: AnyObject, Sendable {
     func databases() async throws -> [String]
     func tables(in database: String?) async throws -> [TableInfo]
     func columns(of table: String, in database: String?) async throws -> [ColumnInfo]
+    /// Run a raw statement (the query editor). The text is executed verbatim — it is the user's
+    /// own SQL — so this path is *not* used for programmatic UPDATEs built from cell values.
     func run(_ sql: String) async throws -> QueryResult
+    /// Run a statement with values bound **natively** by the engine (never string-interpolated into
+    /// the SQL). `sql` must use this driver's `dialect` placeholder syntax; `params` supplies one
+    /// value per placeholder, in order. This is the only path used to write edited cells, so cell
+    /// values can never reach the SQL text. Drivers map every `SQLValue` case to a native bind.
+    func execute(_ sql: String, _ params: [SQLValue]) async throws -> QueryResult
     func close() async
+    /// The placeholder dialect for `execute`, so callers build `UPDATE … WHERE …` with the correct
+    /// placeholder syntax and identifier quoting for this engine.
+    var dialect: SQLDialect { get }
+}
+
+/// Per-engine SQL surface that the parameterized-write path needs: how placeholders are written and
+/// how identifiers are quoted. Kept tiny and value-typed so the UPDATE builder is pure and testable.
+public enum SQLDialect: String, Sendable, Hashable {
+    /// SQLite / MySQL: positional `?` placeholders; identifiers quoted per style below.
+    case sqlite
+    case mysql
+    /// PostgreSQL: numbered `$1`, `$2`, … placeholders.
+    case postgres
+
+    /// The placeholder token for the 1-based parameter at `index` (`?` for sqlite/mysql, `$n` for pg).
+    public func placeholder(_ index: Int) -> String {
+        switch self {
+        case .sqlite, .mysql: return "?"
+        case .postgres: return "$\(index)"
+        }
+    }
+
+    /// Quote a table/column identifier for this engine, escaping the quote char by doubling it.
+    /// MySQL uses backticks; SQLite and Postgres use double quotes. This never carries a *value* —
+    /// only schema identifiers (table/column names), which come from the DB catalog, not user input.
+    public func quoteIdentifier(_ raw: String) -> String {
+        switch self {
+        case .mysql:
+            return "`" + raw.replacingOccurrences(of: "`", with: "``") + "`"
+        case .sqlite, .postgres:
+            return "\"" + raw.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+    }
 }
 
 public enum TableKind: String, Sendable, Hashable { case table, view }

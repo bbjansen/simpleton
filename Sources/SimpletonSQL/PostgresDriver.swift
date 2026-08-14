@@ -40,18 +40,53 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
         connection = nil
     }
 
+    public var dialect: SQLDialect { .postgres }
+
     public func run(_ sql: String) async throws -> QueryResult {
         guard let connection else { throw SQLDriverError.notConnected }
         do {
             let seq = try await connection.query(PostgresQuery(unsafeSQL: sql), logger: logger)
-            let pgRows = try await seq.collect()
-            guard let first = pgRows.first else { return .status(affected: 0, message: "OK") }
-            let columns = first.map { Column(name: $0.columnName) }
-            let rows = pgRows.map { row in row.map { Self.value($0) } }
-            return .rows(columns: columns, rows: rows)
+            return try await Self.materialize(seq)
         } catch {
             throw SQLDriverError.queryFailed("\(error)")
         }
+    }
+
+    public func execute(_ sql: String, _ params: [SQLValue]) async throws -> QueryResult {
+        guard let connection else { throw SQLDriverError.notConnected }
+        do {
+            // Values are appended to PostgresBindings and sent over the extended-query protocol as
+            // typed binary parameters — they are NEVER concatenated into `sql`. The placeholders in
+            // `sql` are `$1..$n` (see SQLDialect.postgres).
+            var binds = PostgresBindings(capacity: params.count)
+            for value in params { Self.bind(value, into: &binds) }
+            let seq = try await connection.query(PostgresQuery(unsafeSQL: sql, binds: binds), logger: logger)
+            return try await Self.materialize(seq)
+        } catch {
+            throw SQLDriverError.queryFailed("\(error)")
+        }
+    }
+
+    /// Append one `SQLValue` to `binds` using PostgresNIO's native encoders (typed binary binds).
+    private static func bind(_ value: SQLValue, into binds: inout PostgresBindings) {
+        switch value {
+        case .null: binds.appendNull()
+        case .integer(let v): binds.append(v)
+        case .double(let v): binds.append(v)
+        case .bool(let b): binds.append(b)
+        case .text(let s): binds.append(s)
+        case .blob(let d): binds.append(ByteBuffer(bytes: d))
+        }
+    }
+
+    /// Collect a Postgres row sequence into a generic `QueryResult`. A statement that returns no
+    /// rows (UPDATE/DDL) surfaces as `.status`; the row count is reported by callers via re-query.
+    private static func materialize(_ seq: PostgresRowSequence) async throws -> QueryResult {
+        let pgRows = try await seq.collect()
+        guard let first = pgRows.first else { return .status(affected: 0, message: "OK") }
+        let columns = first.map { Column(name: $0.columnName) }
+        let rows = pgRows.map { row in row.map { Self.value($0) } }
+        return .rows(columns: columns, rows: rows)
     }
 
     public func databases() async throws -> [String] {
@@ -78,6 +113,7 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
     public func columns(of table: String, in database: String?) async throws -> [ColumnInfo] {
         guard let connection else { throw SQLDriverError.notConnected }
         do {
+            let primaryKeys = try await primaryKeyColumns(of: table, on: connection)
             // `table` is bound as a parameter ($1) via PostgresQuery string interpolation — NOT raw
             // SQL — so no manual escaping and no injection surface (contrast `run`'s unsafeSQL path,
             // which intentionally executes the user's own IDE queries).
@@ -90,17 +126,35 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
             for try await row in seq {
                 let cells = Array(row)
                 guard cells.count >= 3 else { continue }
+                let name = (try? cells[0].decode(String.self)) ?? ""
                 out.append(
                     ColumnInfo(
-                        name: (try? cells[0].decode(String.self)) ?? "",
+                        name: name,
                         type: (try? cells[1].decode(String.self)) ?? "",
                         nullable: ((try? cells[2].decode(String.self)) ?? "").uppercased() == "YES",
-                        isPrimaryKey: false))
+                        isPrimaryKey: primaryKeys.contains(name)))
             }
             return out
         } catch {
             throw SQLDriverError.queryFailed("\(error)")
         }
+    }
+
+    /// The primary-key column names for `table` (public schema), read from the system catalogs.
+    /// `table` is bound as `$1` (a typed parameter), never interpolated into SQL. Editability hinges
+    /// on this being correct, so it comes from `pg_index.indisprimary`, not a heuristic.
+    private func primaryKeyColumns(of table: String, on connection: PostgresConnection) async throws -> Set<String> {
+        let seq = try await connection.query(
+            """
+            SELECT a.attname FROM pg_index i \
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) \
+            WHERE i.indrelid = \(table)::regclass AND i.indisprimary
+            """, logger: logger)
+        var keys: Set<String> = []
+        for try await row in seq {
+            if let name = try? row.decode(String.self) { keys.insert(name) }
+        }
+        return keys
     }
 
     // Generic cell → SQLValue. Common types decode precisely; anything else falls back to text.

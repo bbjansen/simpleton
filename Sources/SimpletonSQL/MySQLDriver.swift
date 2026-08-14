@@ -45,11 +45,20 @@ public final class MySQLDriver: SQLDriver, @unchecked Sendable {
         connection = nil
     }
 
+    public var dialect: SQLDialect { .mysql }
+
     public func run(_ sql: String) async throws -> QueryResult {
+        try await execute(sql, [])
+    }
+
+    public func execute(_ sql: String, _ params: [SQLValue]) async throws -> QueryResult {
         guard let connection else { throw SQLDriverError.notConnected }
         do {
+            // Binds are sent as `[MySQLData]` on MySQLNIO's prepared-statement path; when non-empty,
+            // the driver uses `?` placeholders and NEVER splices values into `sql`.
+            let binds = params.map(Self.bind)
             var affected: UInt64 = 0
-            let rows = try await connection.query(sql, [], onMetadata: { affected = $0.affectedRows }).get()
+            let rows = try await connection.query(sql, binds, onMetadata: { affected = $0.affectedRows }).get()
             guard let first = rows.first else {
                 return .status(affected: Int(affected), message: "OK")
             }
@@ -59,6 +68,22 @@ public final class MySQLDriver: SQLDriver, @unchecked Sendable {
             return .rows(columns: columns, rows: out)
         } catch {
             throw SQLDriverError.queryFailed("\(error)")
+        }
+    }
+
+    /// Map one `SQLValue` to a native `MySQLData` bind. Blobs bind as a raw binary buffer; SQL NULL
+    /// is `MySQLData.null`. Values are typed here, not stringified into the SQL.
+    private static func bind(_ value: SQLValue) -> MySQLData {
+        switch value {
+        case .null: return .null
+        case .integer(let v): return MySQLData(int: Int(v))
+        case .double(let v): return MySQLData(double: v)
+        case .bool(let b): return MySQLData(bool: b)
+        case .text(let s): return MySQLData(string: s)
+        case .blob(let d):
+            var buffer = ByteBufferAllocator().buffer(capacity: d.count)
+            buffer.writeBytes(d)
+            return MySQLData(type: .blob, format: .binary, buffer: buffer)
         }
     }
 

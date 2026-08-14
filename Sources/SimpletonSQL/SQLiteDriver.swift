@@ -42,8 +42,14 @@ public final class SQLiteDriver: SQLDriver, @unchecked Sendable {
         }
     }
 
+    public var dialect: SQLDialect { .sqlite }
+
     public func run(_ sql: String) async throws -> QueryResult {
         try await onQueue { try self.query(sql) }
+    }
+
+    public func execute(_ sql: String, _ params: [SQLValue]) async throws -> QueryResult {
+        try await onQueue { try self.query(sql, params: params) }
     }
 
     public func databases() async throws -> [String] {
@@ -79,13 +85,18 @@ public final class SQLiteDriver: SQLDriver, @unchecked Sendable {
 
     // MARK: - core (queue-confined)
 
-    private func query(_ sql: String) throws -> QueryResult {
+    // SQLite keeps a borrowed pointer for text/blob binds unless told to copy; TRANSIENT forces a
+    // copy so the Swift buffer can be freed as soon as bind returns.
+    private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
+    private func query(_ sql: String, params: [SQLValue] = []) throws -> QueryResult {
         guard let db else { throw SQLDriverError.notConnected }
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
             throw SQLDriverError.queryFailed(String(cString: sqlite3_errmsg(db)))
         }
         defer { sqlite3_finalize(stmt) }
+        try bind(params, into: stmt, db: db)
 
         let colCount = Int(sqlite3_column_count(stmt))
         if colCount == 0 {
@@ -116,6 +127,37 @@ public final class SQLiteDriver: SQLDriver, @unchecked Sendable {
             out.append(row)
         }
         return .rows(columns: columns, rows: out)
+    }
+
+    /// Bind each `SQLValue` to its 1-based positional placeholder using the native `sqlite3_bind_*`
+    /// C API — values never touch the SQL string. Bools bind as 0/1 integers (SQLite has no bool).
+    private func bind(_ params: [SQLValue], into stmt: OpaquePointer?, db: OpaquePointer) throws {
+        for (offset, value) in params.enumerated() {
+            let idx = Int32(offset + 1)
+            let rc: Int32
+            switch value {
+            case .null:
+                rc = sqlite3_bind_null(stmt, idx)
+            case .integer(let v):
+                rc = sqlite3_bind_int64(stmt, idx, v)
+            case .double(let v):
+                rc = sqlite3_bind_double(stmt, idx, v)
+            case .bool(let b):
+                rc = sqlite3_bind_int64(stmt, idx, b ? 1 : 0)
+            case .text(let s):
+                rc = sqlite3_bind_text(stmt, idx, s, -1, Self.transient)
+            case .blob(let d):
+                rc =
+                    d.isEmpty
+                    ? sqlite3_bind_zeroblob(stmt, idx, 0)
+                    : d.withUnsafeBytes { buf in
+                        sqlite3_bind_blob(stmt, idx, buf.baseAddress, Int32(buf.count), Self.transient)
+                    }
+            }
+            guard rc == SQLITE_OK else {
+                throw SQLDriverError.queryFailed(String(cString: sqlite3_errmsg(db)))
+            }
+        }
     }
 
     private static func cell(_ stmt: OpaquePointer?, _ i: Int32) -> SQLValue {
