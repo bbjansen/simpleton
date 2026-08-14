@@ -20,6 +20,7 @@ struct DataConnectionEditor: View {
     @State private var password = ""
     @State private var database = ""
     @State private var sqlitePath = ""
+    @State private var vhost = "/"
     @State private var useTLS = false
     // S3 fields
     @State private var s3Endpoint = ""
@@ -34,7 +35,7 @@ struct DataConnectionEditor: View {
     @State private var tunnelBookmarkID: UUID?
     @State private var didLoad = false
 
-    private let kinds: [ConnectionKind] = [.postgres, .mysql, .sqlite, .s3]
+    private let kinds: [ConnectionKind] = [.postgres, .mysql, .sqlite, .s3, .amqp]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -43,7 +44,7 @@ struct DataConnectionEditor: View {
             Picker("Type", selection: $kind) {
                 ForEach(kinds, id: \.self) { Text($0.displayName).tag($0) }
             }
-            .onChange(of: kind) { if port.isEmpty, let p = kind.defaultPort { port = String(p) } }
+            .onChange(of: kind) { if port.isEmpty, let p = defaultPort(for: kind) { port = String(p) } }
             TextField("Name", text: $name).textFieldStyle(.roundedBorder)
 
             if kind == .sqlite {
@@ -53,6 +54,17 @@ struct DataConnectionEditor: View {
                 }
             } else if kind == .s3 {
                 s3Fields
+            } else if kind == .amqp {
+                HStack {
+                    TextField("Host", text: $host).textFieldStyle(.roundedBorder)
+                    TextField("Port", text: $port).textFieldStyle(.roundedBorder).frame(width: 80)
+                }
+                TextField("Virtual host", text: $vhost).textFieldStyle(.roundedBorder)
+                TextField("User", text: $username).textFieldStyle(.roundedBorder)
+                SecureField(existing == nil ? "Password" : "Password (blank = unchanged)", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                Toggle("Use TLS", isOn: $useTLS)
+                tunnelPicker
             } else {
                 HStack {
                     TextField("Host", text: $host).textFieldStyle(.roundedBorder)
@@ -152,6 +164,7 @@ struct DataConnectionEditor: View {
         username = c.username ?? ""
         database = c.params["database"] ?? ""
         sqlitePath = c.params["path"] ?? ""
+        vhost = c.params["vhost"] ?? "/"
         useTLS = c.params["useTLS"] == "true"
         s3Endpoint = c.params["endpoint"] ?? ""
         s3Region = c.params["region"] ?? "us-east-1"
@@ -164,6 +177,14 @@ struct DataConnectionEditor: View {
         group = c.group ?? ""
         tagsText = c.tags.joined(separator: ", ")
         tunnelBookmarkID = c.tunnelBookmarkID
+    }
+
+    /// The port prefilled when a kind is picked. AMQP connections here target the RabbitMQ
+    /// *Management HTTP API* (15672 / 15671 for TLS), not the AMQP protocol port (5672), so the
+    /// editor overrides `ConnectionKind.defaultPort` for `.amqp`.
+    private func defaultPort(for kind: ConnectionKind) -> Int? {
+        if kind == .amqp { return useTLS ? 15671 : 15672 }
+        return kind.defaultPort
     }
 
     private func chooseFile() {
@@ -183,6 +204,9 @@ struct DataConnectionEditor: View {
             params["region"] = s3Region.trimmingCharacters(in: .whitespaces)
             params["bucket"] = s3Bucket.trimmingCharacters(in: .whitespaces)
             params["pathStyle"] = s3PathStyle ? "true" : "false"
+        } else if kind == .amqp {
+            params["vhost"] = vhost.isEmpty ? "/" : vhost
+            params["useTLS"] = useTLS ? "true" : "false"
         } else {
             params["database"] = database
             params["useTLS"] = useTLS ? "true" : "false"

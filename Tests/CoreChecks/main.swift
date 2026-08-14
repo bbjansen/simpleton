@@ -23,6 +23,7 @@ await runConfigStoreChecks(runner)
 await runConnectionStoreChecks(runner)
 await runSQLDriverChecks(runner)
 await runS3DriverChecks(runner)
+await runAMQPDriverChecks(runner)
 
 // Models (synchronous)
 runAppConfigChecks(runner)

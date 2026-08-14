@@ -163,12 +163,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panelRegistry.register(.docker)
         panelRegistry.register(.sql)
         panelRegistry.register(.s3)
+        panelRegistry.register(.amqp)
         panelRegistry.register(.dataConnections)
         // Map connection kinds to their GUI client panel so Data Connections can launch them.
         GUIClientRegistry.shared.register(
             kinds: Array(SQLPanelModel.sqlKinds), panelID: PanelProfile.PanelID.sql)
         GUIClientRegistry.shared.register(
             kinds: Array(S3PanelModel.s3Kinds), panelID: PanelProfile.PanelID.s3)
+        GUIClientRegistry.shared.register(
+            kinds: Array(AMQPPanelModel.amqpKinds), panelID: PanelProfile.PanelID.amqp)
         // Register JS panels from script plugins
         for plugin in pluginManager?.scriptPlugins ?? [] {
             for panelManifest in plugin.manifest.panels ?? [] {

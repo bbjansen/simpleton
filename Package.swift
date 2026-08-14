@@ -39,10 +39,16 @@ let package = Package(
                 .product(name: "SotoS3", package: "soto"),
             ]
         ),
+        // AMQP (RabbitMQ) management client. Talks to the RabbitMQ Management HTTP API over
+        // URLSession/Foundation only — no AMQP client library, no third-party dependency.
+        .target(
+            name: "SimpletonAMQP",
+            dependencies: ["SimpletonCore"]
+        ),
         .executableTarget(
             name: "Simpleton",
             dependencies: [
-                "SimpletonCore", "SimpletonSQL", "SimpletonS3", "SwiftTerm",
+                "SimpletonCore", "SimpletonSQL", "SimpletonS3", "SimpletonAMQP", "SwiftTerm",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             resources: [.process("Resources")],
@@ -56,7 +62,7 @@ let package = Package(
         // so runnable checks live in a plain executable target (see Tests/CoreChecks).
         .executableTarget(
             name: "CoreChecks",
-            dependencies: ["SimpletonCore", "SimpletonSQL", "SimpletonS3"],
+            dependencies: ["SimpletonCore", "SimpletonSQL", "SimpletonS3", "SimpletonAMQP"],
             path: "Tests/CoreChecks"
         ),
     ]
