@@ -23,6 +23,23 @@ public protocol AMQPManagementBackend: AnyObject, Sendable {
     func publish(vhost: String, exchange: String, routingKey: String, payload: String) async throws -> Bool
     /// Purge (delete all messages from) a queue.
     func purge(vhost: String, queue: String) async throws
+    /// Bindings in a virtual host (queue/exchange ← exchange edges).
+    func bindings(vhost: String) async throws -> [BindingInfo]
+    /// Cluster nodes with their memory / disk / file-descriptor usage.
+    func nodes() async throws -> [NodeInfo]
+    /// Declare (create or update) a queue. `arguments` carries optional `x-*` policy args such as
+    /// `x-message-ttl`, `x-dead-letter-exchange`, `x-dead-letter-routing-key`.
+    func createQueue(
+        vhost: String, name: String, durable: Bool, autoDelete: Bool, arguments: [String: QueueArgument]
+    ) async throws
+    /// Delete a queue (and all messages in it).
+    func deleteQueue(vhost: String, name: String) async throws
+    /// Declare (create or update) an exchange of the given `type` (direct/topic/fanout/headers).
+    func createExchange(vhost: String, name: String, type: String, durable: Bool, autoDelete: Bool) async throws
+    /// Delete an exchange.
+    func deleteExchange(vhost: String, name: String) async throws
+    /// Bind a queue to a source exchange with a routing key.
+    func createBinding(vhost: String, source: String, destination: String, routingKey: String) async throws
 }
 
 // MARK: - Model
@@ -306,6 +323,138 @@ public struct ChannelInfo: Sendable, Codable, Equatable, Identifiable {
         unacked = try c.decodeIfPresent(Int.self, forKey: .unacked) ?? 0
         prefetch = try c.decodeIfPresent(Int.self, forKey: .prefetch) ?? 0
         state = try c.decodeIfPresent(String.self, forKey: .state) ?? ""
+    }
+}
+
+/// One binding as reported by `/api/bindings`. Edges the default (nameless) exchange to every queue
+/// implicitly; those have an empty `source` and a `routingKey` equal to the queue name.
+public struct BindingInfo: Sendable, Codable, Equatable, Identifiable {
+    public let source: String
+    public let destination: String
+    public let destinationType: String
+    public let routingKey: String
+    public let propertiesKey: String
+    public let vhost: String
+
+    /// Stable identity for SwiftUI lists. `properties_key` disambiguates multiple bindings between the
+    /// same source/destination (RabbitMQ uses it as the binding's URI segment); fall back to the tuple
+    /// when the broker omits it.
+    public var id: String {
+        let key = propertiesKey.isEmpty ? routingKey : propertiesKey
+        return "\(vhost)/\(source)->\(destinationType)/\(destination)#\(key)"
+    }
+
+    public init(
+        source: String, destination: String, destinationType: String, routingKey: String,
+        propertiesKey: String = "", vhost: String = "/"
+    ) {
+        self.source = source
+        self.destination = destination
+        self.destinationType = destinationType
+        self.routingKey = routingKey
+        self.propertiesKey = propertiesKey
+        self.vhost = vhost
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case source
+        case destination
+        case destinationType = "destination_type"
+        case routingKey = "routing_key"
+        case propertiesKey = "properties_key"
+        case vhost
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        source = try c.decodeIfPresent(String.self, forKey: .source) ?? ""
+        destination = try c.decodeIfPresent(String.self, forKey: .destination) ?? ""
+        destinationType = try c.decodeIfPresent(String.self, forKey: .destinationType) ?? ""
+        routingKey = try c.decodeIfPresent(String.self, forKey: .routingKey) ?? ""
+        propertiesKey = try c.decodeIfPresent(String.self, forKey: .propertiesKey) ?? ""
+        vhost = try c.decodeIfPresent(String.self, forKey: .vhost) ?? "/"
+    }
+}
+
+/// One cluster node as reported by `/api/nodes`. All byte/count fields are optional because a node
+/// that is down (or an older broker) omits most of them; the panel guards on `running`.
+public struct NodeInfo: Sendable, Codable, Equatable, Identifiable {
+    public let name: String
+    public let running: Bool
+    public let memUsed: Int?
+    public let memLimit: Int?
+    public let diskFree: Int?
+    public let diskFreeLimit: Int?
+    public let fdUsed: Int?
+    public let fdTotal: Int?
+    public let socketsUsed: Int?
+    public let procUsed: Int?
+    /// Node uptime in milliseconds.
+    public let uptime: Int?
+
+    public var id: String { name }
+
+    public init(
+        name: String, running: Bool, memUsed: Int? = nil, memLimit: Int? = nil, diskFree: Int? = nil,
+        diskFreeLimit: Int? = nil, fdUsed: Int? = nil, fdTotal: Int? = nil, socketsUsed: Int? = nil,
+        procUsed: Int? = nil, uptime: Int? = nil
+    ) {
+        self.name = name
+        self.running = running
+        self.memUsed = memUsed
+        self.memLimit = memLimit
+        self.diskFree = diskFree
+        self.diskFreeLimit = diskFreeLimit
+        self.fdUsed = fdUsed
+        self.fdTotal = fdTotal
+        self.socketsUsed = socketsUsed
+        self.procUsed = procUsed
+        self.uptime = uptime
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case running
+        case memUsed = "mem_used"
+        case memLimit = "mem_limit"
+        case diskFree = "disk_free"
+        case diskFreeLimit = "disk_free_limit"
+        case fdUsed = "fd_used"
+        case fdTotal = "fd_total"
+        case socketsUsed = "sockets_used"
+        case procUsed = "proc_used"
+        case uptime
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        running = try c.decodeIfPresent(Bool.self, forKey: .running) ?? false
+        memUsed = try c.decodeIfPresent(Int.self, forKey: .memUsed)
+        memLimit = try c.decodeIfPresent(Int.self, forKey: .memLimit)
+        diskFree = try c.decodeIfPresent(Int.self, forKey: .diskFree)
+        diskFreeLimit = try c.decodeIfPresent(Int.self, forKey: .diskFreeLimit)
+        fdUsed = try c.decodeIfPresent(Int.self, forKey: .fdUsed)
+        fdTotal = try c.decodeIfPresent(Int.self, forKey: .fdTotal)
+        socketsUsed = try c.decodeIfPresent(Int.self, forKey: .socketsUsed)
+        procUsed = try c.decodeIfPresent(Int.self, forKey: .procUsed)
+        uptime = try c.decodeIfPresent(Int.self, forKey: .uptime)
+    }
+}
+
+/// A value for a queue's `arguments` map. RabbitMQ policy args are either integers (`x-message-ttl`,
+/// `x-max-length`) or strings (`x-dead-letter-exchange`, `x-dead-letter-routing-key`); this models
+/// exactly those two so the New Queue form can build a correct JSON body.
+public enum QueueArgument: Sendable, Equatable, Encodable {
+    case int(Int)
+    case string(String)
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .int(let i): try c.encode(i)
+        case .string(let s): try c.encode(s)
+        }
     }
 }
 
