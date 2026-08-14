@@ -59,16 +59,7 @@ func runSFTPECDSAKeyChecks(_ t: TestRunner) {
         }
     }
 
-    t.suite("Passphrase-encrypted ECDSA key is rejected precisely") {
-        do {
-            _ = try OpenSSHECDSAKey.parse(pem: ECDSAKeyFixtures.p256Encrypted)
-            t.expect(false, "encrypted ECDSA key should not parse")
-        } catch let e as OpenSSHECDSAKey.ParseError {
-            t.expectEqual(e, .encryptedUnsupported, "encrypted key → .encryptedUnsupported")
-        } catch {
-            t.expect(false, "wrong error type for encrypted key: \(error)")
-        }
-    }
+    runEncryptedECDSAKeyChecks(t)
 
     t.suite("OpenSSHECDSAKey.parse rejects non-ECDSA and malformed input") {
         // An ed25519 OpenSSH key is a valid container but not ECDSA.
@@ -94,6 +85,87 @@ func runSFTPECDSAKeyChecks(_ t: TestRunner) {
         } catch {
             t.expect(false, "unexpected error for garbage: \(error)")
         }
+    }
+}
+
+// MARK: - Encrypted-key round-trips
+
+/// Decrypt each bcrypt-encrypted ECDSA fixture with the right passphrase and check the derived public
+/// point matches the `.pub` fixture (proving the bcrypt_pbkdf key/IV and AES decrypt are correct, not
+/// merely non-throwing), then confirm a wrong passphrase is rejected as `.incorrectPassphrase`.
+private func runEncryptedECDSAKeyChecks(_ t: TestRunner) {
+    let pass = Array(ECDSAKeyFixtures.encryptedPassphrase.utf8)
+
+    // (fixture, expected-public-point, label) across all three supported ciphers and two curves.
+    let cases: [(String, String, String)] = [
+        (ECDSAKeyFixtures.p256Encrypted, ECDSAKeyFixtures.p256EncryptedPublicPoint, "aes256-ctr P-256"),
+        (ECDSAKeyFixtures.p384Encrypted, ECDSAKeyFixtures.p384EncryptedPublicPoint, "aes256-ctr P-384"),
+        (ECDSAKeyFixtures.p256EncryptedCBC, ECDSAKeyFixtures.p256EncryptedCBCPublicPoint, "aes256-cbc P-256"),
+        (
+            ECDSAKeyFixtures.p256Encrypted128CTR, ECDSAKeyFixtures.p256Encrypted128CTRPublicPoint,
+            "aes128-ctr P-256"
+        ),
+    ]
+
+    t.suite("Encrypted ECDSA keys decrypt to the correct public point") {
+        for (pem, expectedPoint, label) in cases {
+            do {
+                let parsed = try OpenSSHECDSAKey.parse(pem: pem, passphrase: pass)
+                let actual = publicPointBase64(parsed)
+                t.expectEqual(actual, expectedPoint, "\(label) decrypted public point")
+            } catch {
+                t.expect(false, "\(label) decrypt threw: \(error)")
+            }
+        }
+    }
+
+    t.suite("Wrong passphrase on an encrypted ECDSA key is rejected precisely") {
+        do {
+            _ = try OpenSSHECDSAKey.parse(
+                pem: ECDSAKeyFixtures.p256Encrypted, passphrase: Array("totally-wrong".utf8))
+            t.expect(false, "wrong passphrase should not decrypt")
+        } catch let e as OpenSSHECDSAKey.ParseError {
+            t.expectEqual(e, .incorrectPassphrase, "wrong passphrase → .incorrectPassphrase")
+        } catch {
+            t.expect(false, "wrong error type for wrong passphrase: \(error)")
+        }
+    }
+
+    t.suite("Encrypted ECDSA key with no passphrase is rejected precisely") {
+        do {
+            _ = try OpenSSHECDSAKey.parse(pem: ECDSAKeyFixtures.p256Encrypted, passphrase: nil)
+            t.expect(false, "missing passphrase should not decrypt")
+        } catch let e as OpenSSHECDSAKey.ParseError {
+            t.expectEqual(e, .passphraseRequired, "missing passphrase → .passphraseRequired")
+        } catch {
+            t.expect(false, "wrong error type for missing passphrase: \(error)")
+        }
+    }
+
+    t.suite("Decrypted ECDSA key can sign and self-verify") {
+        // A sign/verify round-trip on a decrypted key proves the scalar (not just the point) is right.
+        if case .p256(let key)? = try? OpenSSHECDSAKey.parse(
+            pem: ECDSAKeyFixtures.p256Encrypted, passphrase: pass)
+        {
+            let message = Data("simpleton-sftp-encrypted".utf8)
+            if let signature = try? key.signature(for: message) {
+                t.expect(
+                    key.publicKey.isValidSignature(signature, for: message),
+                    "decrypted P-256 signature verifies against its own public key")
+            } else {
+                t.expect(false, "decrypted P-256 key failed to sign")
+            }
+        } else {
+            t.expect(false, "encrypted P-256 fixture failed to decrypt for signing")
+        }
+    }
+}
+
+private func publicPointBase64(_ parsed: OpenSSHECDSAKey.ParsedKey) -> String {
+    switch parsed {
+    case .p256(let key): return Data(key.publicKey.x963Representation).base64EncodedString()
+    case .p384(let key): return Data(key.publicKey.x963Representation).base64EncodedString()
+    case .p521(let key): return Data(key.publicKey.x963Representation).base64EncodedString()
     }
 }
 

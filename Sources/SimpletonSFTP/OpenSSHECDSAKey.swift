@@ -12,6 +12,10 @@ import Foundation
 /// from the `ecdsa-sha2-nistp{256,384,521}` key blob, and builds the swift-crypto key that Citadel's
 /// ECDSA auth factories accept.
 ///
+/// Passphrase-protected ECDSA keys are also supported: when the container names a non-`none`
+/// cipher + the `bcrypt` KDF, the private section is decrypted with `bcrypt_pbkdf` (see `BcryptPBKDF`
+/// / `Blowfish`) and the named AES cipher (see `OpenSSHCipher`) before the scalar is extracted.
+///
 /// The OpenSSH private-key binary layout is:
 ///   "openssh-key-v1\0"
 ///   string  ciphername      (e.g. "none" or "aes256-ctr")
@@ -45,8 +49,12 @@ public enum OpenSSHECDSAKey {
         case truncated
         /// The key blob was not an `ecdsa-sha2-nistp{256,384,521}` key.
         case notECDSA(String)
-        /// The key is passphrase-encrypted; the OpenSSH bcrypt KDF is not available to this backend.
-        case encryptedUnsupported
+        /// The key is passphrase-encrypted but no passphrase was supplied.
+        case passphraseRequired
+        /// The supplied passphrase was wrong (the decrypted check-ints did not match).
+        case incorrectPassphrase
+        /// The key uses a cipher/KDF this backend does not implement (see the associated name).
+        case unsupportedCipher(String)
         /// The private scalar could not be turned into a valid curve key.
         case invalidScalar
 
@@ -56,18 +64,25 @@ public enum OpenSSHECDSAKey {
             case .invalidMagic: return "missing openssh-key-v1 magic"
             case .truncated: return "truncated OpenSSH private-key data"
             case .notECDSA(let type): return "not an ECDSA key (found \(type))"
-            case .encryptedUnsupported: return "passphrase-encrypted ECDSA key is not supported"
+            case .passphraseRequired: return "passphrase required for encrypted ECDSA key"
+            case .incorrectPassphrase: return "incorrect passphrase"
+            case .unsupportedCipher(let name): return "unsupported OpenSSH key cipher/KDF: \(name)"
             case .invalidScalar: return "invalid ECDSA private scalar"
             }
         }
     }
 
-    /// Parse an unencrypted OpenSSH ECDSA private key string into a swift-crypto signing key.
+    /// Parse an OpenSSH ECDSA private key string into a swift-crypto signing key, decrypting a
+    /// passphrase-protected key with OpenSSH's `bcrypt_pbkdf` KDF + AES cipher when needed.
     ///
-    /// - Throws: `ParseError.encryptedUnsupported` when the key is passphrase-protected (the OpenSSH
-    ///   `bcrypt` KDF has no public API in the crypto stack available to this backend), or another
-    ///   `ParseError` when the container is malformed or not ECDSA.
-    public static func parse(pem: String) throws -> ParsedKey {
+    /// - Parameters:
+    ///   - pem: the `-----BEGIN OPENSSH PRIVATE KEY-----` text.
+    ///   - passphrase: the passphrase bytes, required only for an encrypted key.
+    /// - Throws: `ParseError.passphraseRequired` when the key is encrypted but no passphrase is
+    ///   given, `.incorrectPassphrase` when the passphrase is wrong, `.unsupportedCipher` for a
+    ///   cipher/KDF this backend does not implement, or another `ParseError` for a malformed or
+    ///   non-ECDSA container.
+    public static func parse(pem: String, passphrase: [UInt8]? = nil) throws -> ParsedKey {
         let data = try decodeContainer(pem)
         var reader = SSHReader(data)
 
@@ -78,22 +93,27 @@ public enum OpenSSHECDSAKey {
         // cipher, kdf, kdfoptions
         guard let cipherName = reader.readString(),
             let kdfName = reader.readString(),
-            reader.readLengthPrefixed() != nil
+            let kdfOptions = reader.readLengthPrefixed()
         else { throw ParseError.truncated }
-
-        // Passphrase-encrypted keys use a non-"none" cipher and the "bcrypt" KDF. Decrypting those
-        // requires OpenSSH's bcrypt_pbkdf, which is not exposed by swift-crypto or Citadel's public
-        // API, so we surface a precise error rather than fail obscurely later.
-        guard cipherName == "none", kdfName == "none" else { throw ParseError.encryptedUnsupported }
 
         // number of keys (expect 1), then the public-key blob (skipped), then the private section.
         guard let numberOfKeys = reader.readUInt32(), numberOfKeys == 1 else { throw ParseError.truncated }
         guard reader.readLengthPrefixed() != nil else { throw ParseError.truncated }
-        guard let privateSection = reader.readLengthPrefixed() else { throw ParseError.truncated }
+        guard let encryptedSection = reader.readLengthPrefixed() else { throw ParseError.truncated }
 
-        var priv = SSHReader(Data(privateSection))
+        // Decrypt the private section in place when the key is passphrase-protected; an unencrypted
+        // key ("none"/"none") passes through unchanged. `decryptPrivateSection` also verifies the two
+        // OpenSSH check-ints, so a wrong passphrase surfaces as `.incorrectPassphrase` here.
+        let plaintextSection = try decryptPrivateSection(
+            cipherName: cipherName,
+            kdfName: kdfName,
+            kdfOptions: Array(kdfOptions),
+            section: Array(encryptedSection),
+            passphrase: passphrase)
 
-        // Two check integers must match on an unencrypted key; skip them (still bounds-checked).
+        var priv = SSHReader(Data(plaintextSection))
+
+        // Two check integers; already validated equal for encrypted keys, still bounds-checked here.
         guard priv.readUInt32() != nil, priv.readUInt32() != nil else { throw ParseError.truncated }
 
         guard let keyType = priv.readString() else { throw ParseError.truncated }
@@ -117,6 +137,73 @@ public enum OpenSSHECDSAKey {
         } catch {
             throw ParseError.invalidScalar
         }
+    }
+
+    // MARK: - Decryption
+
+    /// Return the plaintext private section, decrypting it when the key is passphrase-protected.
+    ///
+    /// For an unencrypted key (`cipher == "none"`, `kdf == "none"`) the section is returned as-is.
+    /// Otherwise the `bcrypt` kdfoptions (salt + rounds) are parsed, `bcrypt_pbkdf` derives the AES
+    /// key+IV, the named cipher decrypts the section, and the two leading check-ints are verified —
+    /// which is exactly how OpenSSH detects a wrong passphrase.
+    private static func decryptPrivateSection(
+        cipherName: String,
+        kdfName: String,
+        kdfOptions: [UInt8],
+        section: [UInt8],
+        passphrase: [UInt8]?
+    ) throws -> [UInt8] {
+        if cipherName == "none" && kdfName == "none" {
+            return section
+        }
+
+        // Only the OpenSSH bcrypt KDF is defined for encrypted private keys.
+        guard kdfName == "bcrypt" else { throw ParseError.unsupportedCipher("kdf \(kdfName)") }
+        guard let cipher = OpenSSHCipher(rawValue: cipherName) else {
+            throw ParseError.unsupportedCipher(cipherName)
+        }
+        guard let passphrase, !passphrase.isEmpty else { throw ParseError.passphraseRequired }
+
+        // kdfoptions is `string salt || uint32 rounds`.
+        var options = SSHReader(Data(kdfOptions))
+        guard let salt = options.readLengthPrefixed(), let rounds = options.readUInt32() else {
+            throw ParseError.invalidContainer
+        }
+
+        // The encrypted section must be a whole number of cipher blocks.
+        guard section.count % cipher.blockSize == 0, !section.isEmpty else {
+            throw ParseError.invalidContainer
+        }
+
+        // Derive key || IV in one bcrypt_pbkdf call, exactly as OpenSSH does.
+        let keyLength = cipher.keyLength + cipher.ivLength
+        let derived: [UInt8]
+        do {
+            derived = try BcryptPBKDF.derive(
+                password: passphrase, salt: Array(salt), keyLen: keyLength, rounds: Int(rounds))
+        } catch {
+            throw ParseError.invalidContainer
+        }
+        let key = Array(derived[..<cipher.keyLength])
+        let iv = Array(derived[cipher.keyLength...])
+
+        let plaintext: [UInt8]
+        do {
+            plaintext = try cipher.decrypt(section, key: key, iv: iv)
+        } catch {
+            throw ParseError.invalidContainer
+        }
+
+        // Verify the two check-ints: they are random-but-equal, so a wrong passphrase almost always
+        // yields a mismatch. This is OpenSSH's own wrong-passphrase test.
+        var check = SSHReader(Data(plaintext))
+        guard let check0 = check.readUInt32(), let check1 = check.readUInt32() else {
+            throw ParseError.incorrectPassphrase
+        }
+        guard check0 == check1 else { throw ParseError.incorrectPassphrase }
+
+        return plaintext
     }
 
     // MARK: - Helpers
