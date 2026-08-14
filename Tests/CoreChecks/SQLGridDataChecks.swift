@@ -61,6 +61,25 @@ func runSQLGridDataChecks(_ t: TestRunner) {
             d.sortedIndex(sortColumn: 1, ascending: true), "multi wrapper == single")
     }
 
+    t.suite("SQLGridData.enumColumns") {
+        let cols = [Column(name: "id"), Column(name: "status"), Column(name: "n")]
+        let rs: [[SQLValue]] = [
+            [.text("a1"), .text("open"), .integer(1)],
+            [.text("a2"), .text("closed"), .integer(2)],
+            [.text("a3"), .text("open"), .integer(3)],
+            [.text("a4"), .text("open"), .integer(4)],
+        ]
+        let d = SQLGridData(columns: cols, rows: rs)
+        let enums = d.enumColumns(maxDistinct: 3)
+        t.expect(enums.contains(1), "low-cardinality text column is an enum")
+        t.expect(!enums.contains(0), "all-distinct text column is not an enum (exceeds maxDistinct)")
+        t.expect(!enums.contains(2), "numeric column is never an enum")
+        // stable color slot in range
+        let slot = d.enumColorIndex("open", slots: 8)
+        t.expect((0..<8).contains(slot), "color slot in range")
+        t.expectEqual(d.enumColorIndex("open", slots: 8), slot, "color slot is deterministic")
+    }
+
     t.suite("SQLGridData.columnSignature") {
         let a = SQLGridData(columns: [Column(name: "id"), Column(name: "name")], rows: [])
         let a2 = SQLGridData(columns: [Column(name: "id"), Column(name: "name")], rows: [[.integer(1)]])

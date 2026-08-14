@@ -43,7 +43,7 @@ struct SQLDataGrid: NSViewRepresentable {
         scroll.backgroundColor = .clear
 
         context.coordinator.table = table
-        context.coordinator.observeColumnResize()
+        context.coordinator.observeColumnLayout()
         context.coordinator.rebuildColumns()
         context.coordinator.applyOrder()
         context.coordinator.applyTheme()
@@ -68,32 +68,40 @@ struct SQLDataGrid: NSViewRepresentable {
         weak var table: NSTableView?
         private(set) var order: [Int] = []
         private var builtColumns: [Column] = []
+        private var enumCols: Set<Int> = []
         private var isProgrammaticReload = false
         private var isApplyingSort = false
-        private var isRestoringWidths = false
+        private var isRestoringLayout = false
         private var resizeObserver: NSObjectProtocol?
+        private var moveObserver: NSObjectProtocol?
         private let cellID = NSUserInterfaceItemIdentifier("gridCell")
         private let rowID = NSUserInterfaceItemIdentifier("gridRow")
 
         init(_ parent: SQLDataGrid) { self.parent = parent }
 
         deinit {
-            if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+            for obs in [resizeObserver, moveObserver].compactMap({ $0 }) {
+                NotificationCenter.default.removeObserver(obs)
+            }
         }
 
-        /// Persist a column's width (keyed by its stable identifier) whenever the user resizes it,
-        /// so widths survive switching between queries with the same columns.
-        func observeColumnResize() {
+        /// Persist a column's width + order (keyed by stable identifier) whenever the user resizes or
+        /// reorders, so the layout survives switching between queries with the same columns.
+        func observeColumnLayout() {
             guard let table else { return }
             resizeObserver = NotificationCenter.default.addObserver(
                 forName: NSTableView.columnDidResizeNotification, object: table, queue: .main
             ) { [weak self] _ in self?.saveColumnWidths() }
+            moveObserver = NotificationCenter.default.addObserver(
+                forName: NSTableView.columnDidMoveNotification, object: table, queue: .main
+            ) { [weak self] _ in self?.saveColumnOrder() }
         }
 
         private func widthsKey() -> String { "sql.grid.widths.\(parent.data.columnSignature)" }
+        private func orderKey() -> String { "sql.grid.order.\(parent.data.columnSignature)" }
 
         func saveColumnWidths() {
-            guard !isRestoringWidths, let table else { return }
+            guard !isRestoringLayout, let table else { return }
             var widths: [String: Double] = [:]
             for col in table.tableColumns where col.identifier.rawValue != "#" {
                 widths[col.identifier.rawValue] = Double(col.width)
@@ -105,10 +113,31 @@ struct SQLDataGrid: NSViewRepresentable {
             guard let table,
                 let saved = UserDefaults.standard.dictionary(forKey: widthsKey()) as? [String: Double]
             else { return }
-            isRestoringWidths = true
-            defer { isRestoringWidths = false }
+            isRestoringLayout = true
+            defer { isRestoringLayout = false }
             for col in table.tableColumns where col.identifier.rawValue != "#" {
                 if let w = saved[col.identifier.rawValue] { col.width = CGFloat(w) }
+            }
+        }
+
+        func saveColumnOrder() {
+            guard !isRestoringLayout, let table else { return }
+            let order = table.tableColumns.map(\.identifier.rawValue).filter { $0 != "#" }
+            UserDefaults.standard.set(order, forKey: orderKey())
+        }
+
+        func restoreColumnOrder() {
+            guard let table, let saved = UserDefaults.standard.array(forKey: orderKey()) as? [String] else { return }
+            isRestoringLayout = true
+            defer { isRestoringLayout = false }
+            // Move each saved identifier into its position; the gutter ("#") stays at index 0.
+            for (target, id) in saved.enumerated() {
+                let to = 1 + target
+                guard to < table.tableColumns.count,
+                    let from = table.tableColumns.firstIndex(where: { $0.identifier.rawValue == id }),
+                    from != to
+                else { continue }
+                table.moveColumn(from, toColumn: to)
             }
         }
 
@@ -134,7 +163,9 @@ struct SQLDataGrid: NSViewRepresentable {
                 table.addTableColumn(c)
             }
             builtColumns = parent.data.columns
+            enumCols = parent.data.enumColumns()
             restoreColumnWidths()
+            restoreColumnOrder()
         }
 
         func applyOrder() {
@@ -185,9 +216,14 @@ struct SQLDataGrid: NSViewRepresentable {
             }
             guard let colIndex = Int(id) else { return cell }
             let original = order.indices.contains(row) ? order[row] : row
+            let value = parent.data.value(row: original, column: colIndex)
+            var enumColor: NSColor?
+            if enumCols.contains(colIndex), case .text(let s) = value, !s.isEmpty {
+                let palette = DT.Grid.enumPalette
+                if !palette.isEmpty { enumColor = palette[parent.data.enumColorIndex(s, slots: palette.count)] }
+            }
             cell.configure(
-                with: SQLCellFormatting.present(parent.data.value(row: original, column: colIndex)),
-                font: DT.monoNSFont(size: fontSize))
+                with: SQLCellFormatting.present(value), font: DT.monoNSFont(size: fontSize), enumColor: enumColor)
             return cell
         }
 
@@ -328,8 +364,20 @@ final class GridCellView: NSTableCellView {
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not implemented") }
 
-    func configure(with p: CellPresentation, font: NSFont) {
+    func configure(with p: CellPresentation, font: NSFont, enumColor: NSColor? = nil) {
         label.font = font
+        label.wantsLayer = true
+        if let enumColor {
+            // Categorical value → a subtle colored pill; the value is non-null text here.
+            label.stringValue = p.text
+            label.textColor = DT.Grid.rowText
+            label.alignment = .left
+            label.layer?.backgroundColor = enumColor.withAlphaComponent(0.20).cgColor
+            label.layer?.cornerRadius = 4
+            return
+        }
+        label.layer?.backgroundColor = NSColor.clear.cgColor
+        label.layer?.cornerRadius = 0
         label.alignment = (p.alignment == .trailing) ? .right : .left
         if p.isNull {
             label.stringValue = "NULL"

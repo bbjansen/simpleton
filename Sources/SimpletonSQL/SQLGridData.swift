@@ -59,6 +59,42 @@ public struct SQLGridData: Sendable {
         }
     }
 
+    /// Columns that look categorical — every non-null value is text and there
+    /// are 2…`maxDistinct` distinct values (sampled over the first `sampleRows`
+    /// rows to stay cheap on huge results). The grid renders these as colored
+    /// pills. A high-cardinality or non-text column bails early.
+    public func enumColumns(maxDistinct: Int = 12, sampleRows: Int = 2000) -> Set<Int> {
+        var result: Set<Int> = []
+        let limit = min(rows.count, sampleRows)
+        guard limit >= 2 else { return result }
+        for c in columns.indices {
+            var distinct = Set<String>()
+            var qualifies = true
+            for r in 0..<limit {
+                switch value(row: r, column: c) {
+                case .null: continue
+                case .text(let s):
+                    distinct.insert(s)
+                    if distinct.count > maxDistinct { qualifies = false }
+                default:
+                    qualifies = false
+                }
+                if !qualifies { break }
+            }
+            if qualifies, distinct.count >= 2 { result.insert(c) }
+        }
+        return result
+    }
+
+    /// A stable palette slot (0..<slots) for a categorical value, so the same
+    /// value always gets the same color. FNV-1a over the text.
+    public func enumColorIndex(_ text: String, slots: Int) -> Int {
+        guard slots > 0 else { return 0 }
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in text.utf8 { hash = (hash ^ UInt64(byte)) &* 0x100_0000_01b3 }
+        return Int(hash % UInt64(slots))
+    }
+
     /// Single-column convenience over `sortedIndex(by:)`.
     public func sortedIndex(sortColumn: Int?, ascending: Bool) -> [Int] {
         guard let col = sortColumn else { return Array(rows.indices) }
