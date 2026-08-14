@@ -8,8 +8,7 @@ import SwiftUI
 /// in-memory, and copies TSV. The data logic lives in `SQLGridData`.
 struct SQLDataGrid: NSViewRepresentable {
     let data: SQLGridData
-    @Binding var sortColumn: Int?
-    @Binding var ascending: Bool
+    @Binding var sortKeys: [SortKey]
     @Binding var selectedRow: Int?
     let rowHeight: CGFloat
     var onActivateRecord: () -> Void
@@ -70,6 +69,7 @@ struct SQLDataGrid: NSViewRepresentable {
         private(set) var order: [Int] = []
         private var builtColumns: [Column] = []
         private var isProgrammaticReload = false
+        private var isApplyingSort = false
         private var isRestoringWidths = false
         private var resizeObserver: NSObjectProtocol?
         private let cellID = NSUserInterfaceItemIdentifier("gridCell")
@@ -138,7 +138,7 @@ struct SQLDataGrid: NSViewRepresentable {
         }
 
         func applyOrder() {
-            order = parent.data.sortedIndex(sortColumn: parent.sortColumn, ascending: parent.ascending)
+            order = parent.data.sortedIndex(by: parent.sortKeys)
         }
 
         func applyTheme() {
@@ -206,14 +206,37 @@ struct SQLDataGrid: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
-            // Mutate the bindings only; the resulting SwiftUI update re-runs
-            // updateNSView, which applies the new order and reloads once.
-            if let sd = tableView.sortDescriptors.first, let key = sd.key, let col = Int(key) {
-                parent.sortColumn = col
-                parent.ascending = sd.ascending
-            } else {
-                parent.sortColumn = nil
+            guard !isApplyingSort else { return }
+            guard let sd = tableView.sortDescriptors.first, let key = sd.key, let col = Int(key) else {
+                parent.sortKeys = []
+                return
             }
+            // Plain click cycles the primary asc → desc → cleared. ⌥-click builds a multi-column
+            // sort: add the column as a secondary key, then cycle that key asc → desc → removed.
+            let option = NSApp.currentEvent?.modifierFlags.contains(.option) ?? false
+            var keys = parent.sortKeys
+            if option {
+                if let idx = keys.firstIndex(where: { $0.column == col }) {
+                    if keys[idx].ascending {
+                        keys[idx] = SortKey(column: col, ascending: false)
+                    } else {
+                        keys.remove(at: idx)
+                    }
+                } else {
+                    keys.append(SortKey(column: col, ascending: true))
+                }
+            } else if keys.count == 1, keys[0].column == col {
+                keys = keys[0].ascending ? [SortKey(column: col, ascending: false)] : []
+            } else {
+                keys = [SortKey(column: col, ascending: true)]
+            }
+            // Reflect the full key list back onto the table so the header shows every sorted column
+            // (guarded so this programmatic set does not re-enter). The binding change re-runs
+            // updateNSView, which re-orders and reloads.
+            isApplyingSort = true
+            tableView.sortDescriptors = keys.map { NSSortDescriptor(key: String($0.column), ascending: $0.ascending) }
+            isApplyingSort = false
+            parent.sortKeys = keys
         }
 
         func copySelection(withHeader: Bool) {
@@ -344,7 +367,8 @@ final class GridHeaderView: NSTableHeaderView {
             .font: DT.monoNSFont(size: 10, weight: .semibold),
         ]
         DT.Grid.gridline.setStroke()
-        let sort = table.sortDescriptors.first
+        let descriptors = table.sortDescriptors
+        let multi = descriptors.count > 1
         for i in table.tableColumns.indices {
             let rect = headerRect(ofColumn: i)
             guard rect.intersects(dirtyRect) else { continue }
@@ -353,13 +377,15 @@ final class GridHeaderView: NSTableHeaderView {
             let size = title.size(withAttributes: attrs)
             let textRect = NSRect(
                 x: rect.minX + 6, y: rect.midY - size.height / 2,
-                width: max(0, rect.width - 24), height: size.height)
+                width: max(0, rect.width - 26), height: size.height)
             title.draw(in: textRect, withAttributes: attrs)
-            if let sd = sort, sd.key == col.identifier.rawValue {
-                let arrow = (sd.ascending ? "▲" : "▼") as NSString
-                let aSize = arrow.size(withAttributes: attrs)
-                arrow.draw(
-                    at: NSPoint(x: rect.maxX - aSize.width - 6, y: rect.midY - aSize.height / 2),
+            // Draw an arrow (numbered when multiple columns are sorted) for each sorted column.
+            if let priority = descriptors.firstIndex(where: { $0.key == col.identifier.rawValue }) {
+                let glyph = descriptors[priority].ascending ? "▲" : "▼"
+                let badge = (multi ? "\(glyph)\(priority + 1)" : glyph) as NSString
+                let bSize = badge.size(withAttributes: attrs)
+                badge.draw(
+                    at: NSPoint(x: rect.maxX - bSize.width - 6, y: rect.midY - bSize.height / 2),
                     withAttributes: attrs)
             }
             let path = NSBezierPath()
