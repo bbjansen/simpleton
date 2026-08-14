@@ -93,6 +93,87 @@ func runSQLDriverChecks(_ t: TestRunner) async {
         }
     }
 
+    await t.suite("SQLiteDriver foreignKeys(of:) round-trip") {
+        let path = tempDBPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let driver = SQLiteDriver(path: path)
+        do {
+            try await driver.connect()
+            // Two tables with an explicit FK: order.customer_id → customer.id (named ref column).
+            _ = try await driver.run("CREATE TABLE customer (id INTEGER PRIMARY KEY, name TEXT)")
+            _ = try await driver.run(
+                "CREATE TABLE \"order\" (id INTEGER PRIMARY KEY, customer_id INTEGER, "
+                    + "note TEXT, FOREIGN KEY(customer_id) REFERENCES customer(id))")
+            let fks = try await driver.foreignKeys(of: "order", in: nil)
+            t.expectEqual(fks.count, 1, "one FK on order")
+            t.expectEqual(fks.first?.column, "customer_id", "local FK column")
+            t.expectEqual(fks.first?.referencedTable, "customer", "referenced table")
+            t.expectEqual(fks.first?.referencedColumn, "id", "referenced column")
+            // A table with no FKs yields an empty list (not an error).
+            t.expect(try await driver.foreignKeys(of: "customer", in: nil).isEmpty, "customer has no FKs")
+
+            // End-to-end navigation shape: seed data and run the exact parameterized lookup the FK
+            // jump issues, with the value BOUND — proving the referenced row comes back.
+            _ = try await driver.run("INSERT INTO customer (id, name) VALUES (7, 'Ada')")
+            _ = try await driver.run("INSERT INTO \"order\" (id, customer_id, note) VALUES (1, 7, 'x')")
+            if case .rows(let cols, let rows) = try await driver.execute(
+                "SELECT * FROM \"customer\" WHERE \"id\" = ?", [.integer(7)])
+            {
+                t.expectEqual(rows.count, 1, "one referenced row")
+                if let nameIdx = cols.firstIndex(where: { $0.name == "name" }) {
+                    t.expectEqual(rows.first?[nameIdx], SQLValue.text("Ada"), "referenced row is Ada")
+                } else {
+                    t.expect(false, "name column present")
+                }
+            } else {
+                t.expect(false, "FK lookup should return rows")
+            }
+            await driver.close()
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+    }
+
+    t.suite("SQLForeignKeyMatcher") {
+        let fks = [
+            ForeignKeyInfo(column: "customer_id", referencedTable: "customer", referencedColumn: "id"),
+            ForeignKeyInfo(column: "product_id", referencedTable: "product", referencedColumn: "sku"),
+        ]
+        // Basic name match, in grid order, mapping to the right target.
+        let m = SQLForeignKeyMatcher.matches(
+            resultColumns: ["id", "customer_id", "note", "product_id"], foreignKeys: fks)
+        t.expectEqual(m.count, 2, "two FK columns matched")
+        t.expectEqual(m.first?.columnIndex, 1, "customer_id at grid index 1")
+        t.expectEqual(m.first?.referencedTable, "customer", "→ customer")
+        t.expectEqual(m.first?.referencedColumn, "id", "→ customer.id")
+        t.expectEqual(m.last?.columnIndex, 3, "product_id at grid index 3")
+        t.expectEqual(m.last?.referencedColumn, "sku", "→ product.sku")
+
+        // Case-insensitive match tolerates catalog casing differences.
+        let ci = SQLForeignKeyMatcher.matches(resultColumns: ["Customer_ID"], foreignKeys: fks)
+        t.expectEqual(ci.count, 1, "case-insensitive FK match")
+        t.expectEqual(ci.first?.referencedTable, "customer", "ci → customer")
+
+        // A column not visible in the result yields no match.
+        t.expect(
+            SQLForeignKeyMatcher.matches(resultColumns: ["id", "note"], foreignKeys: fks).isEmpty,
+            "no FK columns in result → no matches")
+
+        // Empty inputs → empty result (both directions).
+        t.expect(SQLForeignKeyMatcher.matches(resultColumns: [], foreignKeys: fks).isEmpty, "no columns")
+        t.expect(
+            SQLForeignKeyMatcher.matches(resultColumns: ["customer_id"], foreignKeys: []).isEmpty, "no FKs")
+
+        // A composite FK (same local column referenced twice) is NOT single-column navigable → skipped.
+        let composite = [
+            ForeignKeyInfo(column: "a_id", referencedTable: "t", referencedColumn: "x"),
+            ForeignKeyInfo(column: "a_id", referencedTable: "t", referencedColumn: "y"),
+        ]
+        t.expect(
+            SQLForeignKeyMatcher.matches(resultColumns: ["a_id"], foreignKeys: composite).isEmpty,
+            "composite FK column is not offered")
+    }
+
     await t.suite("SQLQueryHistoryStore record/dedup/cap/persist") {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("corechecks-sqlhist-\(UUID().uuidString)")

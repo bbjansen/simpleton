@@ -54,6 +54,28 @@ public enum SQLCellEditing {
     }
 }
 
+/// The fully-resolved, UI-framework-free instructions for rendering one grid cell: which value to
+/// show (already resolving staged edits over the committed value), its presentation, whether it is a
+/// staged edit (amber tint), and — for a categorical column — a stable palette *slot* (the view layer
+/// maps the slot to a concrete color, so this stays free of AppKit). Computed once by
+/// `SQLGridData.cellStyle` and consumed identically by the main grid and the frozen first-column pane,
+/// so pills, edit-tint, alignment, and fonts can never drift between the two panes.
+public struct GridCellStyle: Sendable, Hashable {
+    /// How to present the effective value (text, role, alignment, null/empty flags).
+    public let presentation: CellPresentation
+    /// True when the effective value is a staged (uncommitted) edit → render with the amber tint.
+    public let isStaged: Bool
+    /// A palette slot for a categorical (enum) cell, or nil when the cell is not an enum pill. Only set
+    /// for a non-staged, non-empty text value in an enum column; the view maps it to a color.
+    public let enumSlot: Int?
+
+    public init(presentation: CellPresentation, isStaged: Bool, enumSlot: Int?) {
+        self.presentation = presentation
+        self.isStaged = isStaged
+        self.enumSlot = enumSlot
+    }
+}
+
 /// One column sort key: the column index and its direction. An ordered list of
 /// these drives multi-column sort (primary first).
 public struct SortKey: Sendable, Hashable {
@@ -87,6 +109,25 @@ public struct PageBounds: Sendable, Hashable {
     public var firstRowNumber: Int { isEmpty ? 0 : start + 1 }
     /// 1-based index of the last row on the page (0 when empty).
     public var lastRowNumber: Int { end }
+}
+
+/// Pure geometry + column-mapping for the frozen left pane (row-number gutter + the first data
+/// column). Split out so the layout math is unit-tested without AppKit. The frozen data column is
+/// whatever sits at view position 0 (the leftmost column), so it tracks the user's column reordering.
+public enum FrozenColumnGeometry {
+    /// The total width of the frozen pane: the gutter strip plus the frozen data column's width. This
+    /// is the left content inset the main table needs so its columns never slide under the pane.
+    public static func paneWidth(gutter: CGFloat, frozenColumnWidth: CGFloat) -> CGFloat {
+        max(0, gutter) + max(0, frozenColumnWidth)
+    }
+
+    /// Whether a table column at `viewPosition` is the frozen one (always the leftmost, position 0).
+    /// The main table hides this column and the frozen pane renders it, so they never both draw it.
+    public static func isFrozen(viewPosition: Int) -> Bool { viewPosition == 0 }
+
+    /// The x-origin of the frozen data column inside the pane (just right of the gutter). The gutter
+    /// occupies `[0, gutter)`; the frozen data column occupies `[gutter, gutter + width)`.
+    public static func frozenColumnOriginX(gutter: CGFloat) -> CGFloat { max(0, gutter) }
 }
 
 /// Pure pagination math over a sorted row order. A page size of `nil` (or ≤ 0) means "All rows on one
@@ -208,6 +249,28 @@ public struct SQLGridData: Sendable {
     public func value(row: Int, column: Int) -> SQLValue {
         guard rows.indices.contains(row), rows[row].indices.contains(column) else { return .null }
         return rows[row][column]
+    }
+
+    /// The complete render instructions for the cell at `(row, column)` in original coordinates. This
+    /// is the single source of truth both grid panes use, so their pills/tints/alignment stay in sync:
+    /// it resolves the staged edit over the committed value, presents it, flags a staged edit, and —
+    /// only for a non-staged, non-empty text value in an `enumColumns` column — assigns a stable
+    /// palette slot (via `enumColorIndex`). `stagedValue` is the staged edit for this coord (or nil);
+    /// `enumColumns` and `enumSlots` come from the grid's one-time column analysis and palette size.
+    public func cellStyle(
+        row: Int, column: Int, stagedValue: SQLValue?, enumColumns: Set<Int>, enumSlots: Int
+    ) -> GridCellStyle {
+        let effective = stagedValue ?? value(row: row, column: column)
+        let presentation = SQLCellFormatting.present(effective)
+        // Enum pill only when this is the committed value (not a staged edit) in an enum column and the
+        // value is non-empty text — matching the original inline rule exactly.
+        var slot: Int?
+        if stagedValue == nil, enumSlots > 0, enumColumns.contains(column),
+            case .text(let s) = effective, !s.isEmpty
+        {
+            slot = enumColorIndex(s, slots: enumSlots)
+        }
+        return GridCellStyle(presentation: presentation, isStaged: stagedValue != nil, enumSlot: slot)
     }
 
     /// TSV for the given original row indices, already in the desired order.

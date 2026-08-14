@@ -18,12 +18,18 @@ struct SQLDataGrid: NSViewRepresentable {
     /// Non-nil when this result can be edited in place (drives the double-click = edit gesture and
     /// the "Set NULL" menu item). Read-only when nil.
     let editable: EditableTarget?
+    /// Navigable FK cells keyed by result-column index. A right-click on a cell in one of these
+    /// columns (unless NULL) offers "Go to <referencedTable>".
+    let foreignKeyMatches: [Int: SQLForeignKeyMatcher.Match]
     /// Staged (uncommitted) edits keyed by original-row/column. The grid renders these tinted and
     /// prefers them over the underlying value.
     @Binding var stagedEdits: [CellCoord: SQLValue]
     var onActivateRecord: () -> Void
     /// "Inspect Value…" — always available (right-click), and the double-click action when read-only.
     var onInspect: (Int, Int) -> Void
+    /// "Go to <referencedTable>" — jump from an FK cell (original row, result-column index) to the
+    /// referenced row. Only wired when the column is an FK and the cell is non-NULL.
+    var onNavigateForeignKey: (Int, Int) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -89,12 +95,25 @@ struct SQLDataGrid: NSViewRepresentable {
         var parent: SQLDataGrid
         weak var table: NSTableView?
         weak var scrollView: NSScrollView?
-        /// The left-pinned row-number gutter, floated on the horizontal axis so it stays put during
-        /// horizontal scroll while scrolling vertically in lockstep with the rows.
-        private var frozenGutter: FrozenGutterView?
+        /// The left-pinned frozen pane: a single manually-drawn view (floated on the horizontal axis so
+        /// it stays put during horizontal scroll while AppKit scrolls it vertically in lockstep with the
+        /// rows). It draws the row-number gutter AND the first data column's cells, reading the main
+        /// table's own row rects for alignment and the shared `SQLGridData.cellStyle` for content — so a
+        /// single mini `NSTableView` (which AppKit refused to paint reliably inside a floating scroll
+        /// view) is avoided while the cell configuration still comes from the ONE shared path.
+        private var frozenPane: FrozenColumnView?
         private var scrollObserver: NSObjectProtocol?
-        /// Width of the frozen gutter strip; matches the old "#" column width.
+        /// Fires when the main scroll view resizes, so the frozen pane re-fits to the new height.
+        private var sizeObserver: NSObjectProtocol?
+        /// Width of the frozen row-number gutter strip; matches the old "#" column width.
         private let gutterWidth: CGFloat = 44
+        /// The data-column index currently frozen (rendered in the frozen pane, hidden in the main
+        /// table). It's whatever sits at view position 0 — the leftmost column — so it tracks column
+        /// reordering. `nil` before columns are built.
+        private(set) var frozenColumnIndex: Int?
+        /// The width of the frozen data column in the pane. Seeded from a default / persisted value and
+        /// updated when the user drags the pane's column divider.
+        var frozenColumnStoredWidth: CGFloat = 160
         /// Original row indices shown on the current page, in display (sorted) order. This is the
         /// per-page slice of the full sorted order; all row math for the visible table uses this.
         private(set) var order: [Int] = []
@@ -119,9 +138,8 @@ struct SQLDataGrid: NSViewRepresentable {
         init(_ parent: SQLDataGrid) { self.parent = parent }
 
         deinit {
-            for obs in [resizeObserver, moveObserver, scrollObserver].compactMap({ $0 }) {
-                NotificationCenter.default.removeObserver(obs)
-            }
+            let observers = [resizeObserver, moveObserver, scrollObserver, sizeObserver]
+            for obs in observers.compactMap({ $0 }) { NotificationCenter.default.removeObserver(obs) }
         }
 
         /// Persist a column's width + order (keyed by stable identifier) whenever the user resizes or
@@ -133,19 +151,41 @@ struct SQLDataGrid: NSViewRepresentable {
             ) { [weak self] _ in self?.saveColumnWidths() }
             moveObserver = NotificationCenter.default.addObserver(
                 forName: NSTableView.columnDidMoveNotification, object: table, queue: .main
-            ) { [weak self] _ in self?.saveColumnOrder() }
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.saveColumnOrder()
+                // A reorder can change which column is leftmost; re-freeze it into the pane.
+                self.refreshFrozenColumns()
+                self.refreshFrozenGutter()
+            }
         }
+
+        /// The stable identifier of the currently-frozen column, or nil. Persisted-width/order code
+        /// skips it because the main table keeps it collapsed to zero width (the pane renders it).
+        private var frozenColumnID: String? { frozenColumnIndex.map(String.init) }
 
         private func widthsKey() -> String { "sql.grid.widths.\(parent.data.columnSignature)" }
         private func orderKey() -> String { "sql.grid.order.\(parent.data.columnSignature)" }
+        /// The frozen data column's width is persisted under its own key — NOT the shared main widths
+        /// dict — because the main copy is collapsed to 0 and the pane owns the real width.
+        private func frozenWidthsKey() -> String { "sql.grid.frozenwidths.\(parent.data.columnSignature)" }
 
         func saveColumnWidths() {
             guard !isRestoringLayout, let table else { return }
             var widths: [String: Double] = [:]
-            for col in table.tableColumns where col.identifier.rawValue != "#" {
+            // Skip the gutter and the frozen column (collapsed to 0 in the main table — its real width
+            // is persisted separately under the frozen-widths key).
+            for col in table.tableColumns
+            where col.identifier.rawValue != "#" && col.identifier.rawValue != frozenColumnID {
                 widths[col.identifier.rawValue] = Double(col.width)
             }
             UserDefaults.standard.set(widths, forKey: widthsKey())
+            // Persist the frozen column's user-set width under its own key + column id.
+            if let id = frozenColumnID {
+                var frozen = UserDefaults.standard.dictionary(forKey: frozenWidthsKey()) as? [String: Double] ?? [:]
+                frozen[id] = Double(frozenColumnStoredWidth)
+                UserDefaults.standard.set(frozen, forKey: frozenWidthsKey())
+            }
         }
 
         func restoreColumnWidths() {
@@ -154,7 +194,10 @@ struct SQLDataGrid: NSViewRepresentable {
             else { return }
             isRestoringLayout = true
             defer { isRestoringLayout = false }
-            for col in table.tableColumns where col.identifier.rawValue != "#" {
+            // Never restore the frozen column here (it's collapsed to 0); its width comes from the
+            // frozen-widths key in `refreshFrozenColumns`.
+            for col in table.tableColumns
+            where col.identifier.rawValue != "#" && col.identifier.rawValue != frozenColumnID {
                 if let w = saved[col.identifier.rawValue] { col.width = CGFloat(w) }
             }
         }
@@ -186,9 +229,12 @@ struct SQLDataGrid: NSViewRepresentable {
 
         func rebuildColumns() {
             guard let table else { return }
+            // A fresh column set: forget the previously-frozen column so refreshFrozenColumns re-picks
+            // the new leftmost one (the old index may not exist in the new result).
+            frozenColumnIndex = nil
             for col in table.tableColumns { table.removeTableColumn(col) }
-            // The row-number gutter is no longer a table column — it's a left-pinned floating view
-            // (`FrozenGutterView`) with a matching content inset. Data columns start at position 0.
+            // The row-number gutter is not a main-table column — it lives in the frozen pane, along with
+            // the first data column. Main data columns start at view position 0.
             for i in parent.data.columns.indices {
                 let c = NSTableColumn(identifier: .init(String(i)))
                 c.title = parent.data.columns[i].name
@@ -201,6 +247,8 @@ struct SQLDataGrid: NSViewRepresentable {
             enumCols = parent.data.enumColumns()
             restoreColumnWidths()
             restoreColumnOrder()
+            // Freeze the leftmost data column into the pane (hides it in the main table) and reload.
+            refreshFrozenColumns()
             refreshFrozenGutter()
         }
 
@@ -225,48 +273,120 @@ struct SQLDataGrid: NSViewRepresentable {
             guard let table else { return }
             table.gridColor = DT.Grid.gridline
             table.headerView?.needsDisplay = true
-            frozenGutter?.needsDisplay = true
+            frozenPane?.needsDisplay = true
         }
 
-        // MARK: Frozen row-number gutter
+        // MARK: Frozen pane (row-number gutter + first data column)
 
-        /// Install the left-pinned row-number gutter: a narrow floating view (horizontal axis) plus a
-        /// matching left content inset so data columns never slide under it, and a clip-view bounds
-        /// observer so the numbers redraw as rows scroll into view.
+        /// Install the left-pinned frozen pane: a single manually-drawn `FrozenColumnView`, floated on
+        /// the horizontal axis so it stays put during horizontal scroll while AppKit scrolls it
+        /// vertically in lockstep with the rows (the exact mechanism the original gutter used, which is
+        /// why it aligns reliably). It draws the gutter numbers + the first data column's cells by
+        /// reading the main table's own row rects and the shared `SQLGridData.cellStyle`. A matching
+        /// left content inset keeps the main columns from rendering under the pane.
         func installFrozenGutter() {
-            guard let scrollView, frozenGutter == nil else { return }
+            guard let scrollView, frozenPane == nil else { return }
             scrollView.automaticallyAdjustsContentInsets = false
-            scrollView.contentInsets = NSEdgeInsets(top: 0, left: gutterWidth, bottom: 0, right: 0)
-            let gutter = FrozenGutterView()
-            gutter.coordinator = self
-            gutter.frame = NSRect(x: 0, y: 0, width: gutterWidth, height: scrollView.contentView.bounds.height)
-            gutter.autoresizingMask = [.height]
-            scrollView.addFloatingSubview(gutter, for: .horizontal)
-            frozenGutter = gutter
+
+            let pane = FrozenColumnView()
+            pane.coordinator = self
+            pane.autoresizingMask = [.height]
+            frozenPane = pane
+            scrollView.addFloatingSubview(pane, for: .horizontal)
+
             let clip = scrollView.contentView
             clip.postsBoundsChangedNotifications = true
             scrollObserver = NotificationCenter.default.addObserver(
                 forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
             ) { [weak self] _ in self?.refreshFrozenGutter() }
+            // Re-layout the pane whenever the scroll view resizes — its final height often isn't known
+            // until after the SwiftUI mount, so the pane must re-fit or it stays stranded at 0 height.
+            scrollView.postsFrameChangedNotifications = true
+            sizeObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification, object: scrollView, queue: .main
+            ) { [weak self] _ in self?.layoutFrozenPane() }
+
+            layoutFrozenPane()
         }
 
-        /// Redraw the gutter after the row set changes (reload, sort, page, resize).
+        /// Size the frozen pane to `gutter + frozenColumnStoredWidth` and set the matching left content
+        /// inset on the main scroll view so the main columns start just right of the pane. A
+        /// `.horizontal` floating subview is positioned inside the (left-inset) content area, so a naive
+        /// (0,0) frame lands offset by the inset; map the scroll view's whole bounds into the pane's
+        /// superview space (handles the flip) and take its left `paneWidth` slice so the pane overlays
+        /// the grid's true left edge, full height.
+        func layoutFrozenPane() {
+            guard let scrollView, let pane = frozenPane else { return }
+            let paneWidth = FrozenColumnGeometry.paneWidth(
+                gutter: gutterWidth, frozenColumnWidth: frozenColumnStoredWidth)
+            scrollView.contentInsets = NSEdgeInsets(top: 0, left: paneWidth, bottom: 0, right: 0)
+            if let superview = pane.superview {
+                let full = superview.convert(scrollView.bounds, from: scrollView)
+                pane.frame = NSRect(x: full.minX, y: full.minY, width: paneWidth, height: full.height)
+            } else {
+                pane.frame = NSRect(x: 0, y: 0, width: paneWidth, height: scrollView.bounds.height)
+            }
+            pane.needsDisplay = true
+        }
+
+        /// Adopt a new frozen data column (whatever sits at view position 0 — the leftmost column), so
+        /// the frozen pane tracks column reordering. The main table keeps the column collapsed to zero
+        /// width (its cells live in the pane), but not removed, so ordering/identity/copy-mapping are
+        /// unchanged. Called from `rebuildColumns` and after a column move.
+        func refreshFrozenColumns() {
+            guard let table else { return }
+            // Restore any previously-frozen main column to a usable width before re-freezing another.
+            if let index = frozenColumnIndex,
+                let prev = table.tableColumns.first(where: { $0.identifier.rawValue == String(index) })
+            {
+                prev.minWidth = 48
+                if prev.width < 1 { prev.width = frozenColumnStoredWidth }
+            }
+            guard let leftmost = table.tableColumns.first, let dataIndex = Int(leftmost.identifier.rawValue)
+            else {
+                frozenColumnIndex = nil
+                return
+            }
+            frozenColumnIndex = dataIndex
+            // Seed the pane column width from the persisted frozen width for this column, else a default.
+            let saved = UserDefaults.standard.dictionary(forKey: frozenWidthsKey()) as? [String: Double]
+            frozenColumnStoredWidth = max(48, saved?[String(dataIndex)].map { CGFloat($0) } ?? 160)
+            // Collapse the frozen column in the main table (minWidth first, else width clamps back up).
+            leftmost.minWidth = 0
+            leftmost.width = 0
+            layoutFrozenPane()
+        }
+
+        /// The header title for the frozen data column (drawn by the pane), read from the main table.
+        func frozenColumnTitle() -> String {
+            guard let table, let index = frozenColumnIndex,
+                let col = table.tableColumns.first(where: { $0.identifier.rawValue == String(index) })
+            else { return "" }
+            return col.title
+        }
+
+        /// Redraw the frozen pane after the row set changes (reload, sort, page, resize) — it reads the
+        /// main table's live geometry, so a redraw is all it needs to re-align.
         func refreshFrozenGutter() {
-            guard let gutter = frozenGutter, let scrollView else { return }
-            gutter.frame.size.height = scrollView.contentView.bounds.height
-            gutter.needsDisplay = true
+            frozenPane?.endFrozenEditing(commit: true)
+            layoutFrozenPane()
+            frozenPane?.needsDisplay = true
+        }
+
+        /// Persist the frozen data column's width (under the frozen-widths key) after a divider drag.
+        func saveFrozenColumnWidth() {
+            guard let id = frozenColumnIndex.map(String.init) else { return }
+            var frozen = UserDefaults.standard.dictionary(forKey: frozenWidthsKey()) as? [String: Double] ?? [:]
+            frozen[id] = Double(frozenColumnStoredWidth)
+            UserDefaults.standard.set(frozen, forKey: frozenWidthsKey())
         }
 
         /// Absolute (paged) 1-based row number for a display row — what the gutter draws.
         func rowNumber(forDisplayRow row: Int) -> Int { parent.page.start + row + 1 }
 
-        /// Select the whole row under a gutter click so ⌘C copies the full row (the gutter is no longer
-        /// a table column, so it drives row selection itself). Clears any cell rectangle first.
-        func selectRowFromGutter(displayRow row: Int, extending: Bool) {
-            guard let table, order.indices.contains(row) else { return }
-            clearCellSelection()
-            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: extending)
-        }
+        var frozenGutterWidth: CGFloat { gutterWidth }
+        var frozenFontSize: CGFloat { fontSize }
+        var frozenEnumColumns: Set<Int> { enumCols }
 
         /// Reload and restore the table selection from the `selectedRow` binding
         /// (mapping the original row index back to its current display row). The
@@ -308,25 +428,39 @@ struct SQLDataGrid: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
             let cell = reuseCell(tableView)
             let id = tableColumn?.identifier.rawValue ?? ""
-            // Row numbers live in the frozen gutter (a floating view), not a table column.
+            // The frozen pane owns a row-number gutter column ("#"); the main table does not.
+            if id == "#" {
+                cell.coordinator = self
+                cell.coord = nil
+                cell.isEditable = false
+                cell.configureGutter(number: rowNumber(forDisplayRow: row))
+                return cell
+            }
             guard let colIndex = Int(id) else { return cell }
             let original = order.indices.contains(row) ? order[row] : row
+            configureCell(cell, original: original, column: colIndex)
+            return cell
+        }
+
+        /// Configure a reused `GridCellView` for the cell at (original row, data-column). This is the
+        /// ONE cell-configuration path — the main table and the frozen first-column pane both call it,
+        /// so pills, staged-edit tint, alignment, and fonts stay identical and in sync. The render
+        /// instructions come from `SQLGridData.cellStyle` (pure); this only maps the palette slot to a
+        /// theme color and sets the edit target on the cell.
+        func configureCell(_ cell: GridCellView, original: Int, column colIndex: Int) {
             let coord = CellCoord(row: original, column: colIndex)
-            // A staged edit overrides the underlying value and is shown tinted.
-            let staged = parent.stagedEdits[coord]
-            let value = staged ?? parent.data.value(row: original, column: colIndex)
+            let style = parent.data.cellStyle(
+                row: original, column: colIndex, stagedValue: parent.stagedEdits[coord],
+                enumColumns: enumCols, enumSlots: DT.Grid.enumPalette.count)
             cell.coordinator = self
             cell.coord = coord
             cell.isEditable = parent.editable != nil
             var enumColor: NSColor?
-            if staged == nil, enumCols.contains(colIndex), case .text(let s) = value, !s.isEmpty {
+            if let slot = style.enumSlot {
                 let palette = DT.Grid.enumPalette
-                if !palette.isEmpty { enumColor = palette[parent.data.enumColorIndex(s, slots: palette.count)] }
+                if palette.indices.contains(slot) { enumColor = palette[slot] }
             }
-            cell.configure(
-                with: SQLCellFormatting.present(value), font: DT.monoNSFont(size: fontSize),
-                enumColor: enumColor, staged: staged != nil)
-            return cell
+            cell.configure(with: style, font: DT.monoNSFont(size: fontSize), enumColor: enumColor)
         }
 
         /// Stage a parsed edit for the cell at `coord` (or clear it back to the original value when
@@ -373,6 +507,9 @@ struct SQLDataGrid: NSViewRepresentable {
             let r = table.selectedRow
             let newValue = (r >= 0 && order.indices.contains(r)) ? order[r] : nil
             if parent.selectedRow != newValue { parent.selectedRow = newValue }
+            // The frozen pane draws the selection band by reading the main table's selection, so a
+            // redraw keeps it in sync (rows highlight identically across the frozen boundary).
+            frozenPane?.needsDisplay = true
         }
 
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
@@ -402,7 +539,7 @@ struct SQLDataGrid: NSViewRepresentable {
             }
             // Reflect the full key list back onto the table so the header shows every sorted column
             // (guarded so this programmatic set does not re-enter). The binding change re-runs
-            // updateNSView, which re-orders and reloads.
+            // updateNSView, which re-orders, reloads, and redraws the frozen pane.
             isApplyingSort = true
             tableView.sortDescriptors = keys.map { NSSortDescriptor(key: String($0.column), ascending: $0.ascending) }
             isApplyingSort = false
@@ -499,8 +636,8 @@ struct SQLDataGrid: NSViewRepresentable {
 
         func activateRecord() { parent.onActivateRecord() }
 
-        /// Double-click a data cell → edit it (when the result is editable) or inspect its full value
-        /// (when read-only). Ignores the gutter and header.
+        /// Double-click a data cell in the MAIN table → edit it (when editable) or inspect it (read
+        /// only). The frozen pane handles its own double-click internally (it isn't an NSTableView).
         @objc func cellDoubleClicked(_ sender: NSTableView) {
             let r = sender.clickedRow
             let c = sender.clickedColumn
@@ -513,6 +650,62 @@ struct SQLDataGrid: NSViewRepresentable {
             } else {
                 parent.onInspect(original, colIndex)
             }
+        }
+
+        // MARK: Frozen-pane action bridges (the pane maps its clicks to original row + frozen column)
+
+        /// Whether the current result is editable (drives the pane's double-click = edit gesture).
+        var isEditable: Bool { parent.editable != nil }
+        /// Inspect the frozen cell for a display row (right-click / read-only double-click in the pane).
+        func inspectFrozen(displayRow r: Int) {
+            guard let index = frozenColumnIndex, order.indices.contains(r) else { return }
+            parent.onInspect(order[r], index)
+        }
+        /// Stage NULL on the frozen cell for a display row (right-click, editable).
+        func setNullFrozen(displayRow r: Int) {
+            guard let index = frozenColumnIndex, order.indices.contains(r) else { return }
+            stageNull(CellCoord(row: order[r], column: index))
+        }
+        /// The FK match for the frozen column, if it is a foreign key.
+        func frozenForeignKeyMatch() -> SQLForeignKeyMatcher.Match? {
+            guard let index = frozenColumnIndex else { return nil }
+            return parent.foreignKeyMatches[index]
+        }
+        /// The (possibly staged) value of the frozen cell for a display row — gates FK nav on non-NULL.
+        func frozenCellValue(displayRow r: Int) -> SQLValue? {
+            guard let index = frozenColumnIndex, order.indices.contains(r) else { return nil }
+            let original = order[r]
+            return parent.stagedEdits[CellCoord(row: original, column: index)]
+                ?? parent.data.value(row: original, column: index)
+        }
+        /// Navigate the frozen FK cell for a display row (right-click "Go to …").
+        func navigateForeignKeyFrozen(displayRow r: Int) {
+            guard let index = frozenColumnIndex, order.indices.contains(r) else { return }
+            parent.onNavigateForeignKey(order[r], index)
+        }
+        /// Select the whole row under a frozen-pane click so ⌘C copies the row; ⇧ extends.
+        func selectRowFromFrozen(displayRow r: Int, extending: Bool) {
+            guard let table, order.indices.contains(r) else { return }
+            clearCellSelection()
+            table.selectRowIndexes(IndexSet(integer: r), byExtendingSelection: extending)
+        }
+        /// Stage a typed edit for the frozen cell (Enter in the pane's inline editor).
+        func stageFrozenEdit(displayRow r: Int, typed text: String) -> Bool {
+            guard let index = frozenColumnIndex, order.indices.contains(r) else { return false }
+            return stageEdit(CellCoord(row: order[r], column: index), typed: text)
+        }
+        /// The current (committed or staged) value of the frozen cell, seeded into the inline editor.
+        func frozenEditingText(displayRow r: Int) -> String {
+            guard let index = frozenColumnIndex, order.indices.contains(r) else { return "" }
+            let coord = CellCoord(row: order[r], column: index)
+            let value = parent.stagedEdits[coord] ?? parent.data.value(row: order[r], column: index)
+            return SQLCellEditing.editingText(for: value)
+        }
+        /// Copy the frozen cell (a single-cell rectangle) or the selected rows — routes through the
+        /// existing selection copy after anchoring a 1×1 rectangle on the frozen column (view pos 0).
+        func copyFromFrozen(displayRow r: Int, withHeader: Bool) {
+            beginCellSelection(displayRow: r, columnPosition: 0)
+            copySelection(withHeader: withHeader)
         }
 
         /// Right-click → Inspect the clicked cell's value (always available, both modes).
@@ -533,6 +726,39 @@ struct SQLDataGrid: NSViewRepresentable {
             stageNull(CellCoord(row: original, column: colIndex))
         }
 
+        /// The FK jump available on the cell at a table-column view position, or nil if that column is
+        /// not a foreign key. Resolves the view position to the underlying data-column index first, so
+        /// it stays correct after the user reorders columns.
+        func foreignKeyMatch(forColumnPosition c: Int) -> SQLForeignKeyMatcher.Match? {
+            guard let table, table.tableColumns.indices.contains(c),
+                let colIndex = Int(table.tableColumns[c].identifier.rawValue)
+            else { return nil }
+            return parent.foreignKeyMatches[colIndex]
+        }
+
+        /// The value shown in the cell at (displayRow, column view-position), preferring any staged
+        /// edit — the same value FK navigation filters by. Used to gate the "Go to …" menu item so it
+        /// hides on NULL (nothing to match).
+        func cellValue(displayRow r: Int, columnPosition c: Int) -> SQLValue? {
+            guard let table, order.indices.contains(r), table.tableColumns.indices.contains(c),
+                let colIndex = Int(table.tableColumns[c].identifier.rawValue)
+            else { return nil }
+            let original = order[r]
+            return parent.stagedEdits[CellCoord(row: original, column: colIndex)]
+                ?? parent.data.value(row: original, column: colIndex)
+        }
+
+        /// Right-click → "Go to <referencedTable>": navigate the FK cell at (displayRow, column). Maps
+        /// the view position to the data-column index and hands the original row + column to the
+        /// callback, which reads the (possibly staged) value and runs the parameterized lookup.
+        func navigateForeignKeyClicked(displayRow r: Int, column c: Int) {
+            guard let table, r >= 0, c >= 0, order.indices.contains(r),
+                table.tableColumns.indices.contains(c),
+                let colIndex = Int(table.tableColumns[c].identifier.rawValue)
+            else { return }
+            parent.onNavigateForeignKey(order[r], colIndex)
+        }
+
         /// Put the cell at (displayRow, column) into inline-edit mode: seed its text field, make it
         /// editable + first responder. Enter stages the value, Esc cancels.
         func beginEditing(displayRow r: Int, column c: Int) {
@@ -541,6 +767,13 @@ struct SQLDataGrid: NSViewRepresentable {
                 let cell = table.view(atColumn: c, row: r, makeIfNecessary: true) as? GridCellView
             else { return }
             cell.beginEditing()
+        }
+
+        /// Begin inline editing of the frozen cell for a display row — hands off to the pane, which
+        /// hosts the editor field over the cell. Same staged-edit flow (stageFrozenEdit) as the grid.
+        func beginEditingFrozen(displayRow r: Int) {
+            guard parent.editable != nil else { return }
+            frozenPane?.beginEditing(displayRow: r)
         }
     }
 }
@@ -697,6 +930,17 @@ final class GridTableView: NSTableView {
             tableColumns[column].identifier.rawValue != "#"
         {
             menu.addItem(withTitle: "Inspect Value…", action: #selector(inspectValue), keyEquivalent: "")
+            // Foreign-key jump: offered only when the clicked column references another table and the
+            // clicked cell is non-NULL (a NULL FK has nothing to look up).
+            if let match = coordinator?.foreignKeyMatch(forColumnPosition: column),
+                let value = coordinator?.cellValue(displayRow: row, columnPosition: column),
+                !value.isNull
+            {
+                let item = NSMenuItem(
+                    title: "Go to \(match.referencedTable)", action: #selector(navigateForeignKey),
+                    keyEquivalent: "")
+                menu.addItem(item)
+            }
             if coordinator?.parent.editable != nil {
                 menu.addItem(withTitle: "Edit Value", action: #selector(editValue), keyEquivalent: "")
                 menu.addItem(withTitle: "Set NULL", action: #selector(setNull), keyEquivalent: "")
@@ -723,6 +967,10 @@ final class GridTableView: NSTableView {
         guard let c = menuCell else { return }
         coordinator?.setNullClicked(displayRow: c.row, column: c.column)
     }
+    @objc private func navigateForeignKey() {
+        guard let c = menuCell else { return }
+        coordinator?.navigateForeignKeyClicked(displayRow: c.row, column: c.column)
+    }
 }
 
 /// A click-through overlay pinned over the table that draws the rubber-band cell rectangle. It never
@@ -746,43 +994,149 @@ final class CellSelectionOverlay: NSView {
     }
 }
 
-/// The left-pinned, vertically-scrolling row-number gutter. Floated on the horizontal axis so it
-/// stays put during horizontal scroll while AppKit scrolls it vertically in lockstep with the rows.
-/// It draws the absolute (paged) row number for each visible row — reading the table's own row rects
-/// so it stays aligned through sort, paging, density changes, and scrolling — plus a hairline + soft
-/// shadow on its right edge so it reads as a frozen layer. Clicking it selects the whole row.
-final class FrozenGutterView: NSView {
+/// The left-pinned frozen pane, drawn manually as a single floating view (horizontal axis, so it
+/// stays put during horizontal scroll while AppKit scrolls it vertically in lockstep with the rows —
+/// the exact, reliable mechanism the original gutter used). It renders the row-number gutter AND the
+/// first data column's cells by reading the MAIN table's own row rects for alignment and the shared
+/// `SQLGridData.cellStyle` for content (so pills / staged tint / alignment / fonts match the main
+/// grid and stay in sync automatically). It draws its own header strip, a right-edge hairline + soft
+/// shadow (frozen-layer look), participates in selection/copy/editing, and hosts an inline editor.
+final class FrozenColumnView: NSView {
     weak var coordinator: SQLDataGrid.Coordinator?
+    /// The inline editor, created lazily and positioned over the cell being edited.
+    private var editor: NSTextField?
+    private var editingRow: Int?
+    /// The clicked display row when a context menu opens, so menu items act on that row.
+    private var menuRow: Int?
+    /// True while dragging the column divider, so the pane resizes the frozen column live.
+    private var resizingColumn = false
 
     override var isFlipped: Bool { true }
 
+    /// The header height, matched to the main header so the frozen header lines up with it.
+    private var headerHeight: CGFloat { coordinator?.table?.headerView?.frame.height ?? 28 }
+
     override func draw(_ dirtyRect: NSRect) {
-        // A floating subview's drawing context is translated by the scroll offset, so its visible
-        // drawing region is `visibleRect` (which moves with scrolling), not `bounds`. Fill and stroke
-        // against that; position each row number via the shared window coordinate space so it lands
-        // exactly where the row renders.
+        // A floating subview's context is translated by the scroll offset, so the visible region is
+        // `visibleRect` (which moves with scrolling), not `bounds`.
         let area = visibleRect
-        DT.Grid.headerBackground.setFill()
+        DT.Grid.base.setFill()
         area.fill()
         guard let coordinator, let table = coordinator.table else { return }
-        let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: DT.Grid.nullText,
-            .font: DT.monoNSFont(size: 10),
-        ]
+        let gutterW = coordinator.frozenGutterWidth
+        let colX = FrozenColumnGeometry.frozenColumnOriginX(gutter: gutterW)
+        let colW = coordinator.frozenColumnStoredWidth
+
+        drawHeader(in: area, gutterWidth: gutterW, columnX: colX, columnWidth: colW)
+
+        // Draw one gutter number + one data cell per visible main-table row, aligned to that row's rect.
         let visible = table.rows(in: table.visibleRect)
-        if visible.length > 0 {
-            for row in visible.location..<(visible.location + visible.length) {
-                let midY = rowMidY(row, in: table)
-                let number = coordinator.rowNumber(forDisplayRow: row) as NSNumber
-                let text = number.stringValue as NSString
-                let size = text.size(withAttributes: attrs)
-                let textRect = NSRect(
-                    x: area.maxX - size.width - 6, y: midY - size.height / 2,
-                    width: size.width, height: size.height)
-                text.draw(in: textRect, withAttributes: attrs)
+        guard visible.length > 0 else { drawEdge(area); return }
+        let gutterAttrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: DT.Grid.nullText, .font: DT.monoNSFont(size: 10),
+        ]
+        for row in visible.location..<(visible.location + visible.length) {
+            let rowRect = rowRectInSelf(row, table: table)
+            guard rowRect.maxY > area.minY + headerHeight, rowRect.minY < area.maxY else { continue }
+            // Selection band, matching the main row's selection.
+            if table.selectedRowIndexes.contains(row) {
+                DT.Grid.selectionFill.withAlphaComponent(0.35).setFill()
+                NSRect(x: area.minX, y: rowRect.minY, width: area.width, height: rowRect.height).fill()
+            }
+            // Gutter number (right-aligned in the gutter strip).
+            let number = coordinator.rowNumber(forDisplayRow: row) as NSNumber
+            let numText = number.stringValue as NSString
+            let numSize = numText.size(withAttributes: gutterAttrs)
+            numText.draw(
+                at: NSPoint(x: gutterW - numSize.width - 6, y: rowRect.midY - numSize.height / 2),
+                withAttributes: gutterAttrs)
+            // Data cell (skip the one being inline-edited — the editor field covers it).
+            if editingRow != row {
+                drawDataCell(
+                    displayRow: row, in: NSRect(x: colX, y: rowRect.minY, width: colW, height: rowRect.height),
+                    coordinator: coordinator)
             }
         }
-        // Right-edge hairline + a soft shadow so the gutter reads as a layer above the scrolling data.
+        drawEdge(area)
+    }
+
+    /// Draw the frozen header: an empty gutter slot + the frozen column's title, themed like the main
+    /// header (which owns the sort arrow for the collapsed main copy of this column).
+    private func drawHeader(in area: NSRect, gutterWidth: CGFloat, columnX: CGFloat, columnWidth: CGFloat) {
+        let headerRect = NSRect(x: area.minX, y: area.minY, width: area.width, height: headerHeight)
+        DT.Grid.headerBackground.setFill()
+        headerRect.fill()
+        let title = (coordinator?.frozenColumnTitle() ?? "") as NSString
+        let attrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: DT.Grid.headerText, .font: DT.monoNSFont(size: 10, weight: .semibold),
+        ]
+        let size = title.size(withAttributes: attrs)
+        title.draw(
+            at: NSPoint(x: columnX + 6, y: headerRect.midY - size.height / 2), withAttributes: attrs)
+        DT.Grid.gridline.setStroke()
+        let sep = NSBezierPath()
+        sep.move(to: NSPoint(x: area.minX, y: headerRect.maxY - 0.5))
+        sep.line(to: NSPoint(x: area.maxX, y: headerRect.maxY - 0.5))
+        sep.lineWidth = 1
+        sep.stroke()
+    }
+
+    /// Draw one frozen data cell using the shared `cellStyle` (staged tint, enum pill, alignment,
+    /// fonts) — the SAME render instructions the main grid's cells use, so the two never drift.
+    private func drawDataCell(displayRow: Int, in rect: NSRect, coordinator: SQLDataGrid.Coordinator) {
+        guard let index = coordinator.frozenColumnIndex, coordinator.order.indices.contains(displayRow)
+        else { return }
+        let original = coordinator.order[displayRow]
+        let staged = coordinator.parent.stagedEdits[CellCoord(row: original, column: index)]
+        let style = coordinator.parent.data.cellStyle(
+            row: original, column: index, stagedValue: staged,
+            enumColumns: coordinator.frozenEnumColumns, enumSlots: DT.Grid.enumPalette.count)
+        let p = style.presentation
+        let font = DT.monoNSFont(size: coordinator.frozenFontSize)
+        let inset = rect.insetBy(dx: 6, dy: 0)
+
+        // Pill/tint background (staged amber or enum color), matching GridCellView.configure.
+        if style.isStaged {
+            drawPill(DT.Grid.stagedTint.withAlphaComponent(0.22), in: inset, textHeight: font.pointSize)
+        } else if let slot = style.enumSlot, DT.Grid.enumPalette.indices.contains(slot) {
+            drawPill(DT.Grid.enumPalette[slot].withAlphaComponent(0.20), in: inset, textHeight: font.pointSize)
+        }
+
+        let text: String
+        let color: NSColor
+        if style.isStaged {
+            text = p.isNull ? "NULL" : p.text
+            color = DT.Grid.rowText
+        } else if p.isNull {
+            text = "NULL"
+            color = DT.Grid.nullText
+        } else if p.isEmptyText {
+            text = "(empty)"
+            color = DT.Grid.nullText
+        } else if p.role == .bool {
+            text = (p.text == "true") ? "✓" : "✗"
+            color = DT.Grid.rowText
+        } else {
+            text = p.text
+            color = (p.role == .number) ? DT.Grid.rowText : DT.Grid.rowTextSecondary
+        }
+        let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: color, .font: font]
+        let ns = text as NSString
+        let size = ns.size(withAttributes: attrs)
+        let trailing = (p.alignment == .trailing) && !style.isStaged && style.enumSlot == nil
+        let x = trailing ? inset.maxX - size.width : inset.minX
+        ns.draw(at: NSPoint(x: x, y: rect.midY - size.height / 2), withAttributes: attrs)
+    }
+
+    private func drawPill(_ color: NSColor, in inset: NSRect, textHeight: CGFloat) {
+        let h = min(inset.height - 4, textHeight + 8)
+        let pill = NSRect(x: inset.minX - 2, y: inset.midY - h / 2, width: inset.width + 4, height: h)
+        color.setFill()
+        NSBezierPath(roundedRect: pill, xRadius: 4, yRadius: 4).fill()
+    }
+
+    /// The right-edge hairline + soft shadow so the pane reads as a layer above the scrolling data.
+    private func drawEdge(_ area: NSRect) {
         DT.Grid.gridline.setStroke()
         let edge = NSBezierPath()
         edge.move(to: NSPoint(x: area.maxX - 0.5, y: area.minY))
@@ -795,21 +1149,179 @@ final class FrozenGutterView: NSView {
         shadow?.draw(in: NSRect(x: area.maxX, y: area.minY, width: 6, height: area.height), angle: 0)
     }
 
-    /// The on-screen mid-y of a table row, expressed in this floating view's (scroll-translated)
-    /// coordinate space, via the shared window space so it stays aligned through scrolling.
-    private func rowMidY(_ row: Int, in table: NSTableView) -> CGFloat {
-        convert(table.convert(table.rect(ofRow: row), to: nil), from: nil).midY
+    /// The display row's rect in this view's (scroll-translated) coordinate space, via window space so
+    /// it stays aligned with the main table through scrolling, sort, paging, and density changes.
+    private func rowRectInSelf(_ row: Int, table: NSTableView) -> NSRect {
+        convert(table.convert(table.rect(ofRow: row), to: nil), from: nil)
     }
 
-    /// A gutter click selects the whole row under the pointer (⇧ extends), so ⌘C copies full rows —
-    /// the behavior the old "#" table column provided.
+    /// The display row under a point in this view (accounting for the header strip), or -1.
+    private func displayRow(at point: NSPoint) -> Int {
+        guard let table = coordinator?.table, point.y >= visibleRect.minY + headerHeight else { return -1 }
+        let inTable = table.convert(NSPoint(x: point.x, y: point.y), from: self)
+        return table.row(at: NSPoint(x: table.bounds.midX, y: inTable.y))
+    }
+
+    /// Whether a point is over the column-resize hot zone (a few px around the pane's right edge).
+    private func onColumnDivider(_ point: NSPoint) -> Bool {
+        abs(point.x - visibleRect.maxX) <= 4
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(NSRect(x: bounds.maxX - 4, y: 0, width: 8, height: bounds.height), cursor: .resizeLeftRight)
+    }
+
+    // MARK: Mouse
+
     override func mouseDown(with event: NSEvent) {
-        guard let coordinator, let table = coordinator.table else { return }
-        // Map the click through the window into the table's own space to find the row.
-        let inTable = table.convert(event.locationInWindow, from: nil)
-        let row = table.row(at: NSPoint(x: table.bounds.midX, y: inTable.y))
-        guard row >= 0 else { return }
-        coordinator.selectRowFromGutter(displayRow: row, extending: event.modifierFlags.contains(.shift))
+        let point = convert(event.locationInWindow, from: nil)
+        if onColumnDivider(point) {
+            trackColumnResize(from: point)
+            return
+        }
+        let row = displayRow(at: point)
+        guard let coordinator, row >= 0 else { return }
+        if event.clickCount == 2 {
+            if coordinator.isEditable {
+                coordinator.beginEditingFrozen(displayRow: row)
+            } else {
+                coordinator.inspectFrozen(displayRow: row)
+            }
+            return
+        }
+        // Single click: select the whole row (⇧ extends) and anchor a 1×1 cell rectangle on the frozen
+        // column so ⌘C copies it as part of the rectangular-copy path.
+        coordinator.selectRowFromFrozen(displayRow: row, extending: event.modifierFlags.contains(.shift))
+        coordinator.beginCellSelection(displayRow: row, columnPosition: 0)
+    }
+
+    /// Drag the pane's right edge to resize the frozen data column, updating the stored width live.
+    private func trackColumnResize(from start: NSPoint) {
+        guard let coordinator else { return }
+        resizingColumn = true
+        let gutterW = coordinator.frozenGutterWidth
+        trackingLoop: while let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+            let p = convert(next.locationInWindow, from: nil)
+            switch next.type {
+            case .leftMouseDragged:
+                coordinator.frozenColumnStoredWidth = max(48, p.x - gutterW)
+                coordinator.layoutFrozenPane()
+            case .leftMouseUp:
+                break trackingLoop
+            default:
+                break trackingLoop
+            }
+        }
+        resizingColumn = false
+        coordinator.saveFrozenColumnWidth()
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let point = convert(event.locationInWindow, from: nil)
+        let row = displayRow(at: point)
+        menuRow = row
+        guard let coordinator, row >= 0 else { return nil }
+        coordinator.selectRowFromFrozen(displayRow: row, extending: false)
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Inspect Value…", action: #selector(inspectValue), keyEquivalent: "")
+        if let match = coordinator.frozenForeignKeyMatch(),
+            let value = coordinator.frozenCellValue(displayRow: row), !value.isNull
+        {
+            menu.addItem(
+                withTitle: "Go to \(match.referencedTable)", action: #selector(navigateForeignKey),
+                keyEquivalent: "")
+        }
+        if coordinator.isEditable {
+            menu.addItem(withTitle: "Edit Value", action: #selector(editValue), keyEquivalent: "")
+            menu.addItem(withTitle: "Set NULL", action: #selector(setNull), keyEquivalent: "")
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Copy", action: #selector(copyPlain), keyEquivalent: "")
+        menu.addItem(withTitle: "Copy with Column Names", action: #selector(copyWithHeader), keyEquivalent: "")
+        for item in menu.items { item.target = self }
+        return menu
+    }
+
+    @objc private func inspectValue() {
+        if let r = menuRow { coordinator?.inspectFrozen(displayRow: r) }
+    }
+    @objc private func navigateForeignKey() {
+        if let r = menuRow { coordinator?.navigateForeignKeyFrozen(displayRow: r) }
+    }
+    @objc private func editValue() {
+        if let r = menuRow { coordinator?.beginEditingFrozen(displayRow: r) }
+    }
+    @objc private func setNull() {
+        if let r = menuRow { coordinator?.setNullFrozen(displayRow: r) }
+    }
+    @objc private func copyPlain() {
+        if let r = menuRow { coordinator?.copyFromFrozen(displayRow: r, withHeader: false) }
+    }
+    @objc private func copyWithHeader() {
+        if let r = menuRow { coordinator?.copyFromFrozen(displayRow: r, withHeader: true) }
+    }
+
+    // MARK: Inline editing
+
+    /// Open an inline editor over the frozen cell for `displayRow`, seeded with its current value.
+    func beginEditing(displayRow row: Int) {
+        guard let coordinator, let table = coordinator.table, coordinator.order.indices.contains(row) else {
+            return
+        }
+        endFrozenEditing(commit: true)
+        let rowRect = rowRectInSelf(row, table: table)
+        let colX = FrozenColumnGeometry.frozenColumnOriginX(gutter: coordinator.frozenGutterWidth)
+        let field = NSTextField(
+            frame: NSRect(
+                x: colX + 2, y: rowRect.minY + 1, width: coordinator.frozenColumnStoredWidth - 4,
+                height: rowRect.height - 2))
+        field.font = DT.monoNSFont(size: coordinator.frozenFontSize)
+        field.textColor = DT.Grid.rowText
+        field.backgroundColor = DT.Grid.stagedTint.withAlphaComponent(0.12)
+        field.isBordered = false
+        field.focusRingType = .none
+        field.stringValue = coordinator.frozenEditingText(displayRow: row)
+        field.target = self
+        field.action = #selector(commitEditor)
+        field.delegate = self
+        addSubview(field)
+        editor = field
+        editingRow = row
+        window?.makeFirstResponder(field)
+        field.currentEditor()?.selectAll(nil)
+        needsDisplay = true
+    }
+
+    @objc private func commitEditor() { endFrozenEditing(commit: true) }
+
+    /// Tear down the inline editor, optionally staging its text first.
+    func endFrozenEditing(commit: Bool) {
+        guard let field = editor, let row = editingRow else { return }
+        let text = field.stringValue
+        editor = nil
+        editingRow = nil
+        field.removeFromSuperview()
+        if commit { _ = coordinator?.stageFrozenEdit(displayRow: row, typed: text) }
+        needsDisplay = true
+    }
+
+    /// ⌘C copies the selected frozen cell / rows through the coordinator's copy path.
+    @objc func copy(_ sender: Any?) {
+        if let r = menuRow { coordinator?.copyFromFrozen(displayRow: r, withHeader: false) }
+    }
+}
+
+extension FrozenColumnView: NSTextFieldDelegate {
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        if selector == #selector(NSResponder.insertNewline(_:)) {
+            endFrozenEditing(commit: true)
+            return true
+        }
+        if selector == #selector(NSResponder.cancelOperation(_:)) {
+            endFrozenEditing(commit: false)
+            return true
+        }
+        return false
     }
 }
 
@@ -855,6 +1367,16 @@ final class GridCellView: NSTableCellView, NSTextFieldDelegate {
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not implemented") }
+
+    /// The label's current text — used by the headless grid E2E to assert the cell rendered.
+    var currentText: String { label.stringValue }
+
+    /// Render this cell from the shared `GridCellStyle`, so the main grid and the frozen first-column
+    /// pane style identically. The style carries an enum-palette *slot*; the caller maps it to a
+    /// concrete `NSColor` (the palette lives in the app's theme layer) and passes it here.
+    func configure(with style: GridCellStyle, font: NSFont, enumColor: NSColor?) {
+        configure(with: style.presentation, font: font, enumColor: enumColor, staged: style.isStaged)
+    }
 
     func configure(with p: CellPresentation, font: NSFont, enumColor: NSColor? = nil, staged: Bool = false) {
         // Don't clobber the field while the user is typing in it.

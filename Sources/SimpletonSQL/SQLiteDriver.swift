@@ -83,6 +83,32 @@ public final class SQLiteDriver: SQLDriver, @unchecked Sendable {
         }
     }
 
+    public func foreignKeys(of table: String, in database: String?) async throws -> [ForeignKeyInfo] {
+        let escaped = table.replacingOccurrences(of: "\"", with: "\"\"")
+        let result = try await run("PRAGMA foreign_key_list(\"\(escaped)\")")
+        guard case .rows(let cols, let rows) = result else { return [] }
+        // PRAGMA foreign_key_list columns: id | seq | table | from | to | on_update | on_delete | match
+        // Resolve by name (robust to any column-order change) with positional fallbacks.
+        let names = cols.map(\.name)
+        func idx(_ name: String, _ fallback: Int) -> Int {
+            names.firstIndex(of: name) ?? fallback
+        }
+        let tableIdx = idx("table", 2)
+        let fromIdx = idx("from", 3)
+        let toIdx = idx("to", 4)
+        return rows.compactMap { row in
+            guard row.indices.contains(tableIdx), row.indices.contains(fromIdx), row.indices.contains(toIdx)
+            else { return nil }
+            let refTable = row[tableIdx].displayString
+            let from = row[fromIdx].displayString
+            // `to` is NULL when the FK references the target's primary key implicitly; SQLite reports
+            // it as NULL in that case, which we can't navigate by column name, so skip it.
+            guard case .text(let refColumn) = row[toIdx], !refColumn.isEmpty, !from.isEmpty, !refTable.isEmpty
+            else { return nil }
+            return ForeignKeyInfo(column: from, referencedTable: refTable, referencedColumn: refColumn)
+        }
+    }
+
     // MARK: - core (queue-confined)
 
     // SQLite keeps a borrowed pointer for text/blob binds unless told to copy; TRANSIENT forces a

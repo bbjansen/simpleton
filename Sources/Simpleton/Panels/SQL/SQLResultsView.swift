@@ -34,9 +34,15 @@ struct SQLResultsView: View {
     let result: QueryResult?
     /// Non-nil when the current result is a single-table SELECT we can UPDATE — enables editing.
     let editable: EditableTarget?
+    /// FK jumps for the current result, keyed by result-column index. Drives the grid's right-click
+    /// "Go to <referencedTable>" on an FK cell.
+    let foreignKeyMatches: [Int: SQLForeignKeyMatcher.Match]
     /// Commit staged edits: called with the grid's staged edits; returns after the model has written
     /// them and re-queried (so the view can clear its staged state).
     let onCommit: ([CellCoord: SQLValue]) async -> Void
+    /// Navigate a foreign key: run `SELECT * FROM ref WHERE refcol = ?` with the clicked cell's value
+    /// bound (never interpolated) and show the referenced row.
+    let onNavigateForeignKey: (SQLForeignKeyMatcher.Match, SQLValue) async -> Void
     @ObservedObject private var themeSettings = ThemeSettings.shared
 
     var body: some View {
@@ -49,8 +55,12 @@ struct SQLResultsView: View {
             if rows.isEmpty {
                 hint("No rows.")
             } else {
-                SQLRowsView(columns: columns, rows: rows, editable: editable, onCommit: onCommit)
-                    .id(resultIdentity(columns: columns, rowCount: rows.count))
+                SQLRowsView(
+                    columns: columns, rows: rows, editable: editable,
+                    foreignKeyMatches: foreignKeyMatches, onCommit: onCommit,
+                    onNavigateForeignKey: onNavigateForeignKey
+                )
+                .id(resultIdentity(columns: columns, rowCount: rows.count))
             }
         }
     }
@@ -83,7 +93,9 @@ private struct SQLRowsView: View {
     let columns: [Column]
     let rows: [[SQLValue]]
     let editable: EditableTarget?
+    let foreignKeyMatches: [Int: SQLForeignKeyMatcher.Match]
     let onCommit: ([CellCoord: SQLValue]) async -> Void
+    let onNavigateForeignKey: (SQLForeignKeyMatcher.Match, SQLValue) async -> Void
     @State private var mode: ResultsMode = .grid
     @State private var sortKeys: [SortKey] = []
     @State private var selectedRow: Int?
@@ -128,12 +140,18 @@ private struct SQLRowsView: View {
                     page: pageBounds,
                     rowHeight: density.rowHeight,
                     editable: editable,
+                    foreignKeyMatches: foreignKeyMatches,
                     stagedEdits: $stagedEdits,
                     onActivateRecord: { mode = .record },
                     onInspect: { original, col in
                         inspected = InspectedCell(
                             column: columns.indices.contains(col) ? columns[col].name : "",
                             value: data.value(row: original, column: col))
+                    },
+                    onNavigateForeignKey: { original, col in
+                        guard let match = foreignKeyMatches[col] else { return }
+                        let value = data.value(row: original, column: col)
+                        Task { await onNavigateForeignKey(match, value) }
                     }
                 )
             } else {
