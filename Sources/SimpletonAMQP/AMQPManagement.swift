@@ -40,6 +40,17 @@ public protocol AMQPManagementBackend: AnyObject, Sendable {
     func deleteExchange(vhost: String, name: String) async throws
     /// Bind a queue to a source exchange with a routing key.
     func createBinding(vhost: String, source: String, destination: String, routingKey: String) async throws
+    /// Policies in a virtual host. Policies are the RabbitMQ mechanism for applying TTL / dead-letter /
+    /// max-length settings to *existing* queues (queue `arguments` are immutable after declaration).
+    func policies(vhost: String) async throws -> [PolicyInfo]
+    /// Create or replace a policy. `definition` carries the parameter map (`message-ttl` Int,
+    /// `dead-letter-exchange` String, `max-length` Int, …); `applyTo` is `queues`, `exchanges` or `all`.
+    func putPolicy(
+        vhost: String, name: String, pattern: String, applyTo: String,
+        definition: [String: PolicyValue], priority: Int
+    ) async throws
+    /// Delete a policy by name.
+    func deletePolicy(vhost: String, name: String) async throws
 }
 
 // MARK: - Model
@@ -439,6 +450,102 @@ public struct NodeInfo: Sendable, Codable, Equatable, Identifiable {
         socketsUsed = try c.decodeIfPresent(Int.self, forKey: .socketsUsed)
         procUsed = try c.decodeIfPresent(Int.self, forKey: .procUsed)
         uptime = try c.decodeIfPresent(Int.self, forKey: .uptime)
+    }
+}
+
+/// A value in a policy `definition` map. RabbitMQ policy parameters are either integers
+/// (`message-ttl`, `max-length`, `expires`) or strings (`dead-letter-exchange`,
+/// `dead-letter-routing-key`, `queue-mode`); this models exactly those two so the New Policy form can
+/// build a correct JSON body and so a fetched policy round-trips. Booleans decode into `.int` (0/1) —
+/// the policy parameters this form edits are only ints and strings.
+public enum PolicyValue: Sendable, Equatable, Codable {
+    case int(Int)
+    case string(String)
+
+    /// A display string for the policy table's definition column.
+    public var displayString: String {
+        switch self {
+        case .int(let i): return String(i)
+        case .string(let s): return s
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .int(let i): try c.encode(i)
+        case .string(let s): try c.encode(s)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        // Int before Double/String so a whole-number TTL stays an Int; a bool coerces to 0/1.
+        if let i = try? c.decode(Int.self) {
+            self = .int(i)
+        } else if let b = try? c.decode(Bool.self) {
+            self = .int(b ? 1 : 0)
+        } else if let d = try? c.decode(Double.self) {
+            self = .int(Int(d))
+        } else if let s = try? c.decode(String.self) {
+            self = .string(s)
+        } else {
+            // A nested object/array definition value (rare for the parameters this form edits) renders
+            // as a compact placeholder rather than failing the whole decode.
+            self = .string("…")
+        }
+    }
+}
+
+/// One policy as reported by `/api/policies`. Policies attach a `definition` (message-ttl,
+/// dead-letter-exchange, max-length, …) to every object whose name matches `pattern` within
+/// `applyTo` (`queues` / `exchanges` / `all`). Tolerant of missing fields so an older or partial
+/// broker payload still decodes.
+public struct PolicyInfo: Sendable, Codable, Equatable, Identifiable {
+    public let vhost: String
+    public let name: String
+    public let pattern: String
+    public let applyTo: String
+    public let definition: [String: PolicyValue]
+    public let priority: Int
+
+    /// Stable identity for SwiftUI lists: vhost + name is unique within a broker.
+    public var id: String { "\(vhost)/\(name)" }
+
+    /// The definition rendered as a sorted `key=value  key=value` string for the table row.
+    public var definitionSummary: String {
+        definition.map { "\($0.key)=\($0.value.displayString)" }.sorted().joined(separator: "  ")
+    }
+
+    public init(
+        vhost: String, name: String, pattern: String, applyTo: String,
+        definition: [String: PolicyValue], priority: Int
+    ) {
+        self.vhost = vhost
+        self.name = name
+        self.pattern = pattern
+        self.applyTo = applyTo
+        self.definition = definition
+        self.priority = priority
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case vhost
+        case name
+        case pattern
+        case applyTo = "apply-to"
+        case definition
+        case priority
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        vhost = try c.decodeIfPresent(String.self, forKey: .vhost) ?? "/"
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        pattern = try c.decodeIfPresent(String.self, forKey: .pattern) ?? ""
+        applyTo = try c.decodeIfPresent(String.self, forKey: .applyTo) ?? "all"
+        definition = try c.decodeIfPresent([String: PolicyValue].self, forKey: .definition) ?? [:]
+        priority = try c.decodeIfPresent(Int.self, forKey: .priority) ?? 0
     }
 }
 
