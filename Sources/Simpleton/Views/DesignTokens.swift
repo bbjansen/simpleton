@@ -162,6 +162,12 @@ enum DT {
         static var nullText: NSColor { ns(chrome.textFaint) }
         static var selectionFill: NSColor { ns(chrome.selected) }
 
+        /// Tint for a staged (uncommitted) cell edit — amber, matching `DT.accentAmber`. Callers
+        /// apply their own alpha.
+        static let stagedTint = NSColor(red: 0.950, green: 0.700, blue: 0.200, alpha: 1)
+        /// Flash for an edit that failed to parse for the column's type — red, matching `DT.accentRed`.
+        static let invalidTint = NSColor(red: 0.950, green: 0.350, blue: 0.350, alpha: 1)
+
         /// Distinct hues for categorical (enum) cell pills; a value maps to a
         /// stable slot via `SQLGridData.enumColorIndex`.
         static let enumPalette: [NSColor] = [

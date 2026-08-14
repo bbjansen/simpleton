@@ -3,6 +3,34 @@ import Foundation
 import SimpletonCore
 import SimpletonSQL
 
+/// A results grid we've proven safe to edit: one real table, a known primary key, and result
+/// columns that all map to real table columns. Produced only by `SQLPanelModel.detectEditable` and
+/// only when every guard passes — its mere existence is the edit affordance for the UI.
+struct EditableTarget: Equatable {
+    /// The (unquoted) table name UPDATEs target.
+    let table: String
+    /// The primary-key column names (in table order); every one is present in `resultColumns`.
+    let primaryKey: [String]
+    /// The result-grid column names, in grid order. Each maps 1:1 to a real table column.
+    let resultColumns: [String]
+    /// The engine dialect, so the UPDATE builder emits the right placeholders + quoting.
+    let dialect: SQLDialect
+}
+
+/// A single row's staged edit, resolved to concrete values: the primary-key values that identify the
+/// row and the column/value pairs to write. Passed to `commitEdits`, which turns each into one
+/// parameterized UPDATE.
+struct RowEdit {
+    let key: [(column: String, value: SQLValue)]
+    let changes: [(column: String, value: SQLValue)]
+}
+
+/// The outcome of a commit: how many rows were written, or an error message that stopped it.
+struct CommitOutcome: Equatable {
+    let updatedRows: Int
+    let errorMessage: String?
+}
+
 @MainActor
 final class SQLPanelModel: ObservableObject {
     @Published var connections: [Connection] = []
@@ -16,6 +44,12 @@ final class SQLPanelModel: ObservableObject {
     @Published var historyItems: [String] = []
     @Published var tables: [TableInfo] = []
     @Published var columnsByTable: [String: [ColumnInfo]] = [:]
+    /// Non-nil exactly when the current result is a single-table SELECT with a primary key we can
+    /// UPDATE by. The grid shows the edit affordance only while this is set. Recomputed on every
+    /// `runQuery`; cleared on disconnect or any non-editable result.
+    @Published var editable: EditableTarget?
+    /// Result of the most recent commit, surfaced to the UI (success count or an error to display).
+    @Published var lastCommit: CommitOutcome?
 
     private let store: ConnectionStore
     private let history: SQLQueryHistoryStore
@@ -94,23 +128,81 @@ final class SQLPanelModel: ObservableObject {
         driver = nil
         isConnected = false
         result = nil
+        editable = nil
+        lastCommit = nil
         tables = []
         columnsByTable = [:]
     }
 
     func runQuery() async {
+        // A user-initiated run clears any prior commit banner; the refresh after a commit does not
+        // (it goes through `refreshCurrentQuery`, which preserves `lastCommit`).
+        lastCommit = nil
+        await performQuery()
+    }
+
+    /// Execute `queryText`, publish the result, and recompute editability. Shared by the user's Run
+    /// action and the post-commit refresh; the caller owns `lastCommit`.
+    private func performQuery() async {
         guard let driver else { return }
         let sql = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sql.isEmpty else { return }
         errorMessage = nil
         do {
-            result = try await driver.run(sql)
+            let queryResult = try await driver.run(sql)
+            result = queryResult
+            editable = await detectEditable(sql: sql, result: queryResult, driver: driver)
             if let id = selectedConnection?.id {
                 await history.record(sql, for: id)
                 historyItems = await history.history(for: id)
             }
         } catch {
+            editable = nil
             errorMessage = Self.describe(error)
+        }
+    }
+
+    /// Decide whether `result` can be edited in place. Conservative on purpose: it returns non-nil
+    /// ONLY when the query is a single-table SELECT (per `SQLEditableParser`), the table has a
+    /// primary key, every result column maps to a real table column, and every PK column is present
+    /// in the result (so each row can be UPDATE-d by its key). Any doubt → nil (read-only).
+    private func detectEditable(sql: String, result: QueryResult, driver: SQLDriver) async -> EditableTarget? {
+        guard case .rows(let columns, _) = result else { return nil }
+        guard let parsed = SQLEditableParser.parse(sql) else { return nil }
+        let tableColumns = (try? await driver.columns(of: parsed.table, in: nil)) ?? []
+        // The reconciliation (real columns present, PK visible, no duplicates, projection matches) is
+        // a pure function in SimpletonSQL, unit-tested headlessly; here we only supply live schema.
+        guard
+            let resolved = SQLEditableResolver.resolve(
+                parsed: parsed, tableColumns: tableColumns, resultColumns: columns.map(\.name))
+        else { return nil }
+        return EditableTarget(
+            table: resolved.table, primaryKey: resolved.primaryKey, resultColumns: resolved.resultColumns,
+            dialect: driver.dialect)
+    }
+
+    /// Write staged edits as parameterized UPDATEs, then re-run the current query to refresh the grid.
+    /// Each `RowEdit` becomes one `UPDATE … SET … WHERE <pk> = ?` via the driver's native bind path —
+    /// values are bound, never interpolated. Stops at the first error and surfaces it; on full
+    /// success, re-queries so the grid shows committed state. Publishes the outcome via `lastCommit`.
+    func commitEdits(_ edits: [RowEdit]) async {
+        guard let driver, let target = editable, !edits.isEmpty else { return }
+        var written = 0
+        do {
+            for edit in edits {
+                guard !edit.changes.isEmpty, !edit.key.isEmpty else { continue }
+                let stmt = try SQLUpdateBuilder.build(
+                    table: target.table, changes: edit.changes, keys: edit.key, dialect: target.dialect)
+                _ = try await driver.execute(stmt.sql, stmt.params)
+                written += 1
+            }
+            // Refresh via `performQuery` (not `runQuery`) so it doesn't clear the outcome we set next.
+            await performQuery()
+            lastCommit = CommitOutcome(updatedRows: written, errorMessage: nil)
+        } catch {
+            let message = Self.describe(error)
+            errorMessage = message
+            lastCommit = CommitOutcome(updatedRows: written, errorMessage: message)
         }
     }
 

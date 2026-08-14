@@ -1,5 +1,6 @@
 // Sources/Simpleton/Panels/SQL/SQLPanelView.swift
 import SimpletonCore
+import SimpletonSQL
 import SwiftUI
 
 /// The SQL client panel: connection picker + query editor + results grid, hosted in the shared
@@ -59,8 +60,45 @@ struct SQLPanelView: View {
             }
             editor
             ThemedDivider()
-            SQLResultsView(result: model.result)
+            SQLResultsView(
+                result: model.result,
+                editable: model.editable,
+                onCommit: { staged in await commit(staged) }
+            )
         }
+    }
+
+    /// Turn the grid's staged edits into `RowEdit`s (each row's PK values + changed columns) and hand
+    /// them to the model, which builds one parameterized UPDATE per row. Values are read from the
+    /// live result, never formatted into SQL.
+    private func commit(_ staged: [CellCoord: SQLValue]) async {
+        guard let editable = model.editable, case .rows(let columns, let rows) = model.result else { return }
+        let columnIndex = Dictionary(uniqueKeysWithValues: columns.enumerated().map { ($0.element.name, $0.offset) })
+
+        // Group staged edits by original row.
+        var changesByRow: [Int: [(column: String, value: SQLValue)]] = [:]
+        for (coord, value) in staged {
+            guard columns.indices.contains(coord.column) else { continue }
+            changesByRow[coord.row, default: []].append((column: columns[coord.column].name, value: value))
+        }
+
+        var edits: [RowEdit] = []
+        for (rowIndex, changes) in changesByRow {
+            guard rows.indices.contains(rowIndex) else { continue }
+            // Build the WHERE from the row's current primary-key values (read from the result grid).
+            var key: [(column: String, value: SQLValue)] = []
+            var complete = true
+            for pk in editable.primaryKey {
+                guard let ci = columnIndex[pk], rows[rowIndex].indices.contains(ci) else {
+                    complete = false
+                    break
+                }
+                key.append((column: pk, value: rows[rowIndex][ci]))
+            }
+            guard complete, !changes.isEmpty else { continue }
+            edits.append(RowEdit(key: key, changes: changes))
+        }
+        await model.commitEdits(edits)
     }
 
     private var connectionBar: some View {

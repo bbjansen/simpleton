@@ -3,16 +3,23 @@ import AppKit
 import SimpletonSQL
 import SwiftUI
 
-/// An Excel-like, read-only results grid backed by a view-based NSTableView.
-/// Builds columns at runtime from the query result, reuses cell views, sorts
-/// in-memory, and copies TSV. The data logic lives in `SQLGridData`.
+/// An Excel-like results grid backed by a view-based NSTableView. Builds columns at runtime from the
+/// query result, reuses cell views, sorts in-memory, and copies TSV. Read-only unless `editable` is
+/// set, in which case double-clicking a cell edits it (staged, tinted). The data logic lives in
+/// `SQLGridData`.
 struct SQLDataGrid: NSViewRepresentable {
     let data: SQLGridData
     @Binding var sortKeys: [SortKey]
     @Binding var selectedRow: Int?
     let rowHeight: CGFloat
+    /// Non-nil when this result can be edited in place (drives the double-click = edit gesture and
+    /// the "Set NULL" menu item). Read-only when nil.
+    let editable: EditableTarget?
+    /// Staged (uncommitted) edits keyed by original-row/column. The grid renders these tinted and
+    /// prefers them over the underlying value.
+    @Binding var stagedEdits: [CellCoord: SQLValue]
     var onActivateRecord: () -> Void
-    /// Double-click a data cell → inspect (originalRow, columnIndex).
+    /// "Inspect Value…" — always available (right-click), and the double-click action when read-only.
     var onInspect: (Int, Int) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -216,15 +223,54 @@ struct SQLDataGrid: NSViewRepresentable {
             }
             guard let colIndex = Int(id) else { return cell }
             let original = order.indices.contains(row) ? order[row] : row
-            let value = parent.data.value(row: original, column: colIndex)
+            let coord = CellCoord(row: original, column: colIndex)
+            // A staged edit overrides the underlying value and is shown tinted.
+            let staged = parent.stagedEdits[coord]
+            let value = staged ?? parent.data.value(row: original, column: colIndex)
+            cell.coordinator = self
+            cell.coord = coord
+            cell.isEditable = parent.editable != nil
             var enumColor: NSColor?
-            if enumCols.contains(colIndex), case .text(let s) = value, !s.isEmpty {
+            if staged == nil, enumCols.contains(colIndex), case .text(let s) = value, !s.isEmpty {
                 let palette = DT.Grid.enumPalette
                 if !palette.isEmpty { enumColor = palette[parent.data.enumColorIndex(s, slots: palette.count)] }
             }
             cell.configure(
-                with: SQLCellFormatting.present(value), font: DT.monoNSFont(size: fontSize), enumColor: enumColor)
+                with: SQLCellFormatting.present(value), font: DT.monoNSFont(size: fontSize),
+                enumColor: enumColor, staged: staged != nil)
             return cell
+        }
+
+        /// Stage a parsed edit for the cell at `coord` (or clear it back to the original value when
+        /// the typed text re-parses to the same value). Writes through the SwiftUI binding.
+        func stageEdit(_ coord: CellCoord, typed text: String) -> Bool {
+            let original = parent.data.value(row: coord.row, column: coord.column)
+            let base = parent.stagedEdits[coord] ?? original
+            guard let parsed = SQLCellEditing.parse(text, like: base) else { return false }
+            var edits = parent.stagedEdits
+            // If the new value equals the committed value, drop the staged edit entirely.
+            if parsed == original {
+                edits.removeValue(forKey: coord)
+            } else {
+                edits[coord] = parsed
+            }
+            parent.stagedEdits = edits
+            reloadPreservingSelection()
+            return true
+        }
+
+        /// Stage an explicit NULL for the cell (right-click → Set NULL). Only meaningful when editable.
+        func stageNull(_ coord: CellCoord) {
+            guard parent.editable != nil else { return }
+            let original = parent.data.value(row: coord.row, column: coord.column)
+            var edits = parent.stagedEdits
+            if case .null = original {
+                edits.removeValue(forKey: coord)
+            } else {
+                edits[coord] = .null
+            }
+            parent.stagedEdits = edits
+            reloadPreservingSelection()
         }
 
         private func reuseCell(_ tableView: NSTableView) -> GridCellView {
@@ -286,7 +332,8 @@ struct SQLDataGrid: NSViewRepresentable {
 
         func activateRecord() { parent.onActivateRecord() }
 
-        /// Double-click on a data cell → inspect its full value. Ignores the gutter and header.
+        /// Double-click a data cell → edit it (when the result is editable) or inspect its full value
+        /// (when read-only). Ignores the gutter and header.
         @objc func cellDoubleClicked(_ sender: NSTableView) {
             let r = sender.clickedRow
             let c = sender.clickedColumn
@@ -294,7 +341,39 @@ struct SQLDataGrid: NSViewRepresentable {
                 let colIndex = Int(sender.tableColumns[c].identifier.rawValue)
             else { return }
             let original = order.indices.contains(r) ? order[r] : r
+            if parent.editable != nil {
+                beginEditing(displayRow: r, column: c)
+            } else {
+                parent.onInspect(original, colIndex)
+            }
+        }
+
+        /// Right-click → Inspect the clicked cell's value (always available, both modes).
+        func inspectClicked(displayRow r: Int, column c: Int) {
+            guard let table, r >= 0, c >= 0, table.tableColumns.indices.contains(c),
+                let colIndex = Int(table.tableColumns[c].identifier.rawValue)
+            else { return }
+            let original = order.indices.contains(r) ? order[r] : r
             parent.onInspect(original, colIndex)
+        }
+
+        /// Right-click → Set NULL on the clicked cell (editable only).
+        func setNullClicked(displayRow r: Int, column c: Int) {
+            guard let table, r >= 0, c >= 0, table.tableColumns.indices.contains(c),
+                let colIndex = Int(table.tableColumns[c].identifier.rawValue)
+            else { return }
+            let original = order.indices.contains(r) ? order[r] : r
+            stageNull(CellCoord(row: original, column: colIndex))
+        }
+
+        /// Put the cell at (displayRow, column) into inline-edit mode: seed its text field, make it
+        /// editable + first responder. Enter stages the value, Esc cancels.
+        func beginEditing(displayRow r: Int, column c: Int) {
+            guard let table, parent.editable != nil, r >= 0, c >= 0,
+                table.tableColumns.indices.contains(c),
+                let cell = table.view(atColumn: c, row: r, makeIfNecessary: true) as? GridCellView
+            else { return }
+            cell.beginEditing()
         }
     }
 }
@@ -315,13 +394,31 @@ final class GridTableView: NSTableView {
         super.keyDown(with: event)
     }
 
+    /// The cell the last context menu was opened on (row/column in display space), so the menu's
+    /// Inspect / Set NULL / Edit items act on the clicked cell.
+    private var menuCell: (row: Int, column: Int)?
+
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
         let row = self.row(at: point)
+        let column = self.column(at: point)
+        menuCell = (row, column)
         if row >= 0, !selectedRowIndexes.contains(row) {
             selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
         let menu = NSMenu()
+        // Inspect is ALWAYS available so the value inspector stays reachable in both read-only and
+        // editable modes (double-click is repurposed to edit when the result is editable).
+        if row >= 0, column >= 0, tableColumns.indices.contains(column),
+            tableColumns[column].identifier.rawValue != "#"
+        {
+            menu.addItem(withTitle: "Inspect Value…", action: #selector(inspectValue), keyEquivalent: "")
+            if coordinator?.parent.editable != nil {
+                menu.addItem(withTitle: "Edit Value", action: #selector(editValue), keyEquivalent: "")
+                menu.addItem(withTitle: "Set NULL", action: #selector(setNull), keyEquivalent: "")
+            }
+            menu.addItem(.separator())
+        }
         menu.addItem(withTitle: "Copy", action: #selector(copyPlain), keyEquivalent: "")
         menu.addItem(withTitle: "Copy with Column Names", action: #selector(copyWithHeader), keyEquivalent: "")
         for item in menu.items { item.target = self }
@@ -330,6 +427,18 @@ final class GridTableView: NSTableView {
 
     @objc private func copyPlain() { coordinator?.copySelection(withHeader: false) }
     @objc private func copyWithHeader() { coordinator?.copySelection(withHeader: true) }
+    @objc private func inspectValue() {
+        guard let c = menuCell else { return }
+        coordinator?.inspectClicked(displayRow: c.row, column: c.column)
+    }
+    @objc private func editValue() {
+        guard let c = menuCell else { return }
+        coordinator?.beginEditing(displayRow: c.row, column: c.column)
+    }
+    @objc private func setNull() {
+        guard let c = menuCell else { return }
+        coordinator?.setNullClicked(displayRow: c.row, column: c.column)
+    }
 }
 
 /// Row view that themes the selection fill.
@@ -342,9 +451,18 @@ final class GridRowView: NSTableRowView {
     }
 }
 
-/// A reused cell view: one themed, aligned text field.
-final class GridCellView: NSTableCellView {
+/// A reused cell view: one themed, aligned text field that can flip into inline editing. When the
+/// result is editable, double-click (or the context menu) seeds this field with the cell's value and
+/// makes it first responder; Enter stages the parsed value, Esc cancels. Staged cells render tinted.
+final class GridCellView: NSTableCellView, NSTextFieldDelegate {
     private let label = NSTextField(labelWithString: "")
+    /// Set by the coordinator each time the cell is (re)configured, so edit callbacks know where to
+    /// stage and whether editing is allowed.
+    weak var coordinator: SQLDataGrid.Coordinator?
+    var coord: CellCoord?
+    var isEditable = false
+    private var editing = false
+    private var lastFont: NSFont = DT.monoNSFont(size: 12)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -354,6 +472,8 @@ final class GridCellView: NSTableCellView {
         label.drawsBackground = false
         label.isBordered = false
         label.isEditable = false
+        label.focusRingType = .none
+        label.delegate = self
         addSubview(label)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
@@ -364,9 +484,22 @@ final class GridCellView: NSTableCellView {
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not implemented") }
 
-    func configure(with p: CellPresentation, font: NSFont, enumColor: NSColor? = nil) {
+    func configure(with p: CellPresentation, font: NSFont, enumColor: NSColor? = nil, staged: Bool = false) {
+        // Don't clobber the field while the user is typing in it.
+        guard !editing else { return }
+        lastFont = font
         label.font = font
         label.wantsLayer = true
+        label.isEditable = false
+        if staged {
+            // Staged (uncommitted) edit → amber tint so it reads as "pending write".
+            label.stringValue = p.isNull ? "NULL" : p.text
+            label.textColor = DT.Grid.rowText
+            label.alignment = (p.alignment == .trailing) ? .right : .left
+            label.layer?.backgroundColor = DT.Grid.stagedTint.withAlphaComponent(0.22).cgColor
+            label.layer?.cornerRadius = 4
+            return
+        }
         if let enumColor {
             // Categorical value → a subtle colored pill; the value is non-null text here.
             label.stringValue = p.text
@@ -399,6 +532,68 @@ final class GridCellView: NSTableCellView {
         label.alignment = .right
         label.stringValue = String(number)
         label.textColor = DT.Grid.nullText
+    }
+
+    /// Enter inline-edit mode: seed the field with the cell's current (possibly staged) value, make
+    /// it editable, and take first responder.
+    func beginEditing() {
+        guard isEditable, let coord, let coordinator else { return }
+        let committed = coordinator.parent.data.value(row: coord.row, column: coord.column)
+        let value = coordinator.parent.stagedEdits[coord] ?? committed
+        editing = true
+        label.isEditable = true
+        label.font = lastFont
+        label.textColor = DT.Grid.rowText
+        label.layer?.backgroundColor = DT.Grid.stagedTint.withAlphaComponent(0.10).cgColor
+        label.layer?.cornerRadius = 4
+        label.stringValue = SQLCellEditing.editingText(for: value)
+        if let window = label.window {
+            window.makeFirstResponder(label)
+        }
+        label.currentEditor()?.selectAll(nil)
+    }
+
+    /// Enter commits the typed value into staged state; a value invalid for the column flashes red.
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard editing, let coord, let coordinator else { return false }
+        if selector == #selector(NSResponder.insertNewline(_:)) {
+            let text = label.stringValue
+            if coordinator.stageEdit(coord, typed: text) {
+                editing = false
+                label.isEditable = false
+                label.window?.makeFirstResponder(coordinator.table)
+            } else {
+                flashInvalid()
+            }
+            return true
+        }
+        if selector == #selector(NSResponder.cancelOperation(_:)) {
+            editing = false
+            label.isEditable = false
+            label.window?.makeFirstResponder(coordinator.table)
+            coordinator.reloadPreservingSelection()
+            return true
+        }
+        return false
+    }
+
+    /// Losing focus while editing commits the current text (or reverts on parse failure).
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard editing, let coord, let coordinator else { return }
+        let text = label.stringValue
+        editing = false
+        label.isEditable = false
+        if !coordinator.stageEdit(coord, typed: text) {
+            coordinator.reloadPreservingSelection()
+        }
+    }
+
+    private func flashInvalid() {
+        label.layer?.backgroundColor = DT.Grid.invalidTint.withAlphaComponent(0.35).cgColor
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self, self.editing else { return }
+            self.label.layer?.backgroundColor = DT.Grid.stagedTint.withAlphaComponent(0.10).cgColor
+        }
     }
 }
 

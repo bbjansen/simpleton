@@ -16,11 +16,17 @@ enum GridDensity: String, CaseIterable {
     var label: String { rawValue.capitalized }
 }
 
-/// The SQL results area: handles empty/status states and hosts the interactive
-/// body for a `.rows` result. Read-only. The interactive body is keyed by
-/// result identity so its mode/sort/selection reset when a new query arrives.
+/// The SQL results area: handles empty/status states and hosts the interactive body for a `.rows`
+/// result. Editable when `editable` is non-nil (double-click a cell to edit, staged with a commit
+/// bar); read-only otherwise. The interactive body is keyed by result identity so its
+/// mode/sort/selection/staged-edits reset when a new query arrives.
 struct SQLResultsView: View {
     let result: QueryResult?
+    /// Non-nil when the current result is a single-table SELECT we can UPDATE — enables editing.
+    let editable: EditableTarget?
+    /// Commit staged edits: called with the grid's staged edits; returns after the model has written
+    /// them and re-queried (so the view can clear its staged state).
+    let onCommit: ([CellCoord: SQLValue]) async -> Void
     @ObservedObject private var themeSettings = ThemeSettings.shared
 
     var body: some View {
@@ -33,7 +39,7 @@ struct SQLResultsView: View {
             if rows.isEmpty {
                 hint("No rows.")
             } else {
-                SQLRowsView(columns: columns, rows: rows)
+                SQLRowsView(columns: columns, rows: rows, editable: editable, onCommit: onCommit)
                     .id(resultIdentity(columns: columns, rowCount: rows.count))
             }
         }
@@ -66,10 +72,14 @@ struct SQLResultsView: View {
 private struct SQLRowsView: View {
     let columns: [Column]
     let rows: [[SQLValue]]
+    let editable: EditableTarget?
+    let onCommit: ([CellCoord: SQLValue]) async -> Void
     @State private var mode: ResultsMode = .grid
     @State private var sortKeys: [SortKey] = []
     @State private var selectedRow: Int?
     @State private var inspected: InspectedCell?
+    @State private var stagedEdits: [CellCoord: SQLValue] = [:]
+    @State private var isCommitting = false
     @AppStorage("sql.grid.density") private var density: GridDensity = .comfortable
 
     private var data: SQLGridData { SQLGridData(columns: columns, rows: rows) }
@@ -84,6 +94,8 @@ private struct SQLRowsView: View {
                     sortKeys: $sortKeys,
                     selectedRow: $selectedRow,
                     rowHeight: density.rowHeight,
+                    editable: editable,
+                    stagedEdits: $stagedEdits,
                     onActivateRecord: { mode = .record },
                     onInspect: { original, col in
                         inspected = InspectedCell(
@@ -100,8 +112,40 @@ private struct SQLRowsView: View {
                     onExit: { mode = .grid }
                 )
             }
+            if editable != nil, !stagedEdits.isEmpty {
+                ThemedDivider()
+                commitBar
+            }
         }
         .sheet(item: $inspected) { CellDetailSheet(cell: $0) }
+    }
+
+    /// The commit bar: appears below the grid whenever there are staged edits. Discard clears them
+    /// (reverting the grid to committed values); Commit writes them via the model and re-queries.
+    private var commitBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "square.and.pencil").font(.system(size: 11)).foregroundColor(DT.accentAmber)
+            Text("\(stagedEdits.count) pending change\(stagedEdits.count == 1 ? "" : "s")")
+                .font(DT.monoFont(size: 11)).foregroundColor(DT.textSecondary)
+            Spacer()
+            Button("Discard") { stagedEdits = [:] }
+                .disabled(isCommitting)
+            Button("Commit") {
+                let edits = stagedEdits
+                isCommitting = true
+                Task {
+                    await onCommit(edits)
+                    // The model re-queries on success; this view is recreated by `.id(...)` when the
+                    // fresh result arrives, so clearing here also covers the no-change edge.
+                    stagedEdits = [:]
+                    isCommitting = false
+                }
+            }
+            .keyboardShortcut("s", modifiers: .command)
+            .disabled(isCommitting)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .background(DT.accentAmber.opacity(0.08))
     }
 
     private func toolbar(rowCount: Int) -> some View {
