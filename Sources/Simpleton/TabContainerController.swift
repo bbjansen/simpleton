@@ -70,6 +70,11 @@ final class TabContainerController: NSViewController {
     private var rightPanelVC: NSViewController?
     private var rightPanelID: String?
     private var cancellables = Set<AnyCancellable>()
+    /// Debounces sidebar/drawer divider-drag width write-backs so a live drag doesn't thrash the disk.
+    private var widthPersistTimer: Timer?
+    /// Set while `updatePanels` is programmatically positioning dividers, so the resulting
+    /// `didResizeSubviews` notifications (a restore, not a user drag) don't re-persist the same widths.
+    private var isApplyingProfileLayout = false
 
     /// Per-tab AI conversation. Created lazily when aiService is available.
     private(set) var tabConversation: TabConversation?
@@ -164,9 +169,7 @@ final class TabContainerController: NSViewController {
             forName: .simpletonToggleSidebar, object: nil, queue: .main
         ) { [weak self] _ in
             guard let registry = self?.panelRegistry else { return }
-            var profile = registry.activeProfile
-            profile.togglePanel(id: PanelProfile.PanelID.connections, on: .left)
-            registry.activeProfile = profile
+            registry.updateActiveProfile { $0.togglePanel(id: PanelProfile.PanelID.connections, on: .left) }
         }
 
         // Shim: AI chat toggle → toggle ai-chat panel on right
@@ -174,9 +177,7 @@ final class TabContainerController: NSViewController {
             forName: .simpletonToggleAIChat, object: nil, queue: .main
         ) { [weak self] _ in
             guard let registry = self?.panelRegistry else { return }
-            var profile = registry.activeProfile
-            profile.togglePanel(id: PanelProfile.PanelID.aiChat, on: .right)
-            registry.activeProfile = profile
+            registry.updateActiveProfile { $0.togglePanel(id: PanelProfile.PanelID.aiChat, on: .right) }
         }
 
         // Shim: skill picker → open skills panel on right
@@ -192,9 +193,7 @@ final class TabContainerController: NSViewController {
             // `.onReceive` consumes the pending connection — skip the profile re-assignment (which
             // would needlessly rebuild panels).
             guard registry.activeProfile.bottomActivePanelID != targetPanel else { return }
-            var profile = registry.activeProfile
-            profile.setDrawer(id: targetPanel)
-            registry.activeProfile = profile
+            registry.updateActiveProfile { $0.setDrawer(id: targetPanel) }
         }
 
         openConnectionTextObserver = NotificationCenter.default.addObserver(
@@ -223,9 +222,7 @@ final class TabContainerController: NSViewController {
             else { return }
             // Update aiService if passed via notification (legacy path)
             if let svc = notification.object as? AIService { self.aiService = svc }
-            var profile = registry.activeProfile
-            profile.activatePanel(id: PanelProfile.PanelID.skills, on: .right)
-            registry.activeProfile = profile
+            registry.updateActiveProfile { $0.activatePanel(id: PanelProfile.PanelID.skills, on: .right) }
             // Notify skills panel to focus the search field
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
@@ -269,6 +266,10 @@ final class TabContainerController: NSViewController {
         ].forEach {
             if let obs = $0 { NotificationCenter.default.removeObserver(obs) }
         }
+        // Remove the target/selector split-resize observers registered against `self`.
+        NotificationCenter.default.removeObserver(
+            self, name: NSSplitView.didResizeSubviewsNotification, object: nil)
+        widthPersistTimer?.invalidate()
     }
 
     override func loadView() {
@@ -324,6 +325,17 @@ final class TabContainerController: NSViewController {
         outerSplitView.addArrangedSubview(split)
         container.addSubview(outerSplitView)
         outerSplit = outerSplitView
+
+        // Capture divider drags on both splits so the resulting sidebar/drawer sizes persist into the
+        // active profile (write-back is debounced). Restore already happens at load from the profile.
+        split.postsFrameChangedNotifications = true
+        outerSplitView.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(splitViewDidResize(_:)),
+            name: NSSplitView.didResizeSubviewsNotification, object: split)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(splitViewDidResize(_:)),
+            name: NSSplitView.didResizeSubviewsNotification, object: outerSplitView)
 
         if let registry = panelRegistry {
             mountActivityBars(in: container, registry: registry)
@@ -653,6 +665,9 @@ final class TabContainerController: NSViewController {
         // ── 4. Set divider positions ───────────────────────────
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let split = self.contentSplit else { return }
+            // Suppress width write-back while we programmatically restore divider positions — these
+            // resizes reflect the saved profile, not a user drag, so they must not re-persist.
+            self.isApplyingProfileLayout = true
             var dividerIdx = 0
             if self.leftPanelVC != nil {
                 split.setPosition(profile.leftWidth, ofDividerAt: dividerIdx)
@@ -670,6 +685,47 @@ final class TabContainerController: NSViewController {
                 outer.setPosition(pos, ofDividerAt: 0)
             }
             self.splitController.setFocus(to: self.splitController.focusedPaneID)
+            // Release the guard on the next runloop, after the layout notifications have drained.
+            DispatchQueue.main.async { [weak self] in self?.isApplyingProfileLayout = false }
+        }
+    }
+
+    // MARK: - Divider-drag width capture
+
+    /// A divider on the content split (sidebar widths) or the outer split (drawer size) moved. Measure
+    /// the current panel sizes from the live view frames and schedule a debounced write-back into the
+    /// active profile, so the user's chosen widths persist across launches. Ignored while a profile is
+    /// being applied (programmatic restore) or while the window is mid-resize with no panels mounted.
+    @objc private func splitViewDidResize(_ note: Notification) {
+        guard !isApplyingProfileLayout, panelRegistry != nil else { return }
+        // Only care when there's actually a panel/drawer whose size could have changed.
+        guard leftPanelVC != nil || rightPanelVC != nil || drawerPanelVC != nil else { return }
+        scheduleWidthPersist()
+    }
+
+    /// Coalesce rapid resize notifications during a drag into a single write ~0.35s after the last one.
+    private func scheduleWidthPersist() {
+        widthPersistTimer?.invalidate()
+        widthPersistTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) {
+            [weak self] _ in
+            Task { @MainActor in self?.persistCurrentWidths() }
+        }
+    }
+
+    /// Read the current sidebar/drawer sizes from the live split views and, if they differ from the
+    /// active profile, write them back through the persistence funnel.
+    private func persistCurrentWidths() {
+        guard let registry = panelRegistry else { return }
+        let leftW = leftPanelVC?.view.frame.width
+        let rightW = rightPanelVC?.view.frame.width
+        let drawerSz: CGFloat? =
+            drawerHostView.map {
+                registry.activeProfile.drawerEdge == .trailing ? $0.frame.width : $0.frame.height
+            }
+        registry.updateActiveProfile { profile in
+            if let leftW, leftW > 1 { profile.leftWidth = leftW }
+            if let rightW, rightW > 1 { profile.rightWidth = rightW }
+            if let drawerSz, drawerSz > 1 { profile.drawerSize = drawerSz }
         }
     }
 
@@ -680,9 +736,7 @@ final class TabContainerController: NSViewController {
     /// Open (or close, with nil) the edge drawer's GUI panel.
     func activateDrawer(id: String?) {
         guard let registry = panelRegistry else { return }
-        var profile = registry.activeProfile
-        profile.setDrawer(id: id)
-        registry.activeProfile = profile
+        registry.updateActiveProfile { $0.setDrawer(id: id) }
     }
 
     /// Whether a panel id is a GUI client that docks in the edge drawer (never a side slot).
