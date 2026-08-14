@@ -178,6 +178,28 @@ public final class RabbitMQManagementDriver: AMQPManagementBackend, @unchecked S
         _ = try await send(path, method: "POST", jsonBody: body)
     }
 
+    public func policies(vhost: String) async throws -> [PolicyInfo] {
+        try await get("/api/policies/\(Self.encodeSegment(vhost))")
+    }
+
+    public func putPolicy(
+        vhost: String, name: String, pattern: String, applyTo: String,
+        definition: [String: PolicyValue], priority: Int
+    ) async throws {
+        let path = Self.policyPath(vhost: vhost, name: name)
+        let body: [String: AnyEncodable] = [
+            "pattern": AnyEncodable(pattern),
+            "apply-to": AnyEncodable(applyTo),
+            "definition": AnyEncodable(definition),
+            "priority": AnyEncodable(priority),
+        ]
+        _ = try await send(path, method: "PUT", jsonBody: body)
+    }
+
+    public func deletePolicy(vhost: String, name: String) async throws {
+        _ = try await send(Self.policyPath(vhost: vhost, name: name), method: "DELETE", jsonBody: nil)
+    }
+
     // MARK: - Request-path construction (exposed for CoreChecks)
 
     /// `/api/queues/{vhost}/{name}` with both segments strictly percent-encoded.
@@ -193,6 +215,11 @@ public final class RabbitMQManagementDriver: AMQPManagementBackend, @unchecked S
     /// `/api/bindings/{vhost}/e/{source}/q/{destination}` — the exchange-to-queue binding path.
     public static func bindingPath(vhost: String, source: String, destination: String) -> String {
         "/api/bindings/\(encodeSegment(vhost))/e/\(encodeSegment(source))/q/\(encodeSegment(destination))"
+    }
+
+    /// `/api/policies/{vhost}/{name}` with both segments strictly percent-encoded.
+    public static func policyPath(vhost: String, name: String) -> String {
+        "/api/policies/\(encodeSegment(vhost))/\(encodeSegment(name))"
     }
 
     // MARK: - HTTP plumbing
