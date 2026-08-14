@@ -26,6 +26,7 @@ await runSFTPDriverChecks(runner)
 runSFTPECDSAKeyChecks(runner)
 await runS3DriverChecks(runner)
 await runAMQPDriverChecks(runner)
+await runAMQPAdvancedChecks(runner)
 
 // Models (synchronous)
 runAppConfigChecks(runner)
