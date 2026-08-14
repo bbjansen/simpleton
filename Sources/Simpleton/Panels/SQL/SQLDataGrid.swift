@@ -11,6 +11,9 @@ struct SQLDataGrid: NSViewRepresentable {
     let data: SQLGridData
     @Binding var sortKeys: [SortKey]
     @Binding var selectedRow: Int?
+    /// The current display page over the sorted order. The grid shows only `order[start..<end]`;
+    /// selection and staged edits still live in original-row space so they survive paging.
+    let page: PageBounds
     let rowHeight: CGFloat
     /// Non-nil when this result can be edited in place (drives the double-click = edit gesture and
     /// the "Set NULL" menu item). Read-only when nil.
@@ -73,6 +76,8 @@ struct SQLDataGrid: NSViewRepresentable {
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var parent: SQLDataGrid
         weak var table: NSTableView?
+        /// Original row indices shown on the current page, in display (sorted) order. This is the
+        /// per-page slice of the full sorted order; all row math for the visible table uses this.
         private(set) var order: [Int] = []
         private var builtColumns: [Column] = []
         private var enumCols: Set<Int> = []
@@ -176,7 +181,12 @@ struct SQLDataGrid: NSViewRepresentable {
         }
 
         func applyOrder() {
-            order = parent.data.sortedIndex(by: parent.sortKeys)
+            let full = parent.data.sortedIndex(by: parent.sortKeys)
+            // Slice the sorted order to the current page window. Bounds are already clamped by
+            // SQLPaging, but guard against a stale binding pass that hasn't re-derived the page yet.
+            let start = min(max(parent.page.start, 0), full.count)
+            let end = min(max(parent.page.end, start), full.count)
+            order = Array(full[start..<end])
         }
 
         func applyTheme() {
@@ -218,7 +228,8 @@ struct SQLDataGrid: NSViewRepresentable {
             let cell = reuseCell(tableView)
             let id = tableColumn?.identifier.rawValue ?? ""
             if id == "#" {
-                cell.configureGutter(number: row + 1)
+                // Gutter shows the absolute (paged) row number so identity stays readable across pages.
+                cell.configureGutter(number: parent.page.start + row + 1)
                 return cell
             }
             guard let colIndex = Int(id) else { return cell }
