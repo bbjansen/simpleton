@@ -212,7 +212,7 @@ extension PanelDefinition {
         isBuiltIn: true,
         prefersDrawer: true
     ) { context in
-        NSHostingController(rootView: SQLPanelView(appSupportDir: context.appSupportDir))
+        SQLPanelController(appSupportDir: context.appSupportDir)
     }
 
     static let sftp = PanelDefinition(

@@ -28,4 +28,8 @@ extension Notification.Name {
     static let simpletonOpenConnectionGUI = Notification.Name("simpletonOpenConnectionGUI")
     /// Posted (object = connection `id: UUID`) to open that connection as a text (CLI) client pane.
     static let simpletonOpenConnectionText = Notification.Name("simpletonOpenConnectionText")
+    /// Posted (no object) from the drawer SQL panel's Expand button to open the full SQL workspace
+    /// window on the same shared `SQLPanelModel`. `AppDelegate` resolves the active tab's cached
+    /// `SQLPanelController` and opens (or focuses) a standalone workspace `NSWindow`.
+    static let simpletonExpandSQLWorkspace = Notification.Name("simpletonExpandSQLWorkspace")
 }

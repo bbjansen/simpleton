@@ -10,6 +10,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowControllers: [WindowController] = []
     private var config: AppConfig = AppConfig()
 
+    /// Standalone SQL workspace windows, retained so they aren't deallocated while shown. One per
+    /// originating `SQLPanelModel` — the Expand handler focuses an existing window for that model
+    /// rather than opening a duplicate. Entries are dropped when the window closes.
+    private var sqlWorkspaceWindows: [ObjectIdentifier: NSWindow] = [:]
+
     /// The active terminal palette, derived from the current AppTheme.
     private var theme: Theme {
         Theme(name: AppTheme.activeTheme.name, colors: AppTheme.activeTheme.terminal)
@@ -389,6 +394,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(handleUpdateWorkspaceLayout(_:)),
             name: .simpletonUpdateWorkspaceLayout,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleExpandSQLWorkspace),
+            name: .simpletonExpandSQLWorkspace,
             object: nil
         )
     }
@@ -778,6 +789,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false)
         sheetWindow.contentView = NSHostingView(rootView: formView)
         window.beginSheet(sheetWindow)
+    }
+
+    // MARK: - SQL Workspace window
+
+    /// Open (or focus) the standalone full SQL workspace on the active tab's shared `SQLPanelModel`.
+    /// Resolves the key window's active `TabContainerController` (falling back through main/ordered
+    /// windows like `connectToBookmark`), reads its cached `SQLPanelController`, and hosts
+    /// `SQLWorkspaceView(model:)` in a titled, resizable window. The window is keyed by the model's
+    /// identity, so re-firing Expand focuses the existing window instead of duplicating it.
+    @objc private func handleExpandSQLWorkspace() {
+        // Posted from the SQL panel's Expand button (SwiftUI, main thread); selector delivery is on
+        // the posting thread, so we are on the main actor here.
+        MainActor.assumeIsolated {
+            let candidates = [NSApp.mainWindow, NSApp.keyWindow].compactMap { $0 } + NSApp.orderedWindows
+            guard let tabContainer = candidates.compactMap({ $0.activeTabContainer }).first,
+                let controller = tabContainer.sqlPanelController()
+            else { return }
+            let model = controller.model
+            let key = ObjectIdentifier(model)
+
+            // Already open for this model → focus it.
+            if let existing = sqlWorkspaceWindows[key] {
+                existing.makeKeyAndOrderFront(nil)
+                return
+            }
+
+            let title = "SQL — \(model.selectedConnection?.name ?? "No connection")"
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered, defer: false)
+            window.title = title
+            window.minSize = NSSize(width: 720, height: 480)
+            window.isReleasedWhenClosed = false
+            window.contentViewController = NSHostingController(rootView: SQLWorkspaceView(model: model))
+            window.center()
+
+            // Drop our retention when the window closes so a later Expand opens a fresh one.
+            var closeObserver: NSObjectProtocol?
+            closeObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                self?.sqlWorkspaceWindows[key] = nil
+                if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+            }
+
+            sqlWorkspaceWindows[key] = window
+            window.makeKeyAndOrderFront(nil)
+        }
     }
 
     // MARK: - Sidebar

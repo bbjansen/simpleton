@@ -761,6 +761,13 @@ final class TabContainerController: NSViewController {
         controller.conversation = conversation
     }
 
+    /// This container's SQL panel controller, instantiating (and caching) it if the drawer hasn't been
+    /// opened yet. Exposed so `AppDelegate`'s Expand handler can reach the live shared `SQLPanelModel`
+    /// and hand it to a standalone `SQLWorkspaceView`. Mirrors the `rebindAIChatLocal` cache pattern.
+    func sqlPanelController() -> SQLPanelController? {
+        makePanelController(for: PanelProfile.PanelID.sql) as? SQLPanelController
+    }
+
     // MARK: - Context
 
     /// The container that panel actions should target. Panels are cached and shared across

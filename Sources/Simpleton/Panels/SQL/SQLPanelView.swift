@@ -5,12 +5,16 @@ import SwiftUI
 
 /// The SQL client panel: connection picker + query editor + results grid, hosted in the shared
 /// client-panel chrome. Schema browser + history are layered on in a later task.
+///
+/// The model is injected (owned by `SQLPanelController`), not created here, so the drawer panel and
+/// the standalone `SQLWorkspaceView` are two views of one live `SQLPanelModel` — open the workspace
+/// and it already reflects the drawer's connection, schema, and last result.
 struct SQLPanelView: View {
-    @StateObject private var model: SQLPanelModel
+    @ObservedObject private var model: SQLPanelModel
     @ObservedObject private var themeSettings = ThemeSettings.shared
 
-    init(appSupportDir: URL) {
-        _model = StateObject(wrappedValue: SQLPanelModel(appSupportDir: appSupportDir))
+    init(model: SQLPanelModel) {
+        self.model = model
     }
 
     var body: some View {
@@ -58,13 +62,13 @@ struct SQLPanelView: View {
                     .padding(.horizontal, 8).padding(.vertical, 6)
                 ThemedDivider()
             }
-            editor
+            SQLQueryEditor(model: model, editorHeight: 90)
             ThemedDivider()
             SQLResultsView(
                 result: model.result,
                 editable: model.editable,
                 foreignKeyMatches: model.foreignKeyMatches,
-                onCommit: { staged in await commit(staged) },
+                onCommit: { staged in await SQLEditCommit.commit(staged, model: model) },
                 onNavigateForeignKey: { match, value in
                     await model.navigateForeignKey(
                         referencedTable: match.referencedTable,
@@ -72,39 +76,6 @@ struct SQLPanelView: View {
                 }
             )
         }
-    }
-
-    /// Turn the grid's staged edits into `RowEdit`s (each row's PK values + changed columns) and hand
-    /// them to the model, which builds one parameterized UPDATE per row. Values are read from the
-    /// live result, never formatted into SQL.
-    private func commit(_ staged: [CellCoord: SQLValue]) async {
-        guard let editable = model.editable, case .rows(let columns, let rows) = model.result else { return }
-        let columnIndex = Dictionary(uniqueKeysWithValues: columns.enumerated().map { ($0.element.name, $0.offset) })
-
-        // Group staged edits by original row.
-        var changesByRow: [Int: [(column: String, value: SQLValue)]] = [:]
-        for (coord, value) in staged {
-            guard columns.indices.contains(coord.column) else { continue }
-            changesByRow[coord.row, default: []].append((column: columns[coord.column].name, value: value))
-        }
-
-        var edits: [RowEdit] = []
-        for (rowIndex, changes) in changesByRow {
-            guard rows.indices.contains(rowIndex) else { continue }
-            // Build the WHERE from the row's current primary-key values (read from the result grid).
-            var key: [(column: String, value: SQLValue)] = []
-            var complete = true
-            for pk in editable.primaryKey {
-                guard let ci = columnIndex[pk], rows[rowIndex].indices.contains(ci) else {
-                    complete = false
-                    break
-                }
-                key.append((column: pk, value: rows[rowIndex][ci]))
-            }
-            guard complete, !changes.isEmpty else { continue }
-            edits.append(RowEdit(key: key, changes: changes))
-        }
-        await model.commitEdits(edits)
     }
 
     private var connectionBar: some View {
@@ -127,40 +98,12 @@ struct SQLPanelView: View {
                 Image(systemName: "plus")
             }
             .buttonStyle(.plain).help("New connection")
-        }
-        .padding(.horizontal, 8).padding(.vertical, 6)
-    }
-
-    private var editor: some View {
-        VStack(spacing: 4) {
-            TextEditor(text: $model.queryText)
-                .font(DT.monoFont(size: 12))
-                .frame(height: 90)
-                .scrollContentBackground(.hidden)
-            HStack {
-                if model.queryModifiesData && !model.queryText.isEmpty {
-                    Label("modifies data", systemImage: "exclamationmark.triangle")
-                        .font(.system(size: 10)).foregroundColor(DT.accentRed)
-                }
-                Spacer()
-                if !model.historyItems.isEmpty {
-                    Menu {
-                        ForEach(model.historyItems, id: \.self) { item in
-                            Button(item) { model.queryText = item }
-                        }
-                    } label: {
-                        Image(systemName: "clock.arrow.circlepath")
-                    }
-                    .menuStyle(.borderlessButton).fixedSize().help("Query history")
-                }
-                Button("Run  ⌘↵") { Task { await model.runQuery() } }
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!model.isConnected)
+            Button {
+                NotificationCenter.default.post(name: .simpletonExpandSQLWorkspace, object: nil)
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
-            if let err = model.errorMessage, model.isConnected {
-                Text(err).font(DT.monoFont(size: 10)).foregroundColor(DT.accentRed)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            .buttonStyle(.plain).help("Open full SQL workspace")
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
     }
