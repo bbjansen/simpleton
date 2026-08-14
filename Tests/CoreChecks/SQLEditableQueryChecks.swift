@@ -55,6 +55,52 @@ func runSQLEditableQueryChecks(_ t: TestRunner) {
         t.expect(isNil("SELECT * FROM users u, orders o"), "two aliased tables")
     }
 
+    t.suite("SQLEditableResolver — reconcile parse + schema + result columns") {
+        func col(_ name: String, pk: Bool = false) -> ColumnInfo {
+            ColumnInfo(name: name, type: "TEXT", nullable: true, isPrimaryKey: pk)
+        }
+        let schema = [col("id", pk: true), col("name"), col("score")]
+
+        // SELECT * over a table with a PK, all columns present → editable.
+        let star = SQLEditableParser.parse("SELECT * FROM t")!
+        let editable = SQLEditableResolver.resolve(
+            parsed: star, tableColumns: schema, resultColumns: ["id", "name", "score"])
+        t.expectEqual(editable?.table, "t", "resolved table")
+        t.expectEqual(editable?.primaryKey, ["id"], "resolved primary key")
+        t.expectEqual(editable?.resultColumns, ["id", "name", "score"], "resolved result columns")
+
+        // Named projection that includes the PK → editable.
+        let named = SQLEditableParser.parse("SELECT id, name FROM t")!
+        t.expect(
+            SQLEditableResolver.resolve(parsed: named, tableColumns: schema, resultColumns: ["id", "name"]) != nil,
+            "named projection with PK is editable")
+
+        // No primary key on the table → not editable.
+        t.expect(
+            SQLEditableResolver.resolve(
+                parsed: star, tableColumns: [col("a"), col("b")], resultColumns: ["a", "b"]) == nil,
+            "no primary key → nil")
+        // PK not present in the result columns → not editable (can't build a WHERE).
+        let noPk = SQLEditableParser.parse("SELECT name FROM t")!
+        t.expect(
+            SQLEditableResolver.resolve(parsed: noPk, tableColumns: schema, resultColumns: ["name"]) == nil,
+            "PK missing from result → nil")
+        // A result column that isn't a real table column → not editable.
+        t.expect(
+            SQLEditableResolver.resolve(
+                parsed: star, tableColumns: schema, resultColumns: ["id", "name", "bogus"]) == nil,
+            "unknown result column → nil")
+        // Duplicate result column names → ambiguous → not editable.
+        t.expect(
+            SQLEditableResolver.resolve(
+                parsed: star, tableColumns: schema, resultColumns: ["id", "id"]) == nil,
+            "duplicate result columns → nil")
+        // Empty table schema (unknown table) → not editable.
+        t.expect(
+            SQLEditableResolver.resolve(parsed: star, tableColumns: [], resultColumns: ["id"]) == nil,
+            "empty schema → nil")
+    }
+
     t.suite("SQLUpdateBuilder — parameterized, no interpolation") {
         // SQLite/MySQL use ? placeholders; the params array carries the values, in order.
         do {

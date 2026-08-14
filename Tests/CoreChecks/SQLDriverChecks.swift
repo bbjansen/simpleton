@@ -63,6 +63,30 @@ func runSQLDriverChecks(_ t: TestRunner) async {
             t.expectEqual(columns.first?.name, "id", "first column id")
             t.expect(columns.first?.isPrimaryKey == true, "id is primary key")
             t.expect(columns.contains { $0.name == "name" && !$0.nullable }, "name is NOT NULL")
+
+            // Parameterized execute round-trip: the value is BOUND (never interpolated), so a value
+            // containing SQL metacharacters lands verbatim and cannot alter the statement.
+            _ = try await driver.execute(
+                "UPDATE t SET name = ?, score = ?, note = ? WHERE id = ?",
+                [.text("x'; DROP TABLE t; --"), .double(2.5), .null, .integer(1)])
+            if case .rows(_, let rows) = try await driver.run("SELECT name, score, note FROM t WHERE id = 1") {
+                t.expectEqual(rows.count, 1, "row still present after bound UPDATE")
+                t.expectEqual(rows.first?[0], SQLValue.text("x'; DROP TABLE t; --"), "text bound verbatim")
+                t.expectEqual(rows.first?[1], SQLValue.double(2.5), "double bound")
+                t.expectEqual(rows.first?[2], SQLValue.null, "null bound")
+            } else {
+                t.expect(false, "select after execute should return rows")
+            }
+            // The table must still exist — proof the injection-looking value never became SQL.
+            t.expect(try await driver.tables(in: nil).contains { $0.name == "t" }, "table survives bound value")
+            // Blob round-trip through the native bind.
+            _ = try await driver.execute(
+                "UPDATE t SET note = ? WHERE id = ?", [.blob(Data([0, 1, 2, 255])), .integer(1)])
+            if case .rows(_, let rows) = try await driver.run("SELECT note FROM t WHERE id = 1") {
+                t.expectEqual(rows.first?[0], SQLValue.blob(Data([0, 1, 2, 255])), "blob bound + read back")
+            } else {
+                t.expect(false, "select blob should return rows")
+            }
             await driver.close()
         } catch {
             t.expect(false, "unexpected error: \(error)")

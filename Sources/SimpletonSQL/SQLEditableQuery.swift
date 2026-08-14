@@ -203,6 +203,47 @@ public enum SQLEditableParser {
     }
 }
 
+/// A results grid resolved as editable: the table, its primary-key columns, and the result columns
+/// (all mapping 1:1 to real table columns). The engine dialect is attached separately by the caller.
+public struct EditableResolution: Sendable, Hashable {
+    public let table: String
+    public let primaryKey: [String]
+    public let resultColumns: [String]
+    public init(table: String, primaryKey: [String], resultColumns: [String]) {
+        self.table = table
+        self.primaryKey = primaryKey
+        self.resultColumns = resultColumns
+    }
+}
+
+/// The pure reconciliation behind editable detection, split out so it can be unit-tested without the
+/// app or a live driver. Given a parsed single-table SELECT, the table's real columns, and the result
+/// grid's column names, decide whether the grid is editable. Every guard must pass; any failure → nil
+/// (read-only). Conservative by design — a false positive would let an edit hit the wrong rows.
+public enum SQLEditableResolver {
+    public static func resolve(
+        parsed: ParsedSelect,
+        tableColumns: [ColumnInfo],
+        resultColumns: [String]
+    ) -> EditableResolution? {
+        guard !tableColumns.isEmpty, !resultColumns.isEmpty else { return nil }
+        let tableColumnNames = Set(tableColumns.map(\.name))
+        let primaryKey = tableColumns.filter(\.isPrimaryKey).map(\.name)
+        guard !primaryKey.isEmpty else { return nil }
+
+        // Duplicate result column names would make write-by-name ambiguous.
+        guard Set(resultColumns).count == resultColumns.count else { return nil }
+        // Every result column must be a real column of this table.
+        guard resultColumns.allSatisfy({ tableColumnNames.contains($0) }) else { return nil }
+        // For a named projection, the parsed names must equal the result columns exactly.
+        if case .columns(let named) = parsed.projection, named != resultColumns { return nil }
+        // Every PK column must be visible in the result so each row can be UPDATE-d by its key.
+        guard primaryKey.allSatisfy({ resultColumns.contains($0) }) else { return nil }
+
+        return EditableResolution(table: parsed.table, primaryKey: primaryKey, resultColumns: resultColumns)
+    }
+}
+
 /// Builds parameterized UPDATE statements for staged cell edits. The core guarantee: cell values are
 /// NEVER put into the SQL string — they leave only as the ordered `params` array, which the driver
 /// binds natively. Identifiers (table/column names) come from the DB catalog and are quoted per
