@@ -891,12 +891,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let conn = Connection(name: "demo", kind: .sqlite, params: ["path": dbPath])
             let model = SQLPanelModel(appSupportDir: dir)
             await model.saveConnection(conn, secret: nil)
-            let ok = model.isConnected && model.tables.contains { $0.name == "t" }
+            let connected = model.isConnected && model.tables.contains { $0.name == "t" }
+
+            // 3. Editable detection: a single-table SELECT with a PK must be editable; an aggregate
+            //    must NOT be (conservative detection). Then commit an edit and verify it was written.
+            model.queryText = "SELECT id, name FROM t"
+            await model.runQuery()
+            let editableDetected = model.editable?.table == "t" && model.editable?.primaryKey == ["id"]
+
+            model.queryText = "SELECT COUNT(*) AS n FROM t"
+            await model.runQuery()
+            let aggregateNotEditable = model.editable == nil
+
+            // Commit a staged edit to row id=1 via the parameterized path, then confirm the value.
+            model.queryText = "SELECT id, name FROM t"
+            await model.runQuery()
+            await model.commitEdits([
+                RowEdit(key: [("id", .integer(1))], changes: [("name", .text("edited"))])
+            ])
+            let committedOK = model.lastCommit?.updatedRows == 1 && model.lastCommit?.errorMessage == nil
+            var wroteValue = false
+            if case .rows(let cols, let rows) = model.result,
+                let nameIdx = cols.firstIndex(where: { $0.name == "name" }),
+                let idIdx = cols.firstIndex(where: { $0.name == "id" }),
+                let editedRow = rows.first(where: { $0[idIdx] == .integer(1) })
+            {
+                wroteValue = editedRow[nameIdx] == .text("edited")
+            }
+
+            let ok = connected && editableDetected && aggregateNotEditable && committedOK && wroteValue
             NSLog(
-                "SIMP-SQLE2E RESULT %@: connected=%@ tables=%@ connCount=%d selected=%@ error=%@",
-                ok ? "PASS" : "FAIL", "\(model.isConnected)", "\(model.tables.map(\.name))",
-                model.connections.count, model.selectedID?.uuidString ?? "nil",
-                model.errorMessage ?? "nil")
+                "SIMP-SQLE2E RESULT %@: connected=%@ editable=%@ aggNotEditable=%@ committed=%@ wrote=%@ error=%@",
+                ok ? "PASS" : "FAIL", "\(connected)", "\(editableDetected)", "\(aggregateNotEditable)",
+                "\(committedOK)", "\(wroteValue)", model.errorMessage ?? "nil")
             NSApp.terminate(nil)
         }
     }

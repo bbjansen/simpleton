@@ -135,11 +135,19 @@ final class SQLPanelModel: ObservableObject {
     }
 
     func runQuery() async {
+        // A user-initiated run clears any prior commit banner; the refresh after a commit does not
+        // (it goes through `refreshCurrentQuery`, which preserves `lastCommit`).
+        lastCommit = nil
+        await performQuery()
+    }
+
+    /// Execute `queryText`, publish the result, and recompute editability. Shared by the user's Run
+    /// action and the post-commit refresh; the caller owns `lastCommit`.
+    private func performQuery() async {
         guard let driver else { return }
         let sql = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sql.isEmpty else { return }
         errorMessage = nil
-        lastCommit = nil
         do {
             let queryResult = try await driver.run(sql)
             result = queryResult
@@ -188,8 +196,9 @@ final class SQLPanelModel: ObservableObject {
                 _ = try await driver.execute(stmt.sql, stmt.params)
                 written += 1
             }
+            // Refresh via `performQuery` (not `runQuery`) so it doesn't clear the outcome we set next.
+            await performQuery()
             lastCommit = CommitOutcome(updatedRows: written, errorMessage: nil)
-            await runQuery()  // refresh so the grid reflects the committed rows
         } catch {
             let message = Self.describe(error)
             errorMessage = message
