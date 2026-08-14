@@ -83,7 +83,13 @@ final class S3PanelModel: ObservableObject {
         let secret = CredentialStore.secret(for: connection.id)
         do {
             let b = try S3BackendFactory.make(connection, secret: secret)
-            try await b.connect()
+            do {
+                try await b.connect()
+            } catch {
+                // Shut the AWSClient down before dropping `b`, or Soto asserts/leaks on deinit.
+                await b.close()
+                throw error
+            }
             backend = b
             isConnected = true
             buckets = try await b.listBuckets()
