@@ -130,6 +130,10 @@ struct S3PanelView: View {
                     .font(.system(size: 11)).buttonStyle(.plain)
                     .padding(.vertical, 4)
             }
+            if model.isUploading {
+                ThemedDivider()
+                uploadProgressBar
+            }
             if let err = model.errorMessage, model.isConnected {
                 Text(err).font(DT.monoFont(size: 10)).foregroundColor(DT.accentRed)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -165,9 +169,30 @@ struct S3PanelView: View {
             } label: {
                 Image(systemName: "arrow.up.doc").font(.system(size: 11))
             }
-            .buttonStyle(.plain).help("Upload file here").disabled(model.isBusy)
+            .buttonStyle(.plain).help("Upload file here").disabled(model.isBusy || model.isUploading)
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
+    }
+
+    /// Determinate upload progress row: filename + percentage + a bounded ProgressView. Shown only
+    /// while an upload is in flight; conflicting actions (Upload, Delete) are disabled meanwhile.
+    @ViewBuilder
+    private var uploadProgressBar: some View {
+        if let progress = model.uploadProgress {
+            VStack(spacing: 3) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.circle").font(.system(size: 11)).foregroundColor(DT.accentBlue)
+                    Text("Uploading \(progress.name)")
+                        .font(.system(size: 10)).foregroundColor(DT.textSecondary).lineLimit(1)
+                    Spacer()
+                    Text("\(Int((progress.fraction * 100).rounded()))%")
+                        .font(DT.monoFont(size: 10)).foregroundColor(DT.textTertiary)
+                }
+                ProgressView(value: progress.fraction, total: 1.0)
+                    .progressViewStyle(.linear)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
+        }
     }
 
     private var objectTable: some View {
@@ -234,9 +259,11 @@ struct S3PanelView: View {
     @ViewBuilder
     private func objectActions(_ object: S3Object) -> some View {
         Button("Download…") { downloadFile(object) }
+            .disabled(model.isUploading)
         Button("Copy URL") { copyURL(object) }
         Divider()
         Button("Delete", role: .destructive) { confirmDelete(object) }
+            .disabled(model.isUploading)
     }
 
     // MARK: - AppKit file dialogs & pasteboard
