@@ -215,6 +215,18 @@ extension PanelDefinition {
         NSHostingController(rootView: SQLPanelView(appSupportDir: context.appSupportDir))
     }
 
+    static let s3 = PanelDefinition(
+        id: PanelProfile.PanelID.s3,
+        name: "S3",
+        icon: "externaldrive.connected.to.line.below",
+        description: "Browse S3 & S3-compatible object storage",
+        defaultSide: .right,
+        isBuiltIn: true,
+        prefersDrawer: true
+    ) { context in
+        NSHostingController(rootView: S3PanelView(appSupportDir: context.appSupportDir))
+    }
+
     static let amqp = PanelDefinition(
         id: PanelProfile.PanelID.amqp,
         name: "AMQP",
