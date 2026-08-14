@@ -62,22 +62,21 @@ struct ActivityBarView: View {
     // MARK: - Actions
 
     private func togglePanel(id: String) {
-        var profile = registry.activeProfile
-        if side == .right,
-            let def = registry.definitions.first(where: { $0.id == id }), def.prefersDrawer
-        {
-            // A GUI-client launcher icon toggles the edge drawer instead of a side panel.
-            profile.setDrawer(id: profile.bottomActivePanelID == id ? nil : id)
-        } else {
-            profile.togglePanel(id: id, on: side)
+        let isDrawer =
+            side == .right
+            && (registry.definitions.first(where: { $0.id == id })?.prefersDrawer ?? false)
+        registry.updateActiveProfile { profile in
+            if isDrawer {
+                // A GUI-client launcher icon toggles the edge drawer instead of a side panel.
+                profile.setDrawer(id: profile.bottomActivePanelID == id ? nil : id)
+            } else {
+                profile.togglePanel(id: id, on: side)
+            }
         }
-        registry.activeProfile = profile
     }
 
     private func movePanelToSide(panelID: String) {
-        var profile = registry.activeProfile
-        profile.movePanel(id: panelID, to: side)
-        registry.activeProfile = profile
+        registry.updateActiveProfile { $0.movePanel(id: panelID, to: side) }
     }
 }
 
