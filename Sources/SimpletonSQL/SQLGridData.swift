@@ -1,6 +1,59 @@
 // Sources/SimpletonSQL/SQLGridData.swift
 import Foundation
 
+/// A grid cell address in the *original* (unsorted) coordinate space: the row's original index and
+/// the result-column index. Staged edits are keyed by this so they survive re-sorting the grid.
+public struct CellCoord: Sendable, Hashable {
+    public let row: Int
+    public let column: Int
+    public init(row: Int, column: Int) {
+        self.row = row
+        self.column = column
+    }
+}
+
+/// Parses a user's typed cell text back into a `SQLValue` of the same kind as the column's current
+/// value, so edits stay type-correct. Pure + headless: the grid calls this on Enter and either
+/// stages the returned value or flashes the cell red when it returns nil (invalid for the type).
+public enum SQLCellEditing {
+    /// Parse `text` for a cell whose existing value is `existing`.
+    /// - Numeric columns (integer/double) reject non-numeric text (→ nil).
+    /// - Bool columns accept true/false/1/0/yes/no (case-insensitive); anything else → nil.
+    /// - Text columns take the text verbatim (empty string stays empty text, distinct from NULL).
+    /// - A NULL or blob cell edited as text becomes text (blobs aren't editable inline; the caller
+    ///   gates that separately, but we still return a sensible value).
+    public static func parse(_ text: String, like existing: SQLValue) -> SQLValue? {
+        switch existing {
+        case .integer:
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            guard let v = Int64(trimmed) else { return nil }
+            return .integer(v)
+        case .double:
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            guard let v = Double(trimmed) else { return nil }
+            return .double(v)
+        case .bool:
+            switch text.trimmingCharacters(in: .whitespaces).lowercased() {
+            case "true", "1", "yes", "t", "y": return .bool(true)
+            case "false", "0", "no", "f", "n": return .bool(false)
+            default: return nil
+            }
+        case .text, .null:
+            return .text(text)
+        case .blob:
+            // Blobs aren't editable inline; keep the value unchanged if asked.
+            return nil
+        }
+    }
+
+    /// The string a cell shows while editing (what the text field is seeded with). NULL edits start
+    /// empty; everything else uses its display form.
+    public static func editingText(for value: SQLValue) -> String {
+        if case .null = value { return "" }
+        return SQLCellFormatting.present(value).text
+    }
+}
+
 /// One column sort key: the column index and its direction. An ordered list of
 /// these drives multi-column sort (primary first).
 public struct SortKey: Sendable, Hashable {

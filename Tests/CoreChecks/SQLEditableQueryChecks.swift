@@ -55,6 +55,31 @@ func runSQLEditableQueryChecks(_ t: TestRunner) {
         t.expect(isNil("SELECT * FROM users u, orders o"), "two aliased tables")
     }
 
+    t.suite("SQLCellEditing — type-aware edit parsing") {
+        // Integer columns: valid integers parse; non-numeric text rejects.
+        t.expectEqual(SQLCellEditing.parse("42", like: .integer(1)), SQLValue.integer(42), "integer parses")
+        t.expectEqual(SQLCellEditing.parse("-7", like: .integer(1)), SQLValue.integer(-7), "negative integer")
+        t.expect(SQLCellEditing.parse("abc", like: .integer(1)) == nil, "non-numeric rejected for integer")
+        t.expect(SQLCellEditing.parse("3.5", like: .integer(1)) == nil, "float rejected for integer column")
+        // Double columns.
+        t.expectEqual(SQLCellEditing.parse("3.5", like: .double(1)), SQLValue.double(3.5), "double parses")
+        t.expect(SQLCellEditing.parse("x", like: .double(1)) == nil, "non-numeric rejected for double")
+        // Bool columns accept a few spellings.
+        t.expectEqual(SQLCellEditing.parse("true", like: .bool(false)), SQLValue.bool(true), "bool true")
+        t.expectEqual(SQLCellEditing.parse("0", like: .bool(true)), SQLValue.bool(false), "bool 0 → false")
+        t.expect(SQLCellEditing.parse("maybe", like: .bool(true)) == nil, "invalid bool rejected")
+        // Text columns take input verbatim; empty stays empty (distinct from NULL).
+        t.expectEqual(SQLCellEditing.parse("hi", like: .text("x")), SQLValue.text("hi"), "text verbatim")
+        t.expectEqual(SQLCellEditing.parse("", like: .text("x")), SQLValue.text(""), "empty text stays empty")
+        // A NULL cell edited as text becomes text.
+        t.expectEqual(SQLCellEditing.parse("new", like: .null), SQLValue.text("new"), "null → text")
+        // Blobs are not inline-editable.
+        t.expect(SQLCellEditing.parse("x", like: .blob(Data())) == nil, "blob not inline-editable")
+        // Editing seed text.
+        t.expectEqual(SQLCellEditing.editingText(for: .null), "", "NULL seeds empty editor")
+        t.expectEqual(SQLCellEditing.editingText(for: .integer(9)), "9", "integer seed")
+    }
+
     t.suite("SQLEditableResolver — reconcile parse + schema + result columns") {
         func col(_ name: String, pk: Bool = false) -> ColumnInfo {
             ColumnInfo(name: name, type: "TEXT", nullable: true, isPrimaryKey: pk)
