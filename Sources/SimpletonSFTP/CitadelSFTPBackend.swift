@@ -115,18 +115,26 @@ public final class CitadelSFTPBackend: SFTPBackend, @unchecked Sendable {
     ///
     /// Citadel's own OpenSSH parser handles only ed25519/RSA, so the key is parsed here (see
     /// `OpenSSHECDSAKey`) into a swift-crypto signing key and handed to Citadel's ECDSA auth factories,
-    /// which sign via swift-nio-ssh's native P-256/P-384/P-521 support. Passphrase-protected ECDSA keys
-    /// are rejected with a precise message because the OpenSSH `bcrypt` KDF has no public API here.
+    /// which sign via swift-nio-ssh's native P-256/P-384/P-521 support. A passphrase-protected ECDSA
+    /// key is decrypted with the OpenSSH `bcrypt_pbkdf` KDF + AES cipher using `ConnectionSecret`'s
+    /// passphrase; a wrong passphrase is reported as a precise `.auth("incorrect passphrase")`.
     private func makeECDSAAuthentication(
         keyString: String, path: String, type: SSHKeyType
     ) throws -> SSHAuthenticationMethod {
         let parsed: OpenSSHECDSAKey.ParsedKey
         do {
-            parsed = try OpenSSHECDSAKey.parse(pem: keyString)
-        } catch OpenSSHECDSAKey.ParseError.encryptedUnsupported {
+            parsed = try OpenSSHECDSAKey.parse(
+                pem: keyString, passphrase: passphrase.flatMap { Array($0.utf8) })
+        } catch OpenSSHECDSAKey.ParseError.incorrectPassphrase {
+            throw SFTPError.auth("incorrect passphrase for ECDSA identity file \(path)")
+        } catch OpenSSHECDSAKey.ParseError.passphraseRequired {
             throw SFTPError.auth(
-                "Passphrase-protected ECDSA keys are not supported (\(type.description) in \(path)). "
-                    + "Use an unencrypted ECDSA key, or an ed25519 or RSA key, which support passphrases.")
+                "Passphrase required for encrypted ECDSA identity file \(path). "
+                    + "Set a passphrase on the connection to unlock it.")
+        } catch OpenSSHECDSAKey.ParseError.unsupportedCipher(let name) {
+            throw SFTPError.auth(
+                "Unsupported cipher/KDF (\(name)) in ECDSA identity file \(path). "
+                    + "Supported ciphers are aes256-ctr, aes128-ctr, and aes256-cbc with the bcrypt KDF.")
         } catch {
             throw SFTPError.auth("Could not parse ECDSA identity file \(path): \(error)")
         }
