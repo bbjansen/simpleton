@@ -208,6 +208,165 @@ func runAMQPDriverChecks(_ t: TestRunner) async {
             "helper: non-UTF-8 base64 → byte-count placeholder")
     }
 
+    // MARK: Codable decode of sample /api/bindings JSON.
+    t.suite("BindingInfo decode") {
+        let json = """
+            [
+              {"source":"","vhost":"/","destination":"orders","destination_type":"queue",
+               "routing_key":"orders","properties_key":"orders"},
+              {"source":"amq.topic","vhost":"/","destination":"audit","destination_type":"queue",
+               "routing_key":"events.#","properties_key":"events.%23"}
+            ]
+            """
+        do {
+            let bindings = try JSONDecoder().decode([BindingInfo].self, from: Data(json.utf8))
+            t.expectEqual(bindings.count, 2, "two bindings")
+            t.expectEqual(bindings[0].source, "", "default-exchange binding has empty source")
+            t.expectEqual(bindings[0].destination, "orders", "destination")
+            t.expectEqual(bindings[0].destinationType, "queue", "destination_type")
+            t.expectEqual(bindings[0].routingKey, "orders", "routing_key")
+            t.expectEqual(bindings[0].propertiesKey, "orders", "properties_key")
+            t.expectEqual(bindings[0].vhost, "/", "vhost")
+            t.expectEqual(bindings[1].source, "amq.topic", "second source")
+            t.expectEqual(bindings[1].routingKey, "events.#", "second routing_key")
+            // id disambiguates on properties_key, so the two rows have distinct identities.
+            t.expect(bindings[0].id != bindings[1].id, "distinct binding ids")
+        } catch {
+            t.expect(false, "BindingInfo decode failed: \(error)")
+        }
+
+        // A binding with missing optional fields still decodes with tolerant defaults.
+        let sparse = """
+            [{"source":"ex","destination":"q","destination_type":"queue"}]
+            """
+        do {
+            let b = try JSONDecoder().decode([BindingInfo].self, from: Data(sparse.utf8))[0]
+            t.expectEqual(b.routingKey, "", "missing routing_key → empty")
+            t.expectEqual(b.propertiesKey, "", "missing properties_key → empty")
+            t.expectEqual(b.vhost, "/", "missing vhost → /")
+        } catch {
+            t.expect(false, "sparse BindingInfo decode failed: \(error)")
+        }
+    }
+
+    // MARK: Codable decode of sample /api/nodes JSON.
+    t.suite("NodeInfo decode") {
+        let json = """
+            [{"name":"rabbit@node1","running":true,"mem_used":104857600,"mem_limit":2147483648,
+              "disk_free":53687091200,"disk_free_limit":50000000,"fd_used":42,"fd_total":1048576,
+              "sockets_used":8,"proc_used":900,"uptime":90061000}]
+            """
+        do {
+            let n = try JSONDecoder().decode([NodeInfo].self, from: Data(json.utf8))[0]
+            t.expectEqual(n.name, "rabbit@node1", "name")
+            t.expect(n.running, "running true")
+            t.expectEqual(n.memUsed, 104_857_600, "mem_used")
+            t.expectEqual(n.memLimit, 2_147_483_648, "mem_limit")
+            t.expectEqual(n.diskFree, 53_687_091_200, "disk_free")
+            t.expectEqual(n.diskFreeLimit, 50_000_000, "disk_free_limit")
+            t.expectEqual(n.fdUsed, 42, "fd_used")
+            t.expectEqual(n.fdTotal, 1_048_576, "fd_total")
+            t.expectEqual(n.socketsUsed, 8, "sockets_used")
+            t.expectEqual(n.procUsed, 900, "proc_used")
+            t.expectEqual(n.uptime, 90_061_000, "uptime")
+        } catch {
+            t.expect(false, "NodeInfo decode failed: \(error)")
+        }
+
+        // A down node omits the byte/count fields; only name + running are present.
+        let down = """
+            [{"name":"rabbit@node2","running":false}]
+            """
+        do {
+            let n = try JSONDecoder().decode([NodeInfo].self, from: Data(down.utf8))[0]
+            t.expect(!n.running, "down node running false")
+            t.expect(n.memUsed == nil, "down node mem_used nil")
+            t.expect(n.uptime == nil, "down node uptime nil")
+        } catch {
+            t.expect(false, "down NodeInfo decode failed: \(error)")
+        }
+    }
+
+    // MARK: Request-path construction — the load-bearing %2F + /e//q/ segments.
+    t.suite("RabbitMQ request paths") {
+        t.expectEqual(
+            RabbitMQManagementDriver.queuePath(vhost: "/", name: "orders"),
+            "/api/queues/%2F/orders", "createQueue path: default vhost encoded")
+        t.expectEqual(
+            RabbitMQManagementDriver.queuePath(vhost: "prod", name: "a/b"),
+            "/api/queues/prod/a%2Fb", "queue path: slash in name encoded")
+        t.expectEqual(
+            RabbitMQManagementDriver.exchangePath(vhost: "/", name: "events"),
+            "/api/exchanges/%2F/events", "createExchange path")
+        t.expectEqual(
+            RabbitMQManagementDriver.exchangePath(vhost: "my vhost", name: "amq.topic"),
+            "/api/exchanges/my%20vhost/amq.topic", "exchange path: space in vhost, dot preserved")
+        t.expectEqual(
+            RabbitMQManagementDriver.bindingPath(vhost: "/", source: "events", destination: "audit"),
+            "/api/bindings/%2F/e/events/q/audit", "createBinding path: /e/ and /q/ segments")
+        t.expectEqual(
+            RabbitMQManagementDriver.bindingPath(vhost: "/", source: "a b", destination: "c/d"),
+            "/api/bindings/%2F/e/a%20b/q/c%2Fd", "binding path: source/destination encoded")
+    }
+
+    // MARK: createQueue JSON body — durable/auto_delete + x-* arguments serialize correctly.
+    t.suite("createQueue JSON body") {
+        // Mirror the driver's body construction so the shape is asserted without a live broker.
+        struct QueueBody: Encodable {
+            let durable: Bool
+            let autoDelete: Bool
+            let arguments: [String: QueueArgument]
+            enum CodingKeys: String, CodingKey {
+                case durable
+                case autoDelete = "auto_delete"
+                case arguments
+            }
+        }
+        let body = QueueBody(
+            durable: true, autoDelete: false,
+            arguments: [
+                "x-message-ttl": .int(60000),
+                "x-dead-letter-exchange": .string("dlx"),
+                "x-dead-letter-routing-key": .string("dead"),
+            ])
+        do {
+            let data = try JSONEncoder().encode(body)
+            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                t.expect(false, "body should be a JSON object")
+                return
+            }
+            t.expectEqual(obj["durable"] as? Bool, true, "durable true")
+            t.expectEqual(obj["auto_delete"] as? Bool, false, "auto_delete false (snake_case key)")
+            guard let args = obj["arguments"] as? [String: Any] else {
+                t.expect(false, "arguments should be a nested object")
+                return
+            }
+            // x-message-ttl is an integer, not a string — a common serialization bug.
+            t.expectEqual(args["x-message-ttl"] as? Int, 60000, "x-message-ttl is an Int")
+            t.expect(!(args["x-message-ttl"] is String), "x-message-ttl not a String")
+            t.expectEqual(args["x-dead-letter-exchange"] as? String, "dlx", "x-dead-letter-exchange")
+            t.expectEqual(args["x-dead-letter-routing-key"] as? String, "dead", "x-dead-letter-routing-key")
+        } catch {
+            t.expect(false, "createQueue body encode failed: \(error)")
+        }
+
+        // A queue with no arguments serializes an empty object (not null / omitted), which the broker
+        // accepts as "no policy".
+        do {
+            let data = try JSONEncoder().encode(
+                QueueBody(durable: false, autoDelete: true, arguments: [:]))
+            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let args = obj["arguments"] as? [String: Any]
+            else {
+                t.expect(false, "empty-args body should still carry an arguments object")
+                return
+            }
+            t.expectEqual(args.count, 0, "no arguments → empty object")
+        } catch {
+            t.expect(false, "empty-args body encode failed: \(error)")
+        }
+    }
+
     // MARK: HTTP status → AMQPError mapping.
     t.suite("AMQPError status mapping") {
         func mapError(_ status: Int) -> AMQPError? {
@@ -291,6 +450,20 @@ func runAMQPDriverChecks(_ t: TestRunner) async {
                 t.expect(!overview.rabbitmqVersion.isEmpty, "overview returns a rabbitmq_version")
                 _ = try await backend.queues(vhost: "/")  // smoke: queues list decodes
                 _ = try await backend.exchanges(vhost: "/")  // smoke: exchanges list decodes
+                _ = try await backend.bindings(vhost: "/")  // smoke: bindings list decodes
+                let nodes = try await backend.nodes()  // smoke: nodes list decodes
+                t.expect(!nodes.isEmpty, "at least one cluster node reported")
+
+                // Round-trip: create a queue with a TTL arg, confirm it lists, then delete it.
+                let name = "simpleton-check-\(UUID().uuidString.prefix(8))"
+                try await backend.createQueue(
+                    vhost: "/", name: name, durable: false, autoDelete: false,
+                    arguments: ["x-message-ttl": .int(60000)])
+                let listed = try await backend.queues(vhost: "/")
+                t.expect(listed.contains { $0.name == name }, "created queue appears in the listing")
+                try await backend.deleteQueue(vhost: "/", name: name)
+                let afterDelete = try await backend.queues(vhost: "/")
+                t.expect(!afterDelete.contains { $0.name == name }, "queue is gone after delete")
             } catch {
                 t.expect(false, "unexpected error: \(error)")
             }

@@ -19,6 +19,18 @@ final class S3PanelModel: ObservableObject {
     @Published var isConnected = false
     @Published var isBusy = false
     @Published var showingEditor = false
+    /// Set while a file upload is in flight; `nil` when idle. `fraction` is the determinate progress
+    /// (0…1) shown in the panel, `name` is the file being uploaded.
+    @Published var uploadProgress: UploadProgress?
+
+    /// Live state for an in-flight upload, surfaced to the panel's progress indicator.
+    struct UploadProgress: Equatable {
+        var name: String
+        var fraction: Double
+    }
+
+    /// True while an upload is running — used to disable conflicting panel actions.
+    var isUploading: Bool { uploadProgress != nil }
 
     private let store: ConnectionStore
     private var backend: S3Backend?
@@ -210,21 +222,44 @@ final class S3PanelModel: ObservableObject {
         }
     }
 
-    /// Upload a local file into the current folder under its filename.
+    /// Upload a local file into the current folder under its filename. Streams the file by URL (so
+    /// multi-GB files never load fully into memory) and drives a determinate progress indicator; large
+    /// files go through multipart upload in the backend. Returns an error message on failure, nil on
+    /// success.
     func upload(from source: URL) async -> String? {
         guard let backend, let bucket = selectedBucket else { return "Not connected." }
+        guard !isUploading else { return "An upload is already in progress." }
         isBusy = true
-        defer { isBusy = false }
+        uploadProgress = UploadProgress(name: source.lastPathComponent, fraction: 0)
+        defer {
+            isBusy = false
+            uploadProgress = nil
+        }
+        let key = prefix + source.lastPathComponent
         do {
-            let data = try Data(contentsOf: source)
-            let key = prefix + source.lastPathComponent
-            try await backend.upload(bucket: bucket, key: key, data: data)
+            // The progress callback is `@Sendable` and fires off the main actor (Soto's per-part hook).
+            // Forward each fraction to the main-actor updater without capturing `self` in the closure.
+            let update: @Sendable (Double) async -> Void = { [applyProgress] fraction in
+                await applyProgress(fraction)
+            }
+            try await backend.upload(bucket: bucket, key: key, fileURL: source) { fraction in
+                await update(fraction)
+            }
             status = "Uploaded \(source.lastPathComponent)"
             await listCurrent(reset: true)
             return nil
         } catch {
             return Self.describe(error)
         }
+    }
+
+    /// Publish an upload progress fraction (0…1). Called on the main actor from the upload task's
+    /// forwarding closure so the determinate indicator updates as each part completes.
+    @MainActor
+    private func applyProgress(_ fraction: Double) {
+        guard var current = uploadProgress else { return }
+        current.fraction = min(max(fraction, 0), 1)
+        uploadProgress = current
     }
 
     func delete(_ object: S3Object) async -> String? {

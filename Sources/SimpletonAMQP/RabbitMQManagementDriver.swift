@@ -132,6 +132,69 @@ public final class RabbitMQManagementDriver: AMQPManagementBackend, @unchecked S
         _ = try await send(path, method: "DELETE", jsonBody: [String: AnyEncodable]())
     }
 
+    public func bindings(vhost: String) async throws -> [BindingInfo] {
+        try await get("/api/bindings/\(Self.encodeSegment(vhost))")
+    }
+
+    public func nodes() async throws -> [NodeInfo] {
+        try await get("/api/nodes")
+    }
+
+    public func createQueue(
+        vhost: String, name: String, durable: Bool, autoDelete: Bool, arguments: [String: QueueArgument]
+    ) async throws {
+        let path = Self.queuePath(vhost: vhost, name: name)
+        let body: [String: AnyEncodable] = [
+            "durable": AnyEncodable(durable),
+            "auto_delete": AnyEncodable(autoDelete),
+            "arguments": AnyEncodable(arguments),
+        ]
+        _ = try await send(path, method: "PUT", jsonBody: body)
+    }
+
+    public func deleteQueue(vhost: String, name: String) async throws {
+        _ = try await send(Self.queuePath(vhost: vhost, name: name), method: "DELETE", jsonBody: nil)
+    }
+
+    public func createExchange(
+        vhost: String, name: String, type: String, durable: Bool, autoDelete: Bool
+    ) async throws {
+        let path = Self.exchangePath(vhost: vhost, name: name)
+        let body: [String: AnyEncodable] = [
+            "type": AnyEncodable(type),
+            "durable": AnyEncodable(durable),
+            "auto_delete": AnyEncodable(autoDelete),
+        ]
+        _ = try await send(path, method: "PUT", jsonBody: body)
+    }
+
+    public func deleteExchange(vhost: String, name: String) async throws {
+        _ = try await send(Self.exchangePath(vhost: vhost, name: name), method: "DELETE", jsonBody: nil)
+    }
+
+    public func createBinding(vhost: String, source: String, destination: String, routingKey: String) async throws {
+        let path = Self.bindingPath(vhost: vhost, source: source, destination: destination)
+        let body: [String: AnyEncodable] = ["routing_key": AnyEncodable(routingKey)]
+        _ = try await send(path, method: "POST", jsonBody: body)
+    }
+
+    // MARK: - Request-path construction (exposed for CoreChecks)
+
+    /// `/api/queues/{vhost}/{name}` with both segments strictly percent-encoded.
+    public static func queuePath(vhost: String, name: String) -> String {
+        "/api/queues/\(encodeSegment(vhost))/\(encodeSegment(name))"
+    }
+
+    /// `/api/exchanges/{vhost}/{name}` with both segments strictly percent-encoded.
+    public static func exchangePath(vhost: String, name: String) -> String {
+        "/api/exchanges/\(encodeSegment(vhost))/\(encodeSegment(name))"
+    }
+
+    /// `/api/bindings/{vhost}/e/{source}/q/{destination}` — the exchange-to-queue binding path.
+    public static func bindingPath(vhost: String, source: String, destination: String) -> String {
+        "/api/bindings/\(encodeSegment(vhost))/e/\(encodeSegment(source))/q/\(encodeSegment(destination))"
+    }
+
     // MARK: - HTTP plumbing
 
     /// GET + JSON-decode into `T`.
