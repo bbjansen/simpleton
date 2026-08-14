@@ -32,9 +32,14 @@ struct SQLQueryEditor: View {
 
     @ViewBuilder
     private var editorField: some View {
-        let field = TextEditor(text: $model.queryText)
-            .font(DT.monoFont(size: 12))
-            .scrollContentBackground(.hidden)
+        let field = SQLCodeEditor(
+            text: $model.queryText,
+            tableNames: model.tables.map(\.name),
+            columnNames: Array(Set(model.columnsByTable.values.flatMap { $0.map(\.name) })).sorted(),
+            font: DT.monoNSFont(size: 12),
+            onRun: { Task { await model.runQuery() } },
+            onRunSelection: { sql in Task { await model.runSelection(sql) } }
+        )
         if let editorHeight {
             field.frame(height: editorHeight)
         } else {

@@ -150,11 +150,18 @@ final class SQLPanelModel: ObservableObject {
         await performQuery()
     }
 
-    /// Execute `queryText`, publish the result, and recompute editability. Shared by the user's Run
-    /// action and the post-commit refresh; the caller owns `lastCommit`.
-    private func performQuery() async {
+    /// Run just the selected text / current statement (⌘⇧↵) without changing the editor content.
+    func runSelection(_ sql: String) async {
+        lastCommit = nil
+        await performQuery(sql: sql)
+    }
+
+    /// Execute `sql` (defaulting to `queryText`), publish the result, and recompute editability.
+    /// Shared by the user's Run action, Run-selection, and the post-commit refresh; the caller owns
+    /// `lastCommit`.
+    private func performQuery(sql overrideSQL: String? = nil) async {
         guard let driver else { return }
-        let sql = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sql = (overrideSQL ?? queryText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sql.isEmpty else { return }
         errorMessage = nil
         do {
