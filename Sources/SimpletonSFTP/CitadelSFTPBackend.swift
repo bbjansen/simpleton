@@ -96,15 +96,45 @@ public final class CitadelSFTPBackend: SFTPBackend, @unchecked Sendable {
             case .rsa:
                 let key = try Insecure.RSA.PrivateKey(sshRsa: keyString, decryptionKey: pass)
                 return .rsa(username: username, privateKey: key)
+            case .ecdsaP256, .ecdsaP384, .ecdsaP521:
+                return try makeECDSAAuthentication(keyString: keyString, path: identityFile, type: type)
             default:
                 throw SFTPError.auth(
-                    "Unsupported key type \(type.description); use an ed25519 or RSA key, or password auth.")
+                    "Unsupported key type \(type.description) in \(identityFile); "
+                        + "supported identity-file types are ed25519, RSA, and ECDSA "
+                        + "(P-256/P-384/P-521), or use password auth.")
             }
         }
         guard let password else {
             throw SFTPError.auth("No password or identity file configured for \(username)@\(host).")
         }
         return .passwordBased(username: username, password: password)
+    }
+
+    /// Build an ECDSA public-key authentication method from an OpenSSH identity file.
+    ///
+    /// Citadel's own OpenSSH parser handles only ed25519/RSA, so the key is parsed here (see
+    /// `OpenSSHECDSAKey`) into a swift-crypto signing key and handed to Citadel's ECDSA auth factories,
+    /// which sign via swift-nio-ssh's native P-256/P-384/P-521 support. Passphrase-protected ECDSA keys
+    /// are rejected with a precise message because the OpenSSH `bcrypt` KDF has no public API here.
+    private func makeECDSAAuthentication(
+        keyString: String, path: String, type: SSHKeyType
+    ) throws -> SSHAuthenticationMethod {
+        let parsed: OpenSSHECDSAKey.ParsedKey
+        do {
+            parsed = try OpenSSHECDSAKey.parse(pem: keyString)
+        } catch OpenSSHECDSAKey.ParseError.encryptedUnsupported {
+            throw SFTPError.auth(
+                "Passphrase-protected ECDSA keys are not supported (\(type.description) in \(path)). "
+                    + "Use an unencrypted ECDSA key, or an ed25519 or RSA key, which support passphrases.")
+        } catch {
+            throw SFTPError.auth("Could not parse ECDSA identity file \(path): \(error)")
+        }
+        switch parsed {
+        case .p256(let key): return .p256(username: username, privateKey: key)
+        case .p384(let key): return .p384(username: username, privateKey: key)
+        case .p521(let key): return .p521(username: username, privateKey: key)
+        }
     }
 
     // MARK: - operations
