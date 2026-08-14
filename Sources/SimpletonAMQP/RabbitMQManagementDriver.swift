@@ -46,6 +46,12 @@ public final class RabbitMQManagementDriver: AMQPManagementBackend, @unchecked S
         }
     }
 
+    deinit {
+        // A delegate-backed URLSession (the allow-self-signed path) strongly retains its delegate
+        // until invalidated, so release it when the driver is dropped on disconnect/reconnect.
+        session.finishTasksAndInvalidate()
+    }
+
     /// Testing/inspection seam: build the exact `Authorization` header value for Basic auth.
     /// `Basic base64("user:password")`.
     public static func basicAuthHeader(user: String, password: String) -> String {

@@ -18,7 +18,9 @@ struct AMQPPanelView: View {
         ClientPanelScaffold(
             title: "AMQP",
             availability: model.availability,
-            autoRefresh: model.isConnected ? 5 : nil,
+            // Constant interval: the scaffold schedules its timer once at .onAppear, and a dynamic
+            // value would never re-arm on connect. refresh()/reload() no-op while disconnected.
+            autoRefresh: 5,
             onRefresh: { await model.isConnected ? model.refresh() : model.reload() }
         ) {
             content
