@@ -87,7 +87,14 @@ final class SFTPPanelModel: ObservableObject {
         let secret = CredentialStore.secret(for: connection.id)
         do {
             let b = try SFTPBackendFactory.make(connection, secret: secret)
-            try await b.connect()
+            do {
+                try await b.connect()
+            } catch {
+                // Close any half-open SSH channel before dropping `b` (openSFTP can fail after the
+                // SSH client connected), instead of leaking it.
+                await b.close()
+                throw error
+            }
             backend = b
             isConnected = true
             // Start at the login home directory.
