@@ -215,6 +215,18 @@ extension PanelDefinition {
         NSHostingController(rootView: SQLPanelView(appSupportDir: context.appSupportDir))
     }
 
+    static let amqp = PanelDefinition(
+        id: PanelProfile.PanelID.amqp,
+        name: "AMQP",
+        icon: "arrow.left.arrow.right",
+        description: "Manage RabbitMQ (queues, exchanges, messages)",
+        defaultSide: .right,
+        isBuiltIn: true,
+        prefersDrawer: true
+    ) { context in
+        NSHostingController(rootView: AMQPPanelView(appSupportDir: context.appSupportDir))
+    }
+
     static let dataConnections = PanelDefinition(
         id: PanelProfile.PanelID.dataConnections,
         name: "Data Connections",

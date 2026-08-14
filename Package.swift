@@ -28,10 +28,17 @@ let package = Package(
                 .product(name: "MySQLNIO", package: "mysql-nio"),
             ]
         ),
+        // AMQP (RabbitMQ) management client. Talks to the RabbitMQ Management HTTP API over
+        // URLSession/Foundation only — no AMQP client library, no third-party dependency.
+        .target(
+            name: "SimpletonAMQP",
+            dependencies: ["SimpletonCore"]
+        ),
         .executableTarget(
             name: "Simpleton",
             dependencies: [
-                "SimpletonCore", "SimpletonSQL", "SwiftTerm", .product(name: "Sparkle", package: "Sparkle"),
+                "SimpletonCore", "SimpletonSQL", "SimpletonAMQP", "SwiftTerm",
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             resources: [.process("Resources")],
             linkerSettings: [.linkedFramework("NaturalLanguage")]
@@ -44,7 +51,7 @@ let package = Package(
         // so runnable checks live in a plain executable target (see Tests/CoreChecks).
         .executableTarget(
             name: "CoreChecks",
-            dependencies: ["SimpletonCore", "SimpletonSQL"],
+            dependencies: ["SimpletonCore", "SimpletonSQL", "SimpletonAMQP"],
             path: "Tests/CoreChecks"
         ),
     ]
