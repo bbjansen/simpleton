@@ -157,7 +157,7 @@ extension PanelProfile {
                 "connections", "data-connections", "snippets", "notes", "history", "environment",
                 "file-browser", "processes", "ssh-tunnels",
             ],
-            rightPanelIDs: ["sql"],
+            rightPanelIDs: ["sql", "sftp", "s3", "amqp"],
             leftActivePanelID: "connections",
             rightActivePanelID: nil
         ),
