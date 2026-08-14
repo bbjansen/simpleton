@@ -93,6 +93,24 @@ func runSQLDriverChecks(_ t: TestRunner) async {
         }
     }
 
+    await t.suite("SQLiteDriver databases + useDatabase (single file)") {
+        let path = tempDBPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let driver = SQLiteDriver(path: path)
+        do {
+            try await driver.connect()
+            let dbs = try await driver.databases()
+            t.expect(dbs.contains("main"), "attached database list includes main")
+            // SQLite is a single open file — there is no live switch, so useDatabase reports false and
+            // the caller would reconnect to reach another database.
+            let switched = try await driver.useDatabase("main")
+            t.expect(!switched, "SQLite cannot switch a live connection")
+            await driver.close()
+        } catch {
+            t.expect(false, "unexpected error: \(error)")
+        }
+    }
+
     await t.suite("SQLiteDriver foreignKeys(of:) round-trip") {
         let path = tempDBPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -215,6 +233,23 @@ func runSQLDriverChecks(_ t: TestRunner) async {
                     t.expect(false, "SELECT should return rows")
                 }
                 _ = try await driver.tables(in: nil)  // smoke: schema query runs
+                // Postgres can't switch a live connection — useDatabase reports false so the caller
+                // reconnects. Prove that path: a second driver bound to another database connects and
+                // `current_database()` confirms the switch. (Skipped if only one database exists.)
+                t.expect(try await driver.useDatabase("postgres") == false, "Postgres reports no live switch")
+                let dbs = try await driver.databases()
+                if let target = dbs.first(where: { $0 != (conn.params["database"] ?? "") }) {
+                    var overridden = conn
+                    overridden.params["database"] = target
+                    let d2 = try SQLDriverFactory.make(overridden, secret: secret)
+                    try await d2.connect()
+                    if case .rows(_, let rows) = try await d2.run("SELECT current_database() AS db") {
+                        t.expectEqual(rows.first?.first?.displayString, target, "reconnected to switched database")
+                    } else {
+                        t.expect(false, "current_database() should return a row")
+                    }
+                    await d2.close()
+                }
                 await driver.close()
             } catch {
                 t.expect(false, "unexpected error: \(error)")
@@ -238,6 +273,14 @@ func runSQLDriverChecks(_ t: TestRunner) async {
                     t.expect(false, "SELECT should return rows")
                 }
                 _ = try await driver.tables(in: nil)
+                // Live switch: USE information_schema (always present) must succeed and redirect
+                // introspection — its catalog table "TABLES" then shows up in the table list.
+                let switched = try await driver.useDatabase("information_schema")
+                t.expect(switched, "MySQL useDatabase returns true (live USE)")
+                let isTables = try await driver.tables(in: nil)
+                t.expect(
+                    isTables.contains { $0.name.uppercased() == "TABLES" },
+                    "USE redirected introspection to information_schema")
                 await driver.close()
             } catch {
                 t.expect(false, "unexpected error: \(error)")

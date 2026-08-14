@@ -97,6 +97,10 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
         return rows.compactMap { $0.first?.displayString }
     }
 
+    /// Postgres databases are isolated — a live connection cannot cross into another database. The
+    /// caller reconnects with the target `database` param, so this always returns `false`.
+    public func useDatabase(_ name: String) async throws -> Bool { false }
+
     public func tables(in database: String?) async throws -> [TableInfo] {
         guard
             case .rows(_, let rows) = try await run(

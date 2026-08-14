@@ -70,6 +70,8 @@ struct SQLWorkspaceView: View {
             .labelsHidden().fixedSize()
             .onChange(of: model.selectedID) { Task { await model.connectSelected() } }
 
+            SQLDatabasePicker(model: model)
+
             Button(model.isConnected ? "Disconnect" : "Connect") {
                 Task { model.isConnected ? await model.disconnect() : await model.connect() }
             }
