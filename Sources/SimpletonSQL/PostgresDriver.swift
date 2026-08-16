@@ -11,6 +11,9 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
     private let config: PostgresConnection.Configuration
     private let logger = Logger(label: "com.simpleton.sql.postgres")
     private var connection: PostgresConnection?
+    /// The active schema, driving `search_path` (set on switch) and the schema-scoped introspection
+    /// below. Defaults to "public" — the connection's own default — until `useSchema` changes it.
+    private var currentSchema = "public"
 
     public init(connection c: Connection, secret: ConnectionSecret?) throws {
         let tls: PostgresConnection.Configuration.TLS =
@@ -101,16 +104,47 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
     /// caller reconnects with the target `database` param, so this always returns `false`.
     public func useDatabase(_ name: String) async throws -> Bool { false }
 
-    public func tables(in database: String?) async throws -> [TableInfo] {
+    /// User-visible schemas in the current database (system `pg_*` schemas excluded). `information_schema`
+    /// is kept so it can be browsed like any other schema.
+    public func schemas() async throws -> [String] {
         guard
             case .rows(_, let rows) = try await run(
-                "SELECT table_name, table_type FROM information_schema.tables "
-                    + "WHERE table_schema = 'public' ORDER BY table_name")
+                "SELECT schema_name FROM information_schema.schemata "
+                    + "WHERE schema_name NOT LIKE 'pg\\_%' ORDER BY schema_name")
         else { return [] }
-        return rows.compactMap { row in
-            guard row.count >= 2 else { return nil }
-            let kind: TableKind = row[1].displayString.uppercased().contains("VIEW") ? .view : .table
-            return TableInfo(name: row[0].displayString, kind: kind)
+        return rows.compactMap { $0.first?.displayString }
+    }
+
+    /// Switch the active schema live via `search_path`. `SET` takes no bind parameters, so the schema
+    /// identifier is quoted (internal quotes doubled) — the name comes from `schemas()` (the catalog),
+    /// never user free-text. This redirects both raw editor queries and the introspection below.
+    public func useSchema(_ name: String) async throws -> Bool {
+        _ = try await run("SET search_path TO " + dialect.quoteIdentifier(name))
+        currentSchema = name
+        return true
+    }
+
+    public func tables(in database: String?) async throws -> [TableInfo] {
+        guard let connection else { throw SQLDriverError.notConnected }
+        do {
+            // The active schema is bound as a typed parameter ($1), never interpolated into SQL.
+            let schema = currentSchema
+            let seq = try await connection.query(
+                """
+                SELECT table_name, table_type FROM information_schema.tables \
+                WHERE table_schema = \(schema) ORDER BY table_name
+                """, logger: logger)
+            var out: [TableInfo] = []
+            for try await row in seq {
+                let cells = Array(row)
+                guard cells.count >= 2 else { continue }
+                let name = (try? cells[0].decode(String.self)) ?? ""
+                let type = (try? cells[1].decode(String.self)) ?? ""
+                out.append(TableInfo(name: name, kind: type.uppercased().contains("VIEW") ? .view : .table))
+            }
+            return out
+        } catch {
+            throw SQLDriverError.queryFailed("\(error)")
         }
     }
 
@@ -118,13 +152,15 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
         guard let connection else { throw SQLDriverError.notConnected }
         do {
             let primaryKeys = try await primaryKeyColumns(of: table, on: connection)
-            // `table` is bound as a parameter ($1) via PostgresQuery string interpolation — NOT raw
-            // SQL — so no manual escaping and no injection surface (contrast `run`'s unsafeSQL path,
-            // which intentionally executes the user's own IDE queries).
+            // `table` and the active `schema` are bound as parameters ($1/$2) via PostgresQuery string
+            // interpolation — NOT raw SQL — so no manual escaping and no injection surface (contrast
+            // `run`'s unsafeSQL path, which intentionally executes the user's own IDE queries). Scoping
+            // by schema stops a same-named table in another schema from merging its columns in.
+            let schema = currentSchema
             let seq = try await connection.query(
                 """
                 SELECT column_name, data_type, is_nullable FROM information_schema.columns \
-                WHERE table_name = \(table) ORDER BY ordinal_position
+                WHERE table_name = \(table) AND table_schema = \(schema) ORDER BY ordinal_position
                 """, logger: logger)
             var out: [ColumnInfo] = []
             for try await row in seq {
@@ -150,7 +186,8 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
             // Join the three information_schema views that describe a foreign-key constraint: the
             // owning column (key_column_usage), the referenced column (constraint_column_usage), and
             // the constraint metadata (referential_constraints ties the two together by name).
-            // `table` is bound as `$1` (a typed parameter), never interpolated into SQL.
+            // `table` and the active `schema` are bound as typed parameters, never interpolated.
+            let schema = currentSchema
             let seq = try await connection.query(
                 """
                 SELECT kcu.column_name, ccu.table_name AS referenced_table, \
@@ -160,7 +197,7 @@ public final class PostgresDriver: SQLDriver, @unchecked Sendable {
                 ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema \
                 JOIN information_schema.constraint_column_usage ccu \
                 ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema \
-                WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public' \
+                WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = \(schema) \
                 AND tc.table_name = \(table) ORDER BY kcu.ordinal_position
                 """, logger: logger)
             var out: [ForeignKeyInfo] = []

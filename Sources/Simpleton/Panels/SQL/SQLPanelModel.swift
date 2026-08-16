@@ -54,6 +54,11 @@ final class SQLPanelModel: ObservableObject {
     /// The active database. Seeded from the connection's `database` param on connect, updated by
     /// `selectDatabase`. nil when unknown.
     @Published var selectedDatabase: String?
+    /// The schemas in the current database, for engines with a schema layer (Postgres). Empty for
+    /// MySQL/SQLite, which hides the schema switcher. Reloaded on connect and on a database switch.
+    @Published var schemas: [String] = []
+    /// The active schema (Postgres `search_path`). nil when the engine has no schema layer.
+    @Published var selectedSchema: String?
     /// Non-nil exactly when the current result is a single-table SELECT with a primary key we can
     /// UPDATE by. The grid shows the edit affordance only while this is set. Recomputed on every
     /// `runQuery`; cleared on disconnect or any non-editable result.
@@ -174,7 +179,26 @@ final class SQLPanelModel: ObservableObject {
         savedQueries = await savedStore.saved(for: connectionID)
         databases = (try? await d.databases()) ?? []
         selectedDatabase = activeDatabase ?? databases.first
+        schemas = (try? await d.schemas()) ?? []
+        // The driver starts at its default schema ("public" for Postgres); preselect it when present.
+        selectedSchema = schemas.isEmpty ? nil : (schemas.contains("public") ? "public" : schemas.first)
         await loadSchema()
+    }
+
+    /// Switch the active schema on the live connection (Postgres `search_path`) and reload the schema
+    /// tree. A no-op for engines without a schema layer, when the target is already active, or with no
+    /// live driver.
+    func selectSchema(_ name: String) async {
+        guard let driver, name != selectedSchema else { return }
+        errorMessage = nil
+        do {
+            if try await driver.useSchema(name) {
+                selectedSchema = name
+                await loadSchema()
+            }
+        } catch {
+            errorMessage = Self.describe(error)
+        }
     }
 
     /// Switch the active database. Engines that can switch a live connection (MySQL `USE`) do so and
@@ -229,6 +253,8 @@ final class SQLPanelModel: ObservableObject {
         savedQueries = []
         databases = []
         selectedDatabase = nil
+        schemas = []
+        selectedSchema = nil
         tables = []
         columnsByTable = [:]
     }

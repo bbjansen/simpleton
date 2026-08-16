@@ -28,6 +28,14 @@ public protocol SQLDriver: AnyObject, Sendable {
     /// single file) return `false`, signalling the caller to reconnect to reach `name` instead. `name`
     /// comes from `databases()` (the engine's own catalog), and is identifier-quoted, not interpolated.
     func useDatabase(_ name: String) async throws -> Bool
+    /// The schemas within the current database, for engines with a schema layer distinct from the
+    /// database (Postgres). Engines where a schema *is* the database (MySQL) or has none (SQLite)
+    /// return `[]`, which hides the schema switcher.
+    func schemas() async throws -> [String]
+    /// Switch the active schema on the *live* connection when the engine has a schema layer (Postgres
+    /// `SET search_path`), returning `true`; others return `false`. `name` comes from `schemas()` and
+    /// is identifier-quoted, not interpolated as a value. Introspection then follows the new schema.
+    func useSchema(_ name: String) async throws -> Bool
     /// The placeholder dialect for `execute`, so callers build `UPDATE … WHERE …` with the correct
     /// placeholder syntax and identifier quoting for this engine.
     var dialect: SQLDialect { get }
