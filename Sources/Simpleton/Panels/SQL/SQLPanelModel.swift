@@ -31,12 +31,27 @@ struct CommitOutcome: Equatable {
     let errorMessage: String?
 }
 
+/// One statement's result within a multi-statement run: the statement text and what it returned. The
+/// results view shows one tab per `StatementResult` when a script produced more than one.
+struct StatementResult {
+    let sql: String
+    let result: QueryResult
+}
+
 @MainActor
 final class SQLPanelModel: ObservableObject {
     @Published var connections: [Connection] = []
     @Published var selectedID: UUID?
     @Published var queryText: String = ""
+    /// The currently displayed result — the active tab's result when a script returned several. Kept in
+    /// sync with `selectedResultIndex` so the existing single-result plumbing (grid, editable, FK) is
+    /// unchanged.
     @Published var result: QueryResult?
+    /// One entry per statement in the last run. Length > 1 means a multi-statement script; the results
+    /// view then shows a tab per statement. Single-statement runs hold exactly one entry.
+    @Published var results: [StatementResult] = []
+    /// Which of `results` is shown (and mirrored into `result`). Reset per run.
+    @Published var selectedResultIndex = 0
     @Published var errorMessage: String?
     @Published var isConnecting = false
     @Published var isConnected = false
@@ -246,6 +261,8 @@ final class SQLPanelModel: ObservableObject {
         driver = nil
         isConnected = false
         result = nil
+        results = []
+        selectedResultIndex = 0
         editable = nil
         foreignKeyMatches = [:]
         lastCommit = nil
@@ -277,18 +294,33 @@ final class SQLPanelModel: ObservableObject {
     /// `lastCommit`.
     private func performQuery(sql overrideSQL: String? = nil) async {
         guard let driver else { return }
-        let sql = (overrideSQL ?? queryText).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !sql.isEmpty else { return }
+        let script = (overrideSQL ?? queryText).trimmingCharacters(in: .whitespacesAndNewlines)
+        let statements = SQLStatementSplitter.split(script)
+        guard !statements.isEmpty else { return }
         errorMessage = nil
         let start = DispatchTime.now()
         do {
-            let queryResult = try await driver.run(sql)
+            // Run each statement in order, one result tab per statement. Editing/FK navigation stay
+            // single-statement affordances: they need a single-table SELECT context that a script
+            // doesn't provide, so a multi-statement run is read-only.
+            var collected: [StatementResult] = []
+            for statement in statements {
+                collected.append(StatementResult(sql: statement, result: try await driver.run(statement)))
+            }
             lastQueryDuration = Self.elapsed(since: start)
-            result = queryResult
-            editable = await detectEditable(sql: sql, result: queryResult, driver: driver)
-            foreignKeyMatches = await detectForeignKeys(result: queryResult, editable: editable, driver: driver)
+            results = collected
+            selectedResultIndex = collected.count - 1  // show the last statement's result by default
+            result = collected[selectedResultIndex].result
+            if statements.count == 1 {
+                editable = await detectEditable(sql: statements[0], result: collected[0].result, driver: driver)
+                foreignKeyMatches = await detectForeignKeys(
+                    result: collected[0].result, editable: editable, driver: driver)
+            } else {
+                editable = nil
+                foreignKeyMatches = [:]
+            }
             if let id = selectedConnection?.id {
-                await history.record(sql, for: id)
+                await history.record(script, for: id)
                 historyItems = await history.history(for: id)
             }
         } catch {
@@ -297,6 +329,13 @@ final class SQLPanelModel: ObservableObject {
             foreignKeyMatches = [:]
             errorMessage = Self.describe(error)
         }
+    }
+
+    /// Show a different statement's result tab (updates `result` for the grid). Bounds-checked no-op.
+    func selectResult(_ index: Int) {
+        guard results.indices.contains(index) else { return }
+        selectedResultIndex = index
+        result = results[index].result
     }
 
     /// Compute the navigable FK cells for `result`. The source table is known only when editable
@@ -334,6 +373,8 @@ final class SQLPanelModel: ObservableObject {
             let queryResult = try await driver.execute(sql, [value])
             lastQueryDuration = Self.elapsed(since: start)
             result = queryResult
+            results = [StatementResult(sql: sql, result: queryResult)]
+            selectedResultIndex = 0
             editable = await detectEditable(sql: sql, result: queryResult, driver: driver)
             foreignKeyMatches = await detectForeignKeys(result: queryResult, editable: editable, driver: driver)
             if let id = selectedConnection?.id {

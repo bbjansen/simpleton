@@ -1013,15 +1013,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // 6. Database switcher: connect loads the database list; SQLite exposes "main" as active.
             let dbLoaded = model.databases.contains("main") && model.selectedDatabase == "main"
 
+            // 7. Multi-statement run → one read-only result tab per statement; selecting a tab shows it.
+            model.queryText = "SELECT id FROM t; SELECT name FROM t"
+            await model.runQuery()
+            let twoTabs = model.results.count == 2 && model.editable == nil
+            model.selectResult(0)
+            var firstIsID = false
+            if case .rows(let cols, _) = model.result { firstIsID = cols.first?.name == "id" }
+            model.selectResult(1)
+            var secondIsName = false
+            if case .rows(let cols, _) = model.result { secondIsName = cols.first?.name == "name" }
+            let tabsOK = twoTabs && firstIsID && secondIsName
+            // A single statement collapses back to one tab and stays editable.
+            model.queryText = "SELECT id, name FROM t"
+            await model.runQuery()
+            let singleTab = model.results.count == 1 && model.editable?.table == "t"
+
             let ok =
                 connected && editableDetected && aggregateNotEditable && committedOK && wroteValue
-                && timedOK && clearedOnError && savedOK && removedOK && dbLoaded
+                && timedOK && clearedOnError && savedOK && removedOK && dbLoaded && tabsOK && singleTab
             NSLog(
                 "SIMP-SQLE2E RESULT %@: connected=%@ editable=%@ aggNotEditable=%@ committed=%@ wrote=%@ "
-                    + "timed=%@ clearedOnErr=%@ saved=%@ removed=%@ dbLoaded=%@ error=%@",
+                    + "timed=%@ clearedOnErr=%@ saved=%@ removed=%@ dbLoaded=%@ tabs=%@ singleTab=%@ error=%@",
                 ok ? "PASS" : "FAIL", "\(connected)", "\(editableDetected)", "\(aggregateNotEditable)",
                 "\(committedOK)", "\(wroteValue)", "\(timedOK)", "\(clearedOnError)", "\(savedOK)", "\(removedOK)",
-                "\(dbLoaded)", model.errorMessage ?? "nil")
+                "\(dbLoaded)", "\(tabsOK)", "\(singleTab)", model.errorMessage ?? "nil")
             NSApp.terminate(nil)
         }
     }
