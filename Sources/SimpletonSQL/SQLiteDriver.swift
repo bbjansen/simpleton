@@ -62,6 +62,10 @@ public final class SQLiteDriver: SQLDriver, @unchecked Sendable {
     /// by opening a different connection, so this always returns `false`.
     public func useDatabase(_ name: String) async throws -> Bool { false }
 
+    /// SQLite has no schema layer distinct from the database, so there is nothing to switch.
+    public func schemas() async throws -> [String] { [] }
+    public func useSchema(_ name: String) async throws -> Bool { false }
+
     public func tables(in database: String?) async throws -> [TableInfo] {
         let result = try await run(
             "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY name")

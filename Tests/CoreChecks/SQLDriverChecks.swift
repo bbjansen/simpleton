@@ -105,6 +105,9 @@ func runSQLDriverChecks(_ t: TestRunner) async {
             // the caller would reconnect to reach another database.
             let switched = try await driver.useDatabase("main")
             t.expect(!switched, "SQLite cannot switch a live connection")
+            // SQLite has no schema layer, so the schema switcher is inert.
+            t.expect(try await driver.schemas().isEmpty, "SQLite exposes no schemas")
+            t.expect(try await driver.useSchema("anything") == false, "SQLite cannot switch schema")
             await driver.close()
         } catch {
             t.expect(false, "unexpected error: \(error)")
@@ -250,6 +253,24 @@ func runSQLDriverChecks(_ t: TestRunner) async {
                     }
                     await d2.close()
                 }
+                // Schema switch (search_path): seed a table in `public` and one in a new schema, then
+                // prove useSchema redirects introspection to the active schema and back.
+                _ = try await driver.run("CREATE SCHEMA IF NOT EXISTS simp_test")
+                _ = try await driver.run("CREATE TABLE IF NOT EXISTS public.simp_pub (id int)")
+                _ = try await driver.run("CREATE TABLE IF NOT EXISTS simp_test.simp_sales (id int)")
+                let schemaList = try await driver.schemas()
+                t.expect(schemaList.contains("simp_test"), "new schema listed")
+                t.expect(schemaList.contains("public"), "public schema listed")
+                let pubTables = try await driver.tables(in: nil)
+                t.expect(pubTables.contains { $0.name == "simp_pub" }, "public table visible before switch")
+                t.expect(!pubTables.contains { $0.name == "simp_sales" }, "other-schema table hidden in public")
+                t.expect(try await driver.useSchema("simp_test"), "useSchema returns true (live search_path)")
+                let salesTables = try await driver.tables(in: nil)
+                t.expect(salesTables.contains { $0.name == "simp_sales" }, "schema table visible after switch")
+                t.expect(!salesTables.contains { $0.name == "simp_pub" }, "public table hidden after switch")
+                _ = try await driver.run("DROP TABLE IF EXISTS simp_test.simp_sales")
+                _ = try await driver.run("DROP SCHEMA IF EXISTS simp_test CASCADE")
+                _ = try await driver.run("DROP TABLE IF EXISTS public.simp_pub")
                 await driver.close()
             } catch {
                 t.expect(false, "unexpected error: \(error)")

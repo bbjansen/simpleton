@@ -89,6 +89,7 @@ struct SQLPanelView: View {
             .labelsHidden()
             .onChange(of: model.selectedID) { Task { await model.connectSelected() } }
             SQLDatabasePicker(model: model)
+            SQLSchemaPicker(model: model)
             Button(model.isConnected ? "Disconnect" : "Connect") {
                 Task { model.isConnected ? await model.disconnect() : await model.connect() }
             }

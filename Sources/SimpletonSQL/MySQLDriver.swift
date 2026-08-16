@@ -107,6 +107,11 @@ public final class MySQLDriver: SQLDriver, @unchecked Sendable {
         }
     }
 
+    /// In MySQL a schema *is* a database, so the database switcher already covers it — there is no
+    /// separate schema axis to expose.
+    public func schemas() async throws -> [String] { [] }
+    public func useSchema(_ name: String) async throws -> Bool { false }
+
     public func tables(in database: String?) async throws -> [TableInfo] {
         guard case .rows(_, let rows) = try await run("SHOW FULL TABLES") else { return [] }
         return rows.compactMap { row in

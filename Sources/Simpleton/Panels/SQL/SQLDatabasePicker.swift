@@ -31,3 +31,30 @@ struct SQLDatabasePicker: View {
         )
     }
 }
+
+/// The active-schema switcher (Postgres `search_path`), shown only for engines that expose a schema
+/// layer distinct from the database — MySQL/SQLite report no schemas, so it stays hidden. Selecting a
+/// schema calls `model.selectSchema`, which switches live and reloads the schema tree.
+struct SQLSchemaPicker: View {
+    @ObservedObject var model: SQLPanelModel
+
+    var body: some View {
+        if model.isConnected && model.schemas.count > 1 {
+            Picker("", selection: selection) {
+                ForEach(model.schemas, id: \.self) { s in Text(s).tag(s) }
+            }
+            .labelsHidden().fixedSize().help("Active schema")
+            .disabled(model.isConnecting)
+        }
+    }
+
+    private var selection: Binding<String> {
+        Binding(
+            get: {
+                let current = model.selectedSchema ?? ""
+                return model.schemas.contains(current) ? current : (model.schemas.first ?? "")
+            },
+            set: { newValue in Task { await model.selectSchema(newValue) } }
+        )
+    }
+}
