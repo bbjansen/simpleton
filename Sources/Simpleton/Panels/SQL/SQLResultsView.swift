@@ -45,9 +45,25 @@ struct SQLResultsView: View {
     /// Navigate a foreign key: run `SELECT * FROM ref WHERE refcol = ?` with the clicked cell's value
     /// bound (never interpolated) and show the referenced row.
     let onNavigateForeignKey: (SQLForeignKeyMatcher.Match, SQLValue) async -> Void
+    /// One entry per statement from the last run; a tab strip appears when there is more than one.
+    let statementResults: [StatementResult]
+    /// Which statement's result is shown (drives `result`, kept in sync by the model).
+    let selectedResultIndex: Int
+    /// Switch to another statement's result tab.
+    let onSelectResult: (Int) -> Void
     @ObservedObject private var themeSettings = ThemeSettings.shared
 
     var body: some View {
+        VStack(spacing: 0) {
+            if statementResults.count > 1 {
+                resultTabBar
+                ThemedDivider()
+            }
+            resultContent
+        }
+    }
+
+    @ViewBuilder private var resultContent: some View {
         switch result {
         case .none:
             hint("Run a query to see results.")
@@ -64,6 +80,39 @@ struct SQLResultsView: View {
                 )
                 .id(resultIdentity(columns: columns, rowCount: rows.count))
             }
+        }
+    }
+
+    /// A horizontal strip of statement tabs, one per result, showing the statement's leading keyword
+    /// and row/affected count. The active tab is highlighted; clicking one shows that result.
+    private var resultTabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(Array(statementResults.enumerated()), id: \.offset) { index, sr in
+                    Button {
+                        onSelectResult(index)
+                    } label: {
+                        Text(Self.tabLabel(sr, index))
+                            .font(DT.monoFont(size: 10))
+                            .foregroundColor(index == selectedResultIndex ? DT.textPrimary : DT.textTertiary)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(index == selectedResultIndex ? DT.hover : Color.clear)
+                            .cornerRadius(5)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
+        }
+    }
+
+    /// A compact tab label: 1-based position, the statement's leading keyword, and its row/affected
+    /// count — e.g. `1. SELECT (12)`.
+    private static func tabLabel(_ sr: StatementResult, _ index: Int) -> String {
+        let verb = sr.sql.split(whereSeparator: { $0.isWhitespace }).first.map { String($0).uppercased() } ?? "SQL"
+        switch sr.result {
+        case .rows(_, let rows): return "\(index + 1). \(verb) (\(rows.count))"
+        case .status(let affected, _): return "\(index + 1). \(verb) (\(affected))"
         }
     }
 

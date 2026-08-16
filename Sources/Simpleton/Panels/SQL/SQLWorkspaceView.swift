@@ -159,7 +159,10 @@ struct SQLWorkspaceView: View {
                     await model.navigateForeignKey(
                         referencedTable: match.referencedTable,
                         referencedColumn: match.referencedColumn, value: value)
-                }
+                },
+                statementResults: model.results,
+                selectedResultIndex: model.selectedResultIndex,
+                onSelectResult: { model.selectResult($0) }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

@@ -73,7 +73,10 @@ struct SQLPanelView: View {
                     await model.navigateForeignKey(
                         referencedTable: match.referencedTable,
                         referencedColumn: match.referencedColumn, value: value)
-                }
+                },
+                statementResults: model.results,
+                selectedResultIndex: model.selectedResultIndex,
+                onSelectResult: { model.selectResult($0) }
             )
         }
     }
