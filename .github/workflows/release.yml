@@ -39,7 +39,7 @@ jobs:
           ditto -c -k --keepParent Simpleton.app "Simpleton-${GITHUB_REF_NAME}.zip"
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           prerelease: true
           # Release notes are curated per release (see CHANGELOG.md); leave an existing
