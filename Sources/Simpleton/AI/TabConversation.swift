@@ -28,6 +28,20 @@ final class TabConversation: ObservableObject {
         self.splitController = splitController
         self.aiService = aiService
         rebuildPaneLabels()
+        // Screenshot demo mode: seed a short sample conversation so the AI panel shows a real exchange
+        // in captures (no live provider call needed). Gated by env; off in normal use.
+        if ProcessInfo.processInfo.environment["SIMPLETON_SHOT_DEMO"] != nil {
+            messages = [
+                ChatMessage(
+                    role: "user", content: "What's listening on port 8080 and how do I free it?"),
+                ChatMessage(
+                    role: "assistant",
+                    content:
+                        "`lsof -i :8080` shows **node** (PID 588) holding it. Free it with `kill -9 588`, "
+                        + "or start your dev server elsewhere: `PORT=8081 npm run dev`. Want me to run the kill?"
+                ),
+            ]
+        }
     }
 
     // MARK: - Pane Labels

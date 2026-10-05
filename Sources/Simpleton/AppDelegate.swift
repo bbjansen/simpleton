@@ -190,6 +190,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.panelRegistry = panelRegistry
 
+        // Screenshot harness: `--shot-profile <name>` activates a panel profile at launch (the active
+        // profile is otherwise in-memory only and resets to General each launch). No-op without it.
+        if let i = CommandLine.arguments.firstIndex(of: "--shot-profile"),
+            i + 1 < CommandLine.arguments.count,
+            var profile = panelRegistry.profiles.first(where: { $0.name == CommandLine.arguments[i + 1] })
+        {
+            // `--shot-active-panel <id>` starts that left panel active (its onAppear auto-loads the
+            // content) so each panel can be captured with a plain relaunch — no runtime AX clicking.
+            if let j = CommandLine.arguments.firstIndex(of: "--shot-active-panel"),
+                j + 1 < CommandLine.arguments.count
+            {
+                profile.leftActivePanelID = CommandLine.arguments[j + 1]
+            }
+            panelRegistry.activeProfile = profile
+        }
+
         // Fire startup event
         pluginManager?.fireEvent(
             .onStartup,
@@ -475,6 +491,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         wc.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
 
+        maybeLaunchFullScreenForScreenshots(wc.window)
+
         // Focus the terminal in the new window's active tab.
         if let tabContainer = wc.tabManager.activeContainer {
             wc.window?.makeFirstResponder(
@@ -482,6 +500,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
 
+    }
+
+    /// Screenshot harness only: when launched with `--shot-fullscreen`, pin the window to the built-in
+    /// Retina display and enter native fullscreen. Driving fullscreen in-process is reliable (over
+    /// Accessibility it is not, and on a multi-display setup the window otherwise opens on a secondary
+    /// display's inactive Space where it can't be captured cleanly). No-op without the flag.
+    private func maybeLaunchFullScreenForScreenshots(_ window: NSWindow?) {
+        guard CommandLine.arguments.contains("--shot-fullscreen"), let window else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if let builtin = NSScreen.screens.first(where: { screen in
+                (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+                    .map { CGDisplayIsBuiltin($0) != 0 } ?? false
+            }) {
+                window.setFrame(builtin.frame, display: true)
+            }
+            if !window.styleMask.contains(.fullScreen) {
+                window.toggleFullScreen(nil)
+            }
+        }
     }
 
     @objc private func windowClosed(_ notification: Notification) {

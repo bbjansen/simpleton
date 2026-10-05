@@ -76,6 +76,17 @@ struct SSHTunnelsPanelView: View {
     }
 
     private func loadTunnels() {
+        // Screenshot demo mode: show sample active tunnels (real sessions here are local, so the
+        // panel would otherwise be empty). Gated by env; off in normal use.
+        if ProcessInfo.processInfo.environment["SIMPLETON_SHOT_DEMO"] != nil {
+            tunnels = [
+                TunnelEntry(localPort: 8080, remoteHost: "localhost", remotePort: 80, paneName: "prod-web"),
+                TunnelEntry(localPort: 5432, remoteHost: "db.internal", remotePort: 5432, paneName: "db-primary"),
+                TunnelEntry(
+                    localPort: 9090, remoteHost: "grafana.internal", remotePort: 3000, paneName: "staging-api"),
+            ]
+            return
+        }
         guard let panes = tabContainerProvider()?.splitController.panes else {
             tunnels = []
             return

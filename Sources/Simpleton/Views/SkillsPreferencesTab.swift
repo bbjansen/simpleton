@@ -142,6 +142,7 @@ struct SkillsPreferencesTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("skill-\(skill.name)")
     }
 
     private func newSkill() {
