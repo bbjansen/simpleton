@@ -319,6 +319,9 @@ struct SpecDrivenDevView: View {
         else {
             return .systemAction
         }
+        // Defense in depth: never forward a code-ref link whose path isn't safe (control bytes or shell /
+        // terminal metacharacters) to the model. The model guards too, but we drop it here outright.
+        guard CodeRefLinkParser.isSafePath(path) else { return .discarded }
         model.openCodeRef(path: path, line: line)
         return .handled
     }

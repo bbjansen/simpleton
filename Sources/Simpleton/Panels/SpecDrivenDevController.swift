@@ -305,6 +305,14 @@ final class SpecDrivenDevModel: ObservableObject {
     /// the project root and inserts an editor command into the active pane, e.g.
     /// `${EDITOR:-vi} <file> +<line>`, letting the user open it in their configured editor.
     func openCodeRef(path: String, line: Int) {
+        // Security: the path can arrive out-of-band — a crafted markdown link using the custom code-ref
+        // URL scheme bypasses the detector regex. Reject anything with control bytes or shell/terminal
+        // metacharacters before composing a command for the pane, so a malicious reference cannot inject
+        // terminal control characters or extra commands. See CodeRefLinkParser.isSafePath.
+        guard CodeRefLinkParser.isSafePath(path), line >= 1 else {
+            errorMessage = "Ignored an unsafe code reference."
+            return
+        }
         let resolved = CodeRefLinkParser.resolvedPath(path: path, projectRoot: projectRoot)
         let quoted = Self.shellQuote(resolved)
         onOpenFile("${EDITOR:-vi} \(quoted) +\(line)")

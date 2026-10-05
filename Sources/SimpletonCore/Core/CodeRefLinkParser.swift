@@ -80,4 +80,31 @@ public enum CodeRefLinkParser {
         let base = URL(fileURLWithPath: projectRoot, isDirectory: true)
         return base.appendingPathComponent(expanded).standardizedFileURL.path
     }
+
+    /// The characters a code-reference path may contain: ASCII letters/digits plus `. / @ - _ ~` — the
+    /// same class the detector matches. Deliberately excludes whitespace, quotes, control bytes, and
+    /// shell/terminal metacharacters (`;`, `|`, `&`, `$`, backtick, `(`, `)`, `<`, `>`, `*`, `!`, …).
+    private static let safePathScalars: CharacterSet = {
+        var set = CharacterSet()
+        set.insert(charactersIn: "abcdefghijklmnopqrstuvwxyz")
+        set.insert(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        set.insert(charactersIn: "0123456789")
+        set.insert(charactersIn: "._/@-~")
+        return set
+    }()
+
+    /// Whether `path` is safe to compose into a shell/terminal command. References found by `matches`
+    /// already satisfy this, but a path can arrive out-of-band — e.g. a crafted markdown link using the
+    /// custom code-ref URL scheme directly, which bypasses the detector. Re-validating holds every path
+    /// to the detector's safe shape: no control bytes (newlines, carriage returns, escape sequences) that
+    /// a terminal emulator would interpret, and no whitespace or shell metacharacters. This is the guard
+    /// against terminal command injection via a malicious code reference.
+    public static func isSafePath(_ path: String) -> Bool {
+        guard !path.isEmpty, path.utf16.count <= 1024 else { return false }
+        for scalar in path.unicodeScalars {
+            if CharacterSet.controlCharacters.contains(scalar) { return false }
+            if !safePathScalars.contains(scalar) { return false }
+        }
+        return true
+    }
 }

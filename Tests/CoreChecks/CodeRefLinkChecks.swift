@@ -54,4 +54,26 @@ func runCodeRefLinkChecks(_ t: TestRunner) {
         let dotdot = CodeRefLinkParser.resolvedPath(path: "a/../b.swift", projectRoot: root)
         t.expectEqual(dotdot, "/tmp/proj/b.swift", "dot-dot standardized away")
     }
+
+    t.suite("CodeRefLinkParser.isSafePath: accepts normal paths") {
+        for p in ["Sources/App/Main.swift", "File.swift", "./scripts/run.sh", "~/code/x.rb", "a-b_c/d.e2"] {
+            t.expect(CodeRefLinkParser.isSafePath(p), "safe: \(p)")
+        }
+    }
+
+    t.suite("CodeRefLinkParser.isSafePath: rejects injection vectors") {
+        // Terminal control-character injection: newline/CR submit lines; ESC drives the emulator.
+        t.expect(!CodeRefLinkParser.isSafePath("foo.swift\nrm -rf ~"), "rejects newline")
+        t.expect(!CodeRefLinkParser.isSafePath("foo.swift\r\nwhoami"), "rejects carriage return")
+        t.expect(!CodeRefLinkParser.isSafePath("f.swift\u{1b}[31m"), "rejects ESC")
+        t.expect(!CodeRefLinkParser.isSafePath("f.swift\u{07}"), "rejects BEL")
+        t.expect(!CodeRefLinkParser.isSafePath("f.swift\u{7f}"), "rejects DEL")
+        // Shell metacharacters that would break out of (or around) the quoted argument.
+        for p in [
+            "a;rm -rf.sh", "a$(whoami).swift", "a`id`.swift", "a|b.swift", "a&b.swift",
+            "a>b.swift", "a'.swift", "a\".swift", "a b.swift", "a*.swift", "",
+        ] {
+            t.expect(!CodeRefLinkParser.isSafePath(p), "unsafe: \(p.debugDescription)")
+        }
+    }
 }
