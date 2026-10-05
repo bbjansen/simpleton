@@ -10,7 +10,7 @@ func runSpecWorkspaceChecks(_ t: TestRunner) async {
     }
 
     t.suite("SpecMode / SpecArtifact enumerate all cases") {
-        t.expectEqual(SpecMode.allCases.count, 2, "two modes in phase 1")
+        t.expectEqual(SpecMode.allCases.count, 3, "plan, act, board modes")
         t.expectEqual(SpecArtifact.allCases.count, 4, "four artifacts defined")
         t.expectEqual(SpecMode.plan.displayName, "Plan", "plan display name")
     }

@@ -19,15 +19,23 @@ struct SpecDrivenDevView: View {
             modePicker
             ThemedDivider()
 
-            switch model.activeMode {
-            case .plan:
-                planControls
-            case .act:
-                actNotice
+            if model.activeMode == .board {
+                KanbanBoardView(model: model)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                switch model.activeMode {
+                case .plan:
+                    planControls
+                case .act:
+                    actNotice
+                case .board:
+                    EmptyView()
+                }
+
+                ThemedDivider()
+                artifactSlot
             }
 
-            ThemedDivider()
-            artifactSlot
             ThemedDivider()
             footer
         }

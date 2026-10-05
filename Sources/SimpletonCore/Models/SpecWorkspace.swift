@@ -9,12 +9,14 @@ import Foundation
 public enum SpecMode: String, Codable, CaseIterable, Sendable {
     case plan
     case act
+    case board
 
     /// Human-readable label for the mode control.
     public var displayName: String {
         switch self {
         case .plan: return "Plan"
         case .act: return "Act"
+        case .board: return "Board"
         }
     }
 }

@@ -19,6 +19,7 @@ final class SpecDrivenDevModel: ObservableObject {
     @Published var isEditing = false
     @Published var projectRoot: String = ""
     @Published var errorMessage: String?
+    @Published var board = KanbanBoard()
 
     private let aiService: AIService?
     private let currentPaneProvider: () -> PaneController?
@@ -41,7 +42,11 @@ final class SpecDrivenDevModel: ObservableObject {
         let state = await store.state(for: projectRoot)
         activeMode = state.activeMode
         activeArtifact = state.activeArtifact
-        await loadArtifact()
+        if activeMode == .board {
+            await loadBoard()
+        } else {
+            await loadArtifact()
+        }
     }
 
     /// The git top-level of `cwd`, if `cwd` is inside a repo; otherwise nil.
@@ -118,11 +123,80 @@ final class SpecDrivenDevModel: ObservableObject {
         }
     }
 
-    /// Switch the active mode and persist the choice.
+    /// Switch the active mode and persist the choice. Entering `.board` points the active artifact at
+    /// `board.md` and loads it; leaving it restores the `plan` artifact.
     func setMode(_ mode: SpecMode) async {
         guard mode != activeMode else { return }
         activeMode = mode
+        if mode == .board {
+            activeArtifact = .board
+            await loadBoard()
+        } else if activeArtifact == .board {
+            activeArtifact = .plan
+            await loadArtifact()
+        }
         await persistState()
+    }
+
+    // MARK: - Board (kanban over board.md)
+
+    /// Read `board.md` from disk and parse it into `board`.
+    func loadBoard() async {
+        let markdown = await store.readArtifact(.board, projectRoot: projectRoot)
+        board = BoardMarkdown.parse(markdown)
+    }
+
+    /// Serialize `board` and write it back to `board.md`.
+    func saveBoard() async {
+        do {
+            try await store.writeArtifact(
+                .board, projectRoot: projectRoot, contents: BoardMarkdown.serialize(board))
+            errorMessage = nil
+        } catch {
+            errorMessage = "Could not save board.md: \(error.localizedDescription)"
+        }
+    }
+
+    /// Move a card to another column in-memory, then persist the whole board to `board.md`.
+    func moveCard(_ card: KanbanCard, to kind: KanbanColumnKind) async {
+        board.moveCard(id: card.id, to: kind)
+        await saveBoard()
+    }
+
+    /// Toggle a card's done state in-memory, then persist to `board.md`.
+    func toggleCard(_ card: KanbanCard) async {
+        board.toggleCard(id: card.id)
+        await saveBoard()
+    }
+
+    /// Ask the AI for a task list for `goal`, write it to `board.md` (tasks land in Backlog/Todo), and
+    /// reload the board. The quick path for Board mode, mirroring `generatePlan` for Plan mode.
+    func generateTasks(goal: String) async {
+        let trimmed = goal.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let aiService else {
+            errorMessage = "AI is not configured. Enable it in Preferences > AI."
+            return
+        }
+        activeMode = .board
+        activeArtifact = .board
+        isGenerating = true
+        errorMessage = nil
+        defer { isGenerating = false }
+
+        let user = "Project root: \(projectRoot)\n\nGoal:\n\(trimmed)"
+        do {
+            let response = try await aiService.complete(
+                system: Self.taskSystemPrompt, user: user, options: AIOptions(maxTokens: 1500, temperature: 0.2))
+            let markdown = response.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Normalize through the parser so unexpected AI formatting still yields a canonical board.
+            let normalized = BoardMarkdown.serialize(BoardMarkdown.parse(markdown))
+            try await store.writeArtifact(.board, projectRoot: projectRoot, contents: normalized)
+            board = BoardMarkdown.parse(normalized)
+            await persistState()
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     private func persistState() async {
@@ -144,6 +218,15 @@ final class SpecDrivenDevModel: ObservableObject {
         concrete tasks as GitHub-style checkboxes: `- [ ] task`.
         Keep tasks small, specific, and verifiable. Prefer the fewest phases that fully deliver the \
         goal. Do not invent requirements beyond the stated goal.
+        """
+
+    static let taskSystemPrompt = """
+        You are a senior software engineer breaking a goal into a kanban task list for a developer.
+        Output ONLY Markdown with exactly these four section headings, in this order, and nothing else: \
+        `## Backlog`, `## Todo`, `## In Progress`, `## Done`.
+        Under each heading, list tasks as GitHub-style checkboxes: `- [ ] task`. Put every task in \
+        `## Backlog` or `## Todo` (leave `## In Progress` and `## Done` empty). Keep tasks small, \
+        specific, and verifiable. No preamble, no closing remarks, no code fences.
         """
 }
 

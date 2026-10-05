@@ -52,5 +52,6 @@ runSplitNodeChecks(runner)
 runThemeChecks(runner)
 runAppearanceThemeChecks(runner)
 runThemePaletteChecks(runner)
+runBoardMarkdownChecks(runner)
 
 exit(runner.finish())
