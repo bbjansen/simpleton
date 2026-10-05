@@ -79,6 +79,7 @@ extension PanelProfile {
         static let s3 = "s3"
         static let amqp = "amqp"
         static let dataConnections = "data-connections"
+        static let specDrivenDev = "spec-dev"
     }
 }
 

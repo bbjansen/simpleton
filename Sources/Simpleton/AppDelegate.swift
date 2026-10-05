@@ -171,6 +171,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panelRegistry.register(.s3)
         panelRegistry.register(.amqp)
         panelRegistry.register(.dataConnections)
+        panelRegistry.register(.specDrivenDev)
         // Map connection kinds to their GUI client panel so Data Connections can launch them.
         GUIClientRegistry.shared.register(
             kinds: Array(SQLPanelModel.sqlKinds), panelID: PanelProfile.PanelID.sql)
