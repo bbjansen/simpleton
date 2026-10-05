@@ -170,5 +170,13 @@ extension PanelProfile {
             leftActivePanelID: "connections",
             rightActivePanelID: nil
         ),
+        PanelProfile(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
+            name: "Spec-Dev",
+            leftPanelIDs: ["connections"],
+            rightPanelIDs: ["spec-dev", "ai-chat"],
+            leftActivePanelID: "connections",
+            rightActivePanelID: "spec-dev"
+        ),
     ]
 }

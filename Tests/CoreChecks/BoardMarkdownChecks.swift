@@ -111,4 +111,35 @@ func runBoardMarkdownChecks(_ t: TestRunner) {
         board.toggleCard(id: card.id)
         t.expectEqual(board.cards(in: .todo).first?.done, true, "toggle flips done")
     }
+
+    t.suite("KanbanBoard addCard + title lookup/move (AI-tool helpers)") {
+        var board = KanbanBoard()
+        let added = board.addCard(title: "write parser", to: .todo)
+        t.expectEqual(board.cards(in: .todo).count, 1, "card added to todo")
+        t.expectEqual(board.cards(in: .todo).first?.title, "write parser", "added title set")
+        t.expectEqual(added.done, false, "non-done column → not done")
+
+        let doneCard = board.addCard(title: "scaffold", to: .done)
+        t.expectEqual(doneCard.done, true, "adding to Done marks done")
+
+        board.addCard(title: "research")
+        t.expectEqual(board.cards(in: .backlog).first?.title, "research", "default column is backlog")
+
+        t.expectEqual(board.column(ofCardTitled: "WRITE PARSER"), .todo, "title lookup is case-insensitive")
+        t.expect(board.column(ofCardTitled: "missing") == nil, "unknown title → nil column")
+
+        let moved = board.moveCard(titled: "  write parser ", to: .inProgress)
+        t.expect(moved, "move-by-title succeeds for a matching card")
+        t.expectEqual(board.cards(in: .todo).count, 0, "card left todo")
+        t.expectEqual(board.cards(in: .inProgress).first?.title, "write parser", "card entered in-progress")
+
+        let movedToDone = board.moveCard(titled: "write parser", to: .done)
+        t.expect(movedToDone, "move-by-title to done succeeds")
+        t.expectEqual(
+            board.cards(in: .done).first(where: { $0.title == "write parser" })?.done, true,
+            "move to done marks done")
+
+        let missing = board.moveCard(titled: "nope", to: .done)
+        t.expect(!missing, "move-by-title returns false when no card matches")
+    }
 }

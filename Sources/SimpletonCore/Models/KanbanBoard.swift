@@ -106,6 +106,47 @@ public struct KanbanBoard: Equatable, Sendable {
         }
     }
 
+    /// Append a new card with `title` to `column`, marking it done when the column is `.done` so the
+    /// checkbox state and the column stay consistent. Returns the created card.
+    @discardableResult
+    public mutating func addCard(title: String, to column: KanbanColumnKind = .backlog) -> KanbanCard {
+        let card = KanbanCard(title: title, done: column == .done)
+        for index in columns.indices where columns[index].kind == column {
+            columns[index].cards.append(card)
+            break
+        }
+        return card
+    }
+
+    /// The column currently holding the first card whose title matches `title` (case-insensitive,
+    /// whitespace-trimmed), or nil when no card matches.
+    public func column(ofCardTitled title: String) -> KanbanColumnKind? {
+        let needle = title.trimmingCharacters(in: .whitespaces).lowercased()
+        for column in columns {
+            if column.cards.contains(where: { $0.title.trimmingCharacters(in: .whitespaces).lowercased() == needle }) {
+                return column.kind
+            }
+        }
+        return nil
+    }
+
+    /// Move the first card whose title matches `title` (case-insensitive, whitespace-trimmed) into
+    /// `destination`, syncing its done state the same way `moveCard(id:to:)` does. Returns true when a
+    /// card was moved, false when none matched.
+    @discardableResult
+    public mutating func moveCard(titled title: String, to destination: KanbanColumnKind) -> Bool {
+        let needle = title.trimmingCharacters(in: .whitespaces).lowercased()
+        for column in columns {
+            if let card = column.cards.first(where: {
+                $0.title.trimmingCharacters(in: .whitespaces).lowercased() == needle
+            }) {
+                moveCard(id: card.id, to: destination)
+                return true
+            }
+        }
+        return false
+    }
+
     /// Toggle the `done` flag of the card with `cardID` in place. No-op if not found.
     public mutating func toggleCard(id cardID: String) {
         for index in columns.indices {

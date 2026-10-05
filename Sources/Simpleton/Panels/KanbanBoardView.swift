@@ -48,7 +48,7 @@ struct KanbanBoardView: View {
                     Text(model.isGenerating ? "…" : "Tasks")
                         .font(.system(size: 11, weight: .medium))
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(DT.accent.opacity(0.18))
                 .foregroundColor(DT.textPrimary)
