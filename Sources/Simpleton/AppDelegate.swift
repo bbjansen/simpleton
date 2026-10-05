@@ -503,6 +503,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         activeWindowController?.tabManager.activeContainer?.splitController
     }
 
+    /// The primary terminal window used to anchor floating panels (command palette, quick connect).
+    /// Prefer the app's main window — it stays the terminal even when a nonactivating panel is key —
+    /// then any ordered terminal window. Never returns a panel, so a panel is never parented to a panel
+    /// (which would hide the second panel the moment the first one dismisses). A Simpleton terminal
+    /// window is identified by `activeTabContainer != nil` (its content VC is a swappable host, not the
+    /// container itself, so `contentViewController is TabContainerController` no longer holds).
+    private var terminalWindow: NSWindow? {
+        if let main = NSApp.mainWindow, main.activeTabContainer != nil {
+            return main
+        }
+        let candidates = NSApp.orderedWindows + windowControllers.compactMap { $0.window }
+        return candidates.first { $0.activeTabContainer != nil }
+    }
+
     // MARK: - Config
 
     private func loadConfig() {
@@ -572,9 +586,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             quickConnectPanel?.dismiss()
             return
         }
-        // Capture the terminal window BEFORE showing the panel, because the panel
-        // becomes key and NSApp.keyWindow would then point to the panel itself.
-        let parentWindow = NSApp.keyWindow
+        // Anchor to the real terminal window — never whatever is key (a command palette could be key
+        // here), so the panel parents to the terminal and positions over it instead of over a panel.
+        let parentWindow = terminalWindow
         // Reuse the existing panel instance; do NOT recreate it here.
         quickConnectPanel?.show(relativeTo: parentWindow) { [weak self] bookmark in
             self?.connectToBookmark(bookmark, in: parentWindow)
@@ -589,7 +603,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let actions = buildPaletteActions()
-        commandPalettePanel?.show(relativeTo: NSApp.keyWindow, actions: actions)
+        commandPalettePanel?.show(relativeTo: terminalWindow, actions: actions)
     }
 
     private func buildPaletteActions() -> [PaletteAction] {
