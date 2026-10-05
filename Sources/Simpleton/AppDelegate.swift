@@ -190,6 +190,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.panelRegistry = panelRegistry
 
+        // Screenshot harness: `--shot-profile <name>` activates a panel profile at launch (the active
+        // profile is otherwise in-memory only and resets to General each launch). No-op without it.
+        if let i = CommandLine.arguments.firstIndex(of: "--shot-profile"),
+            i + 1 < CommandLine.arguments.count,
+            var profile = panelRegistry.profiles.first(where: { $0.name == CommandLine.arguments[i + 1] })
+        {
+            // `--shot-active-panel <id>` starts that left panel active (its onAppear auto-loads the
+            // content) so each panel can be captured with a plain relaunch — no runtime AX clicking.
+            if let j = CommandLine.arguments.firstIndex(of: "--shot-active-panel"),
+                j + 1 < CommandLine.arguments.count
+            {
+                profile.leftActivePanelID = CommandLine.arguments[j + 1]
+            }
+            panelRegistry.activeProfile = profile
+        }
+
         // Fire startup event
         pluginManager?.fireEvent(
             .onStartup,
@@ -475,6 +491,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         wc.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
 
+        maybeLaunchFullScreenForScreenshots(wc.window)
+
         // Focus the terminal in the new window's active tab.
         if let tabContainer = wc.tabManager.activeContainer {
             wc.window?.makeFirstResponder(
@@ -482,6 +500,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
 
+    }
+
+    /// Screenshot harness only: when launched with `--shot-fullscreen`, pin the window to the built-in
+    /// Retina display and enter native fullscreen. Driving fullscreen in-process is reliable (over
+    /// Accessibility it is not, and on a multi-display setup the window otherwise opens on a secondary
+    /// display's inactive Space where it can't be captured cleanly). No-op without the flag.
+    private func maybeLaunchFullScreenForScreenshots(_ window: NSWindow?) {
+        guard CommandLine.arguments.contains("--shot-fullscreen"), let window else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if let builtin = NSScreen.screens.first(where: { screen in
+                (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+                    .map { CGDisplayIsBuiltin($0) != 0 } ?? false
+            }) {
+                window.setFrame(builtin.frame, display: true)
+            }
+            if !window.styleMask.contains(.fullScreen) {
+                window.toggleFullScreen(nil)
+            }
+        }
     }
 
     @objc private func windowClosed(_ notification: Notification) {
@@ -501,6 +538,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// controller's TabManager rather than the window's contentViewController.
     private var activeSplitController: SplitController? {
         activeWindowController?.tabManager.activeContainer?.splitController
+    }
+
+    /// The primary terminal window used to anchor floating panels (command palette, quick connect).
+    /// Prefer the app's main window — it stays the terminal even when a nonactivating panel is key —
+    /// then any ordered terminal window. Never returns a panel, so a panel is never parented to a panel
+    /// (which would hide the second panel the moment the first one dismisses). A Simpleton terminal
+    /// window is identified by `activeTabContainer != nil` (its content VC is a swappable host, not the
+    /// container itself, so `contentViewController is TabContainerController` no longer holds).
+    private var terminalWindow: NSWindow? {
+        if let main = NSApp.mainWindow, main.activeTabContainer != nil {
+            return main
+        }
+        let candidates = NSApp.orderedWindows + windowControllers.compactMap { $0.window }
+        return candidates.first { $0.activeTabContainer != nil }
     }
 
     // MARK: - Config
@@ -572,9 +623,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             quickConnectPanel?.dismiss()
             return
         }
-        // Capture the terminal window BEFORE showing the panel, because the panel
-        // becomes key and NSApp.keyWindow would then point to the panel itself.
-        let parentWindow = NSApp.keyWindow
+        // Anchor to the real terminal window — never whatever is key (a command palette could be key
+        // here), so the panel parents to the terminal and positions over it instead of over a panel.
+        let parentWindow = terminalWindow
         // Reuse the existing panel instance; do NOT recreate it here.
         quickConnectPanel?.show(relativeTo: parentWindow) { [weak self] bookmark in
             self?.connectToBookmark(bookmark, in: parentWindow)
@@ -589,7 +640,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let actions = buildPaletteActions()
-        commandPalettePanel?.show(relativeTo: NSApp.keyWindow, actions: actions)
+        commandPalettePanel?.show(relativeTo: terminalWindow, actions: actions)
     }
 
     private func buildPaletteActions() -> [PaletteAction] {

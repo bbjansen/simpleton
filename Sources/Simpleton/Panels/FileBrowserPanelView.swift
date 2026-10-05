@@ -88,6 +88,13 @@ struct FileBrowserPanelView: View {
     }
 
     private func syncCWD() {
+        // Screenshot demo mode: browse a fixed demo project instead of the user's real home/cwd
+        // (which would leak personal folders). Gated by env; off in normal use.
+        if ProcessInfo.processInfo.environment["SIMPLETON_SHOT_DEMO"] != nil {
+            currentURL = URL(fileURLWithPath: "/tmp/simpleton-demo-fs/webapp")
+            loadEntries()
+            return
+        }
         if let cwd = currentPaneProvider()?.currentDirectory {
             currentURL = URL(fileURLWithPath: cwd)
         }

@@ -236,10 +236,27 @@ struct AIChatPanelView: View {
         // the conversation the source of truth and preventing one tab's messages from leaking
         // into another.
         .onAppear {
-            guard let conv = conversation else { return }
-            messages = conv.messages
-            agentBubbles = conv.agentBubbles
-            isStreaming = conv.isRunning
+            if let conv = conversation {
+                messages = conv.messages
+                agentBubbles = conv.agentBubbles
+                isStreaming = conv.isRunning
+            }
+            // Screenshot demo mode: seed a sample exchange at the display layer so the AI panel shows
+            // a real conversation in captures (no live provider call). Runs even if no conversation is
+            // attached yet. Gated by env; off in normal use.
+            if messages.isEmpty, ProcessInfo.processInfo.environment["SIMPLETON_SHOT_DEMO"] != nil {
+                messages = [
+                    ChatMessage(
+                        role: "user", content: "What's listening on port 8080 and how do I free it?"),
+                    ChatMessage(
+                        role: "assistant",
+                        content:
+                            "`lsof -i :8080` shows **node** (PID 588) holding it. Free it with `kill -9 588`, "
+                            + "or start your dev server elsewhere: `PORT=8081 npm run dev`. Want me to run the kill?"
+                    ),
+                ]
+                conversation?.messages = messages
+            }
         }
         .onChange(of: messages) { _, v in conversation?.messages = v }
         .onChange(of: agentBubbles.count) { _, _ in conversation?.agentBubbles = agentBubbles }

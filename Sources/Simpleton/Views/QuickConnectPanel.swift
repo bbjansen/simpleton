@@ -28,7 +28,10 @@ final class QuickConnectPanel {
                 defer: false
             )
             newPanel.isFloatingPanel = true
-            newPanel.level = .floating
+            // Normal level (not .floating): the panel is attached as a child of the terminal window in
+            // show(), so it lives in the parent's z-order band. A .floating level would keep it above
+            // every app — even when the terminal window is sent behind another app (the reported bug).
+            newPanel.level = .normal
             newPanel.titleVisibility = .hidden
             newPanel.titlebarAppearsTransparent = true
             newPanel.isMovableByWindowBackground = false
@@ -73,6 +76,9 @@ final class QuickConnectPanel {
             let x = windowFrame.midX - 260
             let y = windowFrame.midY + 50
             panel.setFrameOrigin(NSPoint(x: x, y: y))
+            // Attach to the terminal window so the panel tracks its z-order: sent behind another app
+            // with the parent, never floating on top of everything.
+            if panel.parent == nil { window.addChildWindow(panel, ordered: .above) }
         } else {
             panel.center()
         }
@@ -91,6 +97,9 @@ final class QuickConnectPanel {
                 panel.animator().alphaValue = 0
             },
             completionHandler: { [weak panel] in
+                if let panel = panel, let parent = panel.parent {
+                    parent.removeChildWindow(panel)
+                }
                 panel?.orderOut(nil)
                 panel?.alphaValue = 1
             })

@@ -9,9 +9,11 @@
 //   axdriver tree <pid> [maxDepth]        # dump the AX tree (role #identifier "title" =value)
 //   axdriver raise <pid>                  # raise the app's front window + activate
 //   axdriver windowid <pid>               # print the front window's CGWindowID
+//   axdriver bounds <pid>                 # print the largest window's screen rect "x y w h"
 //   axdriver shot <pid> <out.png>         # raise + screenshot the window (occlusion-independent)
 //   axdriver press <pid> <identifier>     # find a control by AXIdentifier and press it
 //   axdriver presstitle <pid> <title>     # find a control by AXTitle and press it
+//   axdriver pressrole <pid> <role> <idx> # press the Nth element of a role (e.g. AXPopUpButton)
 //   axdriver type <pid> <text>            # type Unicode text into the focused element
 //   axdriver key  <pid> <virtualKeyCode>  # send a key (36=return, 53=esc, 48=tab)
 import AppKit
@@ -44,6 +46,10 @@ func dumpTree(_ e: AXUIElement, _ depth: Int, _ maxDepth: Int) {
 func find(_ e: AXUIElement, id: String, _ depth: Int = 0) -> AXUIElement? {
     if ident(e) == id { return e }
     if depth > 60 { return nil }
+    // Don't descend into web content — a WKWebView's AXWebArea subtree (e.g. the AI panel) has
+    // thousands of nodes and makes a full-tree search take many seconds. The native controls we
+    // look for (activity-bar panels, toolbar buttons, menu items) are never inside a web area.
+    if role(e) == "AXWebArea" { return nil }
     for c in children(e) { if let hit = find(c, id: id, depth + 1) { return hit } }
     return nil
 }
@@ -52,6 +58,13 @@ func findTitle(_ e: AXUIElement, _ wanted: String, _ depth: Int = 0) -> AXUIElem
     if depth > 60 { return nil }
     for c in children(e) { if let hit = findTitle(c, wanted, depth + 1) { return hit } }
     return nil
+}
+
+func collectByRole(_ e: AXUIElement, _ wanted: String, _ acc: inout [AXUIElement], _ depth: Int = 0) {
+    if depth > 60 { return }
+    if role(e) == "AXWebArea" { return }
+    if role(e) == wanted { acc.append(e) }
+    for c in children(e) { collectByRole(c, wanted, &acc, depth + 1) }
 }
 
 func windowBounds(pid: pid_t) -> CGRect? {
@@ -65,6 +78,24 @@ func windowBounds(pid: pid_t) -> CGRect? {
         return CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: width, height: height)
     }
     return nil
+}
+
+func largestWindowBounds(pid: pid_t) -> CGRect? {
+    // The biggest on-screen window for the pid — this is the main terminal window even when a
+    // floating panel (command palette / quick connect) is frontmost, so a region screenshot of
+    // this rect captures the panel composited over the terminal instead of the bare panel.
+    let list =
+        CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+        as? [[String: Any]] ?? []
+    var best: CGRect?
+    for w in list where (w[kCGWindowOwnerPID as String] as? pid_t) == pid {
+        let b = w[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
+        let rect = CGRect(
+            x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0)
+        if rect.width < 120 || rect.height < 80 { continue }
+        if best == nil || rect.width * rect.height > best!.width * best!.height { best = rect }
+    }
+    return best
 }
 
 func windowID(pid: pid_t, nameContains: String? = nil) -> CGWindowID? {
@@ -118,6 +149,14 @@ case "raise":
     raise(pid: pid)
 case "windowid":
     if let id = windowID(pid: pid) { print(id) } else { exit(1) }
+case "bounds":
+    // Print the largest window's screen rect as "x y w h" (points, top-left origin) for
+    // `screencapture -R`. Used to composite a floating panel over the terminal in one frame.
+    if let b = largestWindowBounds(pid: pid) {
+        print("\(Int(b.minX)) \(Int(b.minY)) \(Int(b.width)) \(Int(b.height))")
+    } else {
+        exit(1)
+    }
 case "shot":
     guard args.count > 3 else { exit(64) }
     raise(pid: pid)
@@ -134,9 +173,23 @@ case "shot":
     exit(p.terminationStatus == 0 ? 0 : 1)
 case "press", "presstitle":
     guard args.count > 3 else { exit(64) }
-    let target = args[1] == "press" ? find(app, id: args[3]) : findTitle(app, args[3])
+    let byId = args[1] == "press"
+    // Search the tiny menu bar first — most actions (Settings, Split, Command Palette, Quick Connect,
+    // New Tab) are menu items, and walking the full window tree (terminal grid + web panels) is slow.
+    let menuBar = attr(app, kAXMenuBarAttribute as String).map { $0 as! AXUIElement }
+    let target =
+        (menuBar.flatMap { byId ? find($0, id: args[3]) : findTitle($0, args[3]) })
+        ?? (byId ? find(app, id: args[3]) : findTitle(app, args[3]))
     guard let el = target else { err("element not found: \(args[3])"); exit(1) }
     exit(AXUIElementPerformAction(el, kAXPressAction as CFString) == .success ? 0 : 1)
+case "pressrole":
+    // pressrole <pid> <role> <index>  — press the Nth (0-based) element of a role (e.g. an
+    // AXPopUpButton) to open its menu, so a following `presstitle` can pick an item.
+    guard args.count > 4, let idx = Int(args[4]) else { exit(64) }
+    var found: [AXUIElement] = []
+    collectByRole(app, args[3], &found)
+    guard idx < found.count else { err("only \(found.count) \(args[3]) found"); exit(1) }
+    exit(AXUIElementPerformAction(found[idx], kAXPressAction as CFString) == .success ? 0 : 1)
 case "click":
     // click <pid> <xFrac> <yFrac>   — left-click at a fractional point inside the window
     // (0.5 0.5 = center). Guarantees the window is key + terminal is first responder before a

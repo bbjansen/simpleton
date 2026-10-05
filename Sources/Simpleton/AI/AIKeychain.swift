@@ -8,6 +8,30 @@ enum AIKeychain {
 
     private static let service = "com.simpleton.ai"
 
+    /// Process-lifetime cache of retrieved keys, so the secret is read from the Keychain at most once
+    /// per provider per launch. Reading the data (`retrieveAPIKey`) is the only call that can raise
+    /// the macOS "allow access" prompt, and it fires on every AI-preferences open (autoLoadModels) and
+    /// every request. Without this cache the user is prompted repeatedly; with it, once the key is in
+    /// memory (from the first read, a save, or the last launch's "Always Allow"), no further reads —
+    /// and no further prompts — happen for the rest of the session.
+    private static var memoryCache: [String: String] = [:]
+    private static let cacheLock = NSLock()
+    private static func cacheStore(_ key: String, account: String) {
+        cacheLock.lock()
+        memoryCache[account] = key
+        cacheLock.unlock()
+    }
+    private static func cacheLookup(_ account: String) -> String? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return memoryCache[account]
+    }
+    private static func cacheClear(_ account: String) {
+        cacheLock.lock()
+        memoryCache[account] = nil
+        cacheLock.unlock()
+    }
+
     static func storeAPIKey(_ key: String, for provider: AIProvider) -> Bool {
         let account = "apiKey.\(provider.rawValue)"
         guard let data = key.data(using: .utf8) else { return false }
@@ -26,18 +50,28 @@ enum AIKeychain {
         // subject to that owner check, so overwrites succeed reliably. (See TN3137.)
         let updateStatus = SecItemUpdate(
             query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        if updateStatus == errSecSuccess { return true }
+        if updateStatus == errSecSuccess {
+            cacheStore(key, account: account)
+            return true
+        }
         if updateStatus == errSecItemNotFound {
             var addQuery = query
             addQuery[kSecValueData as String] = data
             addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-            return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+            if SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess {
+                cacheStore(key, account: account)
+                return true
+            }
+            return false
         }
         return false
     }
 
     static func retrieveAPIKey(for provider: AIProvider) -> String? {
         let account = "apiKey.\(provider.rawValue)"
+        // Serve from the in-memory cache first — this is what turns "prompt every time AI prefs open"
+        // into "prompt at most once per launch" (and none at all once a grant persists).
+        if let cached = cacheLookup(account) { return cached }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -47,9 +81,11 @@ enum AIKeychain {
         ]
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-            let data = result as? Data
+            let data = result as? Data,
+            let key = String(data: data, encoding: .utf8)
         else { return nil }
-        return String(data: data, encoding: .utf8)
+        cacheStore(key, account: account)
+        return key
     }
 
     static func deleteAPIKey(for provider: AIProvider) {
@@ -60,6 +96,7 @@ enum AIKeychain {
             kSecAttrAccount as String: account,
         ]
         SecItemDelete(query as CFDictionary)
+        cacheClear(account)
     }
 
     /// Migrate an existing key to AfterFirstUnlock accessibility — at most once per provider.

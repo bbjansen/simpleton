@@ -33,7 +33,10 @@ final class CommandPalettePanel {
                 defer: false
             )
             newPanel.isFloatingPanel = true
-            newPanel.level = .floating
+            // Normal level (not .floating): the panel is attached as a child of the terminal window in
+            // show(), so it lives in the parent's z-order band. A .floating level would keep it above
+            // every app — even when the terminal window is sent behind another app (the reported bug).
+            newPanel.level = .normal
             newPanel.titleVisibility = .hidden
             newPanel.titlebarAppearsTransparent = true
             newPanel.backgroundColor = .clear
@@ -70,6 +73,9 @@ final class CommandPalettePanel {
                 // key window, so window-targeting commands (Split, New Tab, Close Pane, Toggle
                 // Sidebar) resolved no active window and silently no-op'd — only the connection
                 // commands, which open their own panels, appeared to work.
+                if let panel = self?.panel, let parent = panel.parent {
+                    parent.removeChildWindow(panel)
+                }
                 self?.panel?.orderOut(nil)
                 self?.panel?.alphaValue = 1
                 self?.parentWindow?.makeKey()
@@ -84,6 +90,9 @@ final class CommandPalettePanel {
         if let window = window {
             let windowFrame = window.frame
             panel.setFrameOrigin(NSPoint(x: windowFrame.midX - 260, y: windowFrame.midY + 50))
+            // Attach to the terminal window so the panel tracks its z-order: sent behind another app
+            // with the parent, never floating on top of everything.
+            if panel.parent == nil { window.addChildWindow(panel, ordered: .above) }
         } else {
             panel.center()
         }
@@ -102,6 +111,9 @@ final class CommandPalettePanel {
                 panel.animator().alphaValue = 0
             },
             completionHandler: { [weak panel] in
+                if let panel = panel, let parent = panel.parent {
+                    parent.removeChildWindow(panel)
+                }
                 panel?.orderOut(nil)
                 panel?.alphaValue = 1
             })

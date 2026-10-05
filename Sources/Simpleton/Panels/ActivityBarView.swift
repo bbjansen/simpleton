@@ -37,6 +37,7 @@ struct ActivityBarView: View {
                     ) {
                         togglePanel(id: panelID)
                     }
+                    .accessibilityIdentifier("panel-\(panelID)")
                     .onDrag { NSItemProvider(object: panelID as NSString) }
                 }
             }
