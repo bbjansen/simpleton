@@ -3,10 +3,13 @@ import Foundation
 
 /// The active editing mode of the spec-driven dev workspace.
 ///
-/// Phase 1 ships `plan` (the AI writes an implementation plan) and `act` (a passthrough mode noting
-/// that execution happens in the AI chat). Later phases add `brainstorm`, `spec`, and a kanban
-/// `board` mode — add cases here and the UI mode control picks them up automatically.
+/// `brainstorm` and `spec` are open/structured idea modes that generate their own markdown artifact;
+/// `plan` writes an implementation plan; `act` is a passthrough mode noting that execution happens in
+/// the AI chat; `board` is a kanban over `board.md`. Order here is the authoring flow and drives the
+/// mode control (via `allCases`) — add a case and the UI picks it up automatically.
 public enum SpecMode: String, Codable, CaseIterable, Sendable {
+    case brainstorm
+    case spec
     case plan
     case act
     case board
@@ -14,9 +17,33 @@ public enum SpecMode: String, Codable, CaseIterable, Sendable {
     /// Human-readable label for the mode control.
     public var displayName: String {
         switch self {
+        case .brainstorm: return "Brainstorm"
+        case .spec: return "Spec"
         case .plan: return "Plan"
         case .act: return "Act"
         case .board: return "Board"
+        }
+    }
+
+    /// The artifact a doc-generating mode produces, if any. `act` reflects the plan; `board` is driven
+    /// by its own board view rather than this mapping.
+    public var generatedArtifact: SpecArtifact? {
+        switch self {
+        case .brainstorm: return .brainstorm
+        case .spec: return .spec
+        case .plan: return .plan
+        case .act, .board: return nil
+        }
+    }
+
+    /// The artifact this mode displays in the preview/edit slot (brainstorm/spec/plan show their own;
+    /// `act` shows the plan for reference).
+    public var displayedArtifact: SpecArtifact {
+        switch self {
+        case .brainstorm: return .brainstorm
+        case .spec: return .spec
+        case .plan, .act: return .plan
+        case .board: return .board
         }
     }
 }

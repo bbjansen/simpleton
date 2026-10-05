@@ -24,14 +24,15 @@ struct SpecDrivenDevView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 switch model.activeMode {
-                case .plan:
-                    planControls
+                case .brainstorm, .spec, .plan:
+                    goalControls
                 case .act:
                     actNotice
                 case .board:
                     EmptyView()
                 }
 
+                pendingBar
                 ThemedDivider()
                 artifactSlot
             }
@@ -78,11 +79,27 @@ struct SpecDrivenDevView: View {
         )
     }
 
-    // MARK: - Plan mode
+    // MARK: - Goal-driven modes (brainstorm / spec / plan)
 
-    private var planControls: some View {
+    private var goalPrompt: String {
+        switch model.activeMode {
+        case .brainstorm: return "What do you want to explore?"
+        case .spec: return "What should the spec cover?"
+        default: return "What do you want to build?"
+        }
+    }
+
+    private var generateLabel: String {
+        switch model.activeMode {
+        case .brainstorm: return "Brainstorm"
+        case .spec: return "Generate Spec"
+        default: return "Generate Plan"
+        }
+    }
+
+    private var goalControls: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("What do you want to build?")
+            Text(goalPrompt)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(DT.textTertiary)
             TextField("e.g. add rate limiting to the API", text: $goal, axis: .vertical)
@@ -110,7 +127,7 @@ struct SpecDrivenDevView: View {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 10))
                         }
-                        Text(model.isGenerating ? "Generating…" : "Generate Plan")
+                        Text(model.isGenerating ? "Generating…" : generateLabel)
                             .font(.system(size: 11, weight: .medium))
                     }
                     .padding(.horizontal, 10)
@@ -126,6 +143,34 @@ struct SpecDrivenDevView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - Pending approval
+
+    @ViewBuilder private var pendingBar: some View {
+        if model.pending != nil {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.bubble")
+                    .font(.system(size: 10))
+                    .foregroundColor(DT.accentAmber)
+                Text("Proposed — review, then approve to write the file.")
+                    .font(.system(size: 10))
+                    .foregroundColor(DT.textTertiary)
+                    .lineLimit(1)
+                Spacer()
+                Button("Discard") { Task { await model.discardPending() } }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10))
+                    .foregroundColor(DT.textSecondary)
+                Button("Approve") { Task { await model.approvePending() } }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(DT.accentGreen)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(DT.accentAmber.opacity(0.08))
+        }
     }
 
     private var actNotice: some View {
@@ -172,7 +217,7 @@ struct SpecDrivenDevView: View {
             } else {
                 ScrollView {
                     if model.artifactText.isEmpty {
-                        Text("No plan yet. Describe a goal above and generate one.")
+                        Text("Nothing yet. Describe a goal above and generate.")
                             .font(.system(size: 11))
                             .foregroundColor(DT.textFaint)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -182,8 +227,10 @@ struct SpecDrivenDevView: View {
                             .font(.system(size: 12))
                             .foregroundColor(DT.textPrimary)
                             .textSelection(.enabled)
+                            .tint(DT.accentBlue)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(8)
+                            .environment(\.openURL, OpenURLAction { url in handleLink(url) })
                     }
                 }
             }
@@ -208,11 +255,72 @@ struct SpecDrivenDevView: View {
         }
     }
 
+    /// Custom URL scheme used to carry a detected code reference through SwiftUI's link machinery back
+    /// to `handleLink`, which turns it into an editor command in the active pane.
+    private static let codeRefScheme = "simpleton-coderef"
+
+    /// The artifact rendered as inline markdown, with detected `path:line` tokens turned into clickable
+    /// links. Segments between references are parsed as markdown; each reference becomes a link run
+    /// carrying its path/line/col in a custom-scheme URL.
     private var renderedMarkdown: AttributedString {
+        let text = model.artifactText
+        let refs = CodeRefLinkParser.matches(in: text)
+        guard !refs.isEmpty else { return inlineMarkdown(String(text)) }
+
+        var result = AttributedString()
+        var cursor = text.startIndex
+        for ref in refs {
+            if cursor < ref.range.lowerBound {
+                result.append(inlineMarkdown(String(text[cursor..<ref.range.lowerBound])))
+            }
+            var run = AttributedString(String(text[ref.range]))
+            run.font = DT.monoFont(size: 11)
+            if let url = codeRefURL(for: ref) {
+                run.link = url
+            }
+            result.append(run)
+            cursor = ref.range.upperBound
+        }
+        if cursor < text.endIndex {
+            result.append(inlineMarkdown(String(text[cursor...])))
+        }
+        return result
+    }
+
+    private func inlineMarkdown(_ fragment: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: model.artifactText, options: options))
-            ?? AttributedString(model.artifactText)
+        return (try? AttributedString(markdown: fragment, options: options)) ?? AttributedString(fragment)
+    }
+
+    /// Encode a code reference into a `simpleton-coderef://line/col?path=…` URL. Path and positions ride
+    /// in query items so `handleLink` can reconstruct the reference.
+    private func codeRefURL(for ref: CodeRef) -> URL? {
+        var components = URLComponents()
+        components.scheme = Self.codeRefScheme
+        components.host = "open"
+        var items = [
+            URLQueryItem(name: "path", value: ref.path),
+            URLQueryItem(name: "line", value: String(ref.line)),
+        ]
+        if let col = ref.column { items.append(URLQueryItem(name: "col", value: String(col))) }
+        components.queryItems = items
+        return components.url
+    }
+
+    /// Handle an `openURL` from the preview. Code-ref links open the referenced file via the model;
+    /// anything else (e.g. real `http` links) falls back to the system handler.
+    private func handleLink(_ url: URL) -> OpenURLAction.Result {
+        guard url.scheme == Self.codeRefScheme,
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+            let path = components.queryItems?.first(where: { $0.name == "path" })?.value,
+            let lineStr = components.queryItems?.first(where: { $0.name == "line" })?.value,
+            let line = Int(lineStr)
+        else {
+            return .systemAction
+        }
+        model.openCodeRef(path: path, line: line)
+        return .handled
     }
 
     // MARK: - Footer
@@ -239,6 +347,7 @@ struct SpecDrivenDevView: View {
 
     private func generate() {
         let captured = goal
-        Task { await model.generatePlan(goal: captured) }
+        let mode = model.activeMode
+        Task { await model.generate(for: mode, goal: captured) }
     }
 }

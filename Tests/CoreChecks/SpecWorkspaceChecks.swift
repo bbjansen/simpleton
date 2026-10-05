@@ -10,9 +10,15 @@ func runSpecWorkspaceChecks(_ t: TestRunner) async {
     }
 
     t.suite("SpecMode / SpecArtifact enumerate all cases") {
-        t.expectEqual(SpecMode.allCases.count, 3, "plan, act, board modes")
+        t.expectEqual(SpecMode.allCases.count, 5, "brainstorm, spec, plan, act, board modes")
         t.expectEqual(SpecArtifact.allCases.count, 4, "four artifacts defined")
         t.expectEqual(SpecMode.plan.displayName, "Plan", "plan display name")
+        t.expectEqual(SpecMode.brainstorm.displayName, "Brainstorm", "brainstorm display name")
+        t.expectEqual(SpecMode.spec.displayName, "Spec", "spec display name")
+        t.expectEqual(SpecMode.brainstorm.generatedArtifact, .brainstorm, "brainstorm generates brainstorm")
+        t.expectEqual(SpecMode.spec.generatedArtifact, .spec, "spec generates spec")
+        t.expect(SpecMode.act.generatedArtifact == nil, "act generates nothing")
+        t.expectEqual(SpecMode.act.displayedArtifact, .plan, "act shows plan")
     }
 
     t.suite("SpecWorkspaceState JSON round-trip") {

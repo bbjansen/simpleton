@@ -263,7 +263,10 @@ extension PanelDefinition {
         return SpecDrivenDevController(
             aiService: context.aiService,
             currentPaneProvider: context.currentPane,
-            store: store
+            store: store,
+            skillStore: context.skillStore,
+            memoryStore: context.memoryStore,
+            onOpenFile: context.onInsertCommand
         )
     }
 

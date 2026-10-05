@@ -16,6 +16,7 @@ runFieldValidatorChecks(runner)
 runFrecencyScorerChecks(runner)
 runFuzzyMatcherChecks(runner)
 runSSHConfigParserChecks(runner)
+runCodeRefLinkChecks(runner)
 
 // Core (async — actor-backed stores)
 await runBookmarkStoreChecks(runner)
