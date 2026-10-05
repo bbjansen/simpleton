@@ -251,6 +251,25 @@ extension PanelDefinition {
         NSHostingController(rootView: AMQPPanelView(appSupportDir: context.appSupportDir))
     }
 
+    static let specDrivenDev = PanelDefinition(
+        id: PanelProfile.PanelID.specDrivenDev,
+        name: "Spec Dev",
+        icon: "checklist",
+        description: "Spec-driven dev: generate & edit a plan as repo-local Markdown",
+        defaultSide: .right,
+        isBuiltIn: true
+    ) { context in
+        let store = SpecWorkspaceStore(directory: context.appSupportDir.appendingPathComponent("spec-dev"))
+        return SpecDrivenDevController(
+            aiService: context.aiService,
+            currentPaneProvider: context.currentPane,
+            store: store,
+            skillStore: context.skillStore,
+            memoryStore: context.memoryStore,
+            onOpenFile: context.onInsertCommand
+        )
+    }
+
     static let dataConnections = PanelDefinition(
         id: PanelProfile.PanelID.dataConnections,
         name: "Data Connections",

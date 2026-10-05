@@ -61,7 +61,7 @@ final class AgentSession: ObservableObject {
         var handlers: [ToolHandler] = [
             FileTools(), TerminalTools(), GitTools(),
             SystemTools(), NetworkTools(), ProcessTools(),
-            WebTools(),
+            WebTools(), SpecWorkspaceTools(),
         ]
         if memoryStore != nil {
             handlers.append(MemoryTools())

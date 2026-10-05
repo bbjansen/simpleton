@@ -79,6 +79,7 @@ extension PanelProfile {
         static let s3 = "s3"
         static let amqp = "amqp"
         static let dataConnections = "data-connections"
+        static let specDrivenDev = "spec-dev"
     }
 }
 
@@ -168,6 +169,14 @@ extension PanelProfile {
             rightPanelIDs: [],
             leftActivePanelID: "connections",
             rightActivePanelID: nil
+        ),
+        PanelProfile(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
+            name: "Spec-Dev",
+            leftPanelIDs: ["connections"],
+            rightPanelIDs: ["spec-dev", "ai-chat"],
+            leftActivePanelID: "connections",
+            rightActivePanelID: "spec-dev"
         ),
     ]
 }

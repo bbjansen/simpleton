@@ -442,6 +442,75 @@ struct OpenAIProvider: AIProviderProtocol {
                     ] as [String: Any],
                 ] as [String: Any],
             ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "spec_read",
+                    "description":
+                        "Read a spec-driven-dev artifact from the project's .plan/ directory (brainstorm, spec, plan, or board markdown).",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "artifact": [
+                                "type": "string",
+                                "enum": ["brainstorm", "spec", "plan", "board"],
+                                "description": "Which artifact to read.",
+                            ]
+                        ] as [String: Any],
+                        "required": ["artifact"],
+                    ] as [String: Any],
+                ] as [String: Any],
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "board_list",
+                    "description":
+                        "List the spec-driven-dev kanban board (.plan/board.md) as a per-column task summary.",
+                    "parameters": ["type": "object", "properties": [:] as [String: Any], "required": [] as [String]]
+                        as [String: Any],
+                ] as [String: Any],
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "board_add_task",
+                    "description":
+                        "Add a task card to the spec-driven-dev kanban board (.plan/board.md). Defaults to Backlog.",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "title": ["type": "string", "description": "The task title."],
+                            "column": [
+                                "type": "string",
+                                "enum": ["Backlog", "Todo", "In Progress", "Done"],
+                                "description": "Target column (default: Backlog).",
+                            ],
+                        ] as [String: Any],
+                        "required": ["title"],
+                    ] as [String: Any],
+                ] as [String: Any],
+            ],
+            [
+                "type": "function",
+                "function": [
+                    "name": "board_set_status",
+                    "description":
+                        "Move the first matching task to another column on the spec-driven-dev kanban board (.plan/board.md).",
+                    "parameters": [
+                        "type": "object",
+                        "properties": [
+                            "title": ["type": "string", "description": "The task title to move (case-insensitive)."],
+                            "column": [
+                                "type": "string",
+                                "enum": ["Backlog", "Todo", "In Progress", "Done"],
+                                "description": "Destination column.",
+                            ],
+                        ] as [String: Any],
+                        "required": ["title", "column"],
+                    ] as [String: Any],
+                ] as [String: Any],
+            ],
         ]
 
         let body: [String: Any] = [
