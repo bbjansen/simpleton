@@ -74,9 +74,11 @@ jobs:
           if [ -n "$SPARKLE_KEY" ]; then SPARKLE=true; fi
           PUBLISH=false
           if [ "$SPARKLE" = true ] && [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then PUBLISH=true; fi
-          echo "notarize=$NOTARIZE" >> "$GITHUB_OUTPUT"
-          echo "sparkle=$SPARKLE" >> "$GITHUB_OUTPUT"
-          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          {
+            echo "notarize=$NOTARIZE"
+            echo "sparkle=$SPARKLE"
+            echo "publish=$PUBLISH"
+          } >> "$GITHUB_OUTPUT"
           echo "notarize=$NOTARIZE  sparkle=$SPARKLE  publish=$PUBLISH"
 
       - name: Build (release)
