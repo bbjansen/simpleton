@@ -8,6 +8,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)build and publish, e.g. v0.1.5
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -17,6 +23,6 @@ jobs:
     name: Build & Publish Release
     uses: ./.github/workflows/release-build.yml
     with:
-      ref: ${{ github.ref_name }}
-      tag: ${{ github.ref_name }}
+      ref: ${{ inputs.tag || github.ref_name }}
+      tag: ${{ inputs.tag || github.ref_name }}
     secrets: inherit

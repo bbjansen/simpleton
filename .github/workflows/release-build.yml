@@ -49,6 +49,12 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
+          # Only build v-prefixed tags. inputs come from a push-tag or workflow_dispatch (both require
+          # write access), but validate the shape anyway before anything is published.
+          case "$TAG" in
+            v[0-9]*) : ;;
+            *) echo "::error::Unexpected tag '$TAG' (expected v<semver>); refusing to build." >&2; exit 1 ;;
+          esac
           SHORT="${TAG#v}"               # v1.2.0 -> 1.2.0
           BUILD="$(git rev-list --count HEAD)"   # monotonic build number; Sparkle compares this
           echo "short=$SHORT" >> "$GITHUB_OUTPUT"

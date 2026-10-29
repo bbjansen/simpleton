@@ -17,6 +17,7 @@ jobs:
     name: Prepare release
     runs-on: ubuntu-latest
     outputs:
+      releases_created: ${{ steps.rp.outputs.releases_created }}
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
@@ -29,7 +30,9 @@ jobs:
   build-app:
     name: Build & attach app bundle
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    # v4 manifest mode: `releases_created` (plural) is the reliable "a release happened" flag; the
+    # singular `release_created` is unset in this setup, which is why this job used to always skip.
+    if: ${{ needs.release-please.outputs.releases_created == 'true' || needs.release-please.outputs.release_created == 'true' }}
     uses: ./.github/workflows/release-build.yml
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
