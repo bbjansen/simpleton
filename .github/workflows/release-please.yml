@@ -33,6 +33,8 @@ jobs:
     # v4 manifest mode: `releases_created` (plural) is the reliable "a release happened" flag; the
     # singular `release_created` is unset in this setup, which is why this job used to always skip.
     if: ${{ needs.release-please.outputs.releases_created == 'true' || needs.release-please.outputs.release_created == 'true' }}
+    permissions:
+      contents: write
     uses: ./.github/workflows/release-build.yml
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
