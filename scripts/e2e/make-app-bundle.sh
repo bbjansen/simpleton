@@ -37,7 +37,31 @@ done
 SPARKLE="${BINDIR}/Sparkle.framework"   # note: BINDIR may be a symlink, so use the path directly
 [ -d "$SPARKLE" ] && ditto "$SPARKLE" "$APP/Contents/MacOS/Sparkle.framework"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+# Sparkle / versioning are env-driven so the release pipeline can bake in the real update
+# feed, public key, auto-checks, and an incrementing build number — while a plain dev build
+# keeps the old behavior (auto-checks off, placeholder feed, ad-hoc signed). Env vars:
+#   SIMPLETON_SHORT_VERSION    marketing version  → CFBundleShortVersionString (default 0.1.1)
+#   SIMPLETON_BUILD_VERSION    build number       → CFBundleVersion, MUST increment per release (default 1)
+#   SIMPLETON_SU_FEED_URL      appcast URL        → SUFeedURL (default a placeholder)
+#   SIMPLETON_SU_PUBLIC_ED_KEY Sparkle EdDSA pub  → SUPublicEDKey (omitted when empty)
+#   SIMPLETON_SU_AUTO_CHECKS   "true" to enable background update checks (default false)
+SHORT_VERSION="${SIMPLETON_SHORT_VERSION:-0.1.1}"
+BUILD_VERSION="${SIMPLETON_BUILD_VERSION:-1}"
+SU_FEED_URL="${SIMPLETON_SU_FEED_URL:-https://example.invalid/appcast.xml}"
+SU_PUBLIC_ED_KEY="${SIMPLETON_SU_PUBLIC_ED_KEY:-}"
+SU_AUTO_CHECKS="${SIMPLETON_SU_AUTO_CHECKS:-false}"
+
+if [ "$SU_AUTO_CHECKS" = "true" ]; then
+  SU_CHECK_KEYS="  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUScheduledCheckInterval</key><integer>86400</integer>"
+else
+  SU_CHECK_KEYS="  <!-- Dev build: don't let Sparkle auto-check (no signed appcast exists). -->
+  <key>SUEnableAutomaticChecks</key><false/>"
+fi
+SU_KEY_LINE=""
+[ -n "$SU_PUBLIC_ED_KEY" ] && SU_KEY_LINE="  <key>SUPublicEDKey</key><string>${SU_PUBLIC_ED_KEY}</string>"
+
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -47,14 +71,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleName</key><string>Simpleton</string>
   <key>CFBundleDisplayName</key><string>Simpleton</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.1</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>${SHORT_VERSION}</string>
+  <key>CFBundleVersion</key><string>${BUILD_VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
-  <!-- Dev build: don't let Sparkle auto-check (no signed appcast exists). -->
-  <key>SUEnableAutomaticChecks</key><false/>
-  <key>SUFeedURL</key><string>https://example.invalid/appcast.xml</string>
+  <key>SUFeedURL</key><string>${SU_FEED_URL}</string>
+${SU_CHECK_KEYS}
+${SU_KEY_LINE}
 </dict>
 </plist>
 PLIST

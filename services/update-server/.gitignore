@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output (wrangler deploy --dry-run --outdir dist)
+dist/
+
+# Wrangler local state / cache
+.wrangler/
+
+# Generated binding + runtime types (run `pnpm types` to regenerate).
+# Not committed: it is ~600 KB of generated code and is reproducible from
+# wrangler.jsonc.
+worker-configuration.d.ts
+
+# Local dev secrets / vars — never commit
+.dev.vars
+.dev.vars.*
+*.local

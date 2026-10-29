@@ -1,5 +1,9 @@
 name: Release
 
+# Manual release path: pushing a v* tag builds, (optionally) signs/notarizes/Sparkle-signs, uploads
+# to R2, and attaches the artifact to the release. The automated path (release-please.yml) calls the
+# same reusable workflow, so the logic lives in one place.
+
 on:
   push:
     tags:
@@ -11,37 +15,8 @@ permissions:
 jobs:
   release:
     name: Build & Publish Release
-    runs-on: macos-15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Select latest Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Show Swift version
-        run: swift --version
-
-      - name: Build (release)
-        run: swift build -c release
-
-      - name: Run CoreChecks
-        run: swift run -c release CoreChecks
-
-      - name: Assemble app bundle (ad-hoc signed)
-        run: bash scripts/e2e/make-app-bundle.sh release
-
-      - name: Zip app bundle
-        run: |
-          cd .build
-          ditto -c -k --keepParent Simpleton.app "Simpleton-${GITHUB_REF_NAME}.zip"
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          prerelease: true
-          # Release notes are curated per release (see CHANGELOG.md); leave an existing
-          # release body untouched and just attach the freshly built artifact.
-          files: .build/Simpleton-${{ github.ref_name }}.zip
+    uses: ./.github/workflows/release-build.yml
+    with:
+      ref: ${{ github.ref_name }}
+      tag: ${{ github.ref_name }}
+    secrets: inherit

@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "simpleton-update-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-15",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // R2 bucket holding the release artifacts and their JSON sidecars under the
+  // `releases/` prefix. Create it once with:
+  //   wrangler r2 bucket create simpleton-updates
+  "r2_buckets": [
+    {
+      "binding": "UPDATES",
+      "bucket_name": "simpleton-updates"
+    }
+  ],
+
+  // Non-secret configuration. BASE_URL is the public origin that Sparkle will
+  // use to build download links in the appcast. Override per environment below.
+  // It must have NO trailing slash.
+  "vars": {
+    "BASE_URL": "https://updates.simpleton.app"
+  },
+
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1
+    }
+  },
+
+  "env": {
+    "staging": {
+      "name": "simpleton-update-server-staging",
+      "r2_buckets": [
+        {
+          "binding": "UPDATES",
+          "bucket_name": "simpleton-updates-staging"
+        }
+      ],
+      "vars": {
+        "BASE_URL": "https://updates-staging.simpleton.app"
+      },
+      "observability": {
+        "enabled": true,
+        "logs": {
+          "head_sampling_rate": 1
+        }
+      }
+    }
+  }
+}
