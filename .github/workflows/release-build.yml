@@ -36,7 +36,7 @@ jobs:
           fetch-depth: 0 # full history so the build number (commit count) is correct
 
       - name: Select latest Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
 
@@ -168,13 +168,14 @@ jobs:
           ZIP: ${{ steps.pkg.outputs.zip }}
         run: |
           set -euo pipefail
+          # Use ONLY the sign_update that ships inside Sparkle's SPM artifact — its integrity is
+          # already pinned via Package.resolved's checksum. Never download an unverified tool here:
+          # this step pipes the private signing key into it.
           SIGN_UPDATE="$(find .build/artifacts -path '*/Sparkle/bin/sign_update' | head -n1 || true)"
           if [ -z "$SIGN_UPDATE" ]; then
-            curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
-              https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz
-            mkdir -p "$RUNNER_TEMP/sparkle"
-            tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
-            SIGN_UPDATE="$RUNNER_TEMP/sparkle/bin/sign_update"
+            echo "::error::sign_update not found under .build/artifacts (Sparkle SPM artifact)." >&2
+            echo "::error::Refusing to fetch an unverified tool to handle the private signing key." >&2
+            exit 1
           fi
           SIG_OUT="$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - "$ZIP")"
           echo "$SIG_OUT"
@@ -216,7 +217,7 @@ jobs:
             --file "$SIDE" --remote --content-type application/json
 
       - name: Attach artifact to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ inputs.tag }}
           files: ${{ steps.pkg.outputs.zip }}
