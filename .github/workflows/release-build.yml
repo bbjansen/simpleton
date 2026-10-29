@@ -256,7 +256,17 @@ jobs:
           wr "${R2_BUCKET}/appcast.xml" --file "$APPCAST" --remote --content-type application/xml
 
       - name: Attach artifact to GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
-        with:
-          tag_name: ${{ inputs.tag }}
-          files: ${{ steps.pkg.outputs.zip }}
+        # Use the gh CLI with the explicit tag rather than a third-party action: no ref inference
+        # (softprops mis-resolved the workflow_dispatch ref refs/heads/main), one fewer dependency.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          ZIP: ${{ steps.pkg.outputs.zip }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" --title "$TAG" --generate-notes --prerelease
+          fi

@@ -21,6 +21,8 @@ permissions:
 jobs:
   release:
     name: Build & Publish Release
+    permissions:
+      contents: write
     uses: ./.github/workflows/release-build.yml
     with:
       ref: ${{ inputs.tag || github.ref_name }}
