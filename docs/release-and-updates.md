@@ -52,12 +52,16 @@ Download Sparkle's tools (or use the copy in `.build/artifacts` after a build) a
 - ⚠️ **This key pair must never change after your first signed release** — if it does, every
   installed copy will reject all future updates.
 
-### 3. Cloudflare update service
-See `services/update-server/README.md`. In short: create an R2 bucket `simpleton-updates`, deploy
-the Worker (`pnpm --dir services/update-server install --ignore-scripts && pnpm -C services/update-server exec wrangler deploy`),
-bind the bucket, and point a custom domain at the Worker. The feed is then
-`https://<your-domain>/appcast.xml`. Create a Cloudflare **API token** with R2 read/write and note
-your **account ID**.
+### 3. Cloudflare update host
+Two options:
+- **Public R2 bucket + static appcast (active default, no Worker needed).** Create an R2 bucket
+  `simpleton-updates`, enable its public development URL, and the release pipeline writes `appcast.xml`
+  plus the artifacts straight to it. The feed is `https://<pub-id>.r2.dev/appcast.xml`. Needs only a
+  Cloudflare **API token** with *Workers R2 Storage: Edit* and your **account ID**.
+- **Worker on a custom domain (optional upgrade).** `services/update-server/` is a Worker that serves a
+  dynamic appcast from the same R2 objects — deploy it (`pnpm -C services/update-server exec wrangler deploy`,
+  needs a *Workers Scripts: Edit* token), point a custom domain at it, and set `SIMPLETON_SU_FEED_URL`
+  to that domain. Use this when you want a branded/stable feed URL instead of the `r2.dev` one.
 
 ### 4. GitHub secrets & variables
 Repo → Settings → Secrets and variables → Actions.
@@ -85,12 +89,17 @@ Repo → Settings → Secrets and variables → Actions.
 | `SIMPLETON_SU_PUBLIC_ED_KEY` | Sparkle public key from `generate_keys` |
 | `R2_BUCKET` | `simpleton-updates` (optional; this is the default) |
 
-### Gating logic
-- **Signing + notarization** turns on when `DEVELOPER_ID_P12_BASE64` + `ASC_API_KEY_P8_BASE64` +
-  `SPARKLE_PRIVATE_KEY` are all present.
-- **R2 upload** additionally needs `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`.
-- The app's **automatic update checks** are baked in only when signing is on **and**
-  `SIMPLETON_SU_PUBLIC_ED_KEY` is set — so a bundle never auto-checks a placeholder feed.
+### Gating logic (decoupled — updates work without Apple)
+- **Notarization** (Developer ID sign → notarytool → staple) turns on when `DEVELOPER_ID_P12_BASE64`
+  + `ASC_API_KEY_P8_BASE64` are present. Off → the app is ad-hoc/unsigned.
+- **Sparkle update-signing** (EdDSA) turns on when `SPARKLE_PRIVATE_KEY` is present — independent of Apple.
+- **Publishing to R2** (zip + sidecar + `appcast.xml`) turns on when Sparkle signing is on **and**
+  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` are present.
+- **Automatic update checks** are baked into the app when both `SIMPLETON_SU_PUBLIC_ED_KEY` and
+  `SIMPLETON_SU_FEED_URL` are set — so a bundle never auto-checks a placeholder feed.
+
+So with just the Sparkle key + Cloudflare (no Apple), the pipeline ships **unsigned-but-EdDSA-signed**
+auto-updating builds. Add the Apple secrets later and the same builds become notarized — no other change.
 
 ## Cutting a release
 - **Automated:** merge the release PR that `release-please` maintains → it tags + releases → the
@@ -101,12 +110,14 @@ Repo → Settings → Secrets and variables → Actions.
 this build number). The marketing version comes from the tag.
 
 ## Installing locally for dogfooding
-1. Cut a signed release (above).
-2. Download the `.zip` from the GitHub Release (or the R2 feed), unzip, move `Simpleton.app` to
-   `/Applications`, launch. Because it's Developer ID-signed + notarized, Gatekeeper allows it with
-   no override.
+1. Cut a release (above) and download the `.zip` from the GitHub Release; unzip, move `Simpleton.app`
+   to `/Applications`, launch.
+2. **First launch of an unsigned build:** Gatekeeper will warn. Right-click the app → Open (or run
+   `xattr -dr com.apple.quarantine /Applications/Simpleton.app`) once. Once the notarization secrets
+   are set (Apple-ready), this step goes away entirely.
 3. Leave it running as your daily terminal — it checks `SUFeedURL` on schedule and self-updates from
-   each new release, so you get first-hand feedback as development continues.
+   each new release (Sparkle verifies the EdDSA signature and clears quarantine on updates it installs),
+   so you get first-hand feedback as development continues.
 
 ## Security notes
 - Every credential above lives in **GitHub Actions secrets** — never commit any of them. The

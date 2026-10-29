@@ -65,13 +65,19 @@ jobs:
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          SIGN=false
-          if [ -n "$DEV_ID_P12" ] && [ -n "$ASC_KEY" ] && [ -n "$SPARKLE_KEY" ]; then SIGN=true; fi
-          UPLOAD=false
-          if [ "$SIGN" = true ] && [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then UPLOAD=true; fi
-          echo "sign=$SIGN" >> "$GITHUB_OUTPUT"
-          echo "upload=$UPLOAD" >> "$GITHUB_OUTPUT"
-          echo "signing=$SIGN  upload=$UPLOAD"
+          # Decoupled gates: notarization needs Apple creds; Sparkle update-signing needs only the
+          # EdDSA key; publishing to R2 needs the key + Cloudflare. So updates work WITHOUT Apple
+          # (unsigned but EdDSA-signed), and notarization layers on later when the Apple secrets exist.
+          NOTARIZE=false
+          if [ -n "$DEV_ID_P12" ] && [ -n "$ASC_KEY" ]; then NOTARIZE=true; fi
+          SPARKLE=false
+          if [ -n "$SPARKLE_KEY" ]; then SPARKLE=true; fi
+          PUBLISH=false
+          if [ "$SPARKLE" = true ] && [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then PUBLISH=true; fi
+          echo "notarize=$NOTARIZE" >> "$GITHUB_OUTPUT"
+          echo "sparkle=$SPARKLE" >> "$GITHUB_OUTPUT"
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "notarize=$NOTARIZE  sparkle=$SPARKLE  publish=$PUBLISH"
 
       - name: Build (release)
         run: swift build -c release
@@ -80,7 +86,7 @@ jobs:
         run: swift run -c release CoreChecks
 
       - name: Import Developer ID certificate
-        if: steps.gate.outputs.sign == 'true'
+        if: steps.gate.outputs.notarize == 'true'
         env:
           DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -105,17 +111,17 @@ jobs:
         env:
           SIMPLETON_SHORT_VERSION: ${{ steps.ver.outputs.short }}
           SIMPLETON_BUILD_VERSION: ${{ steps.ver.outputs.build }}
-          # Feed URL + public key are repo VARIABLES (not secrets). Auto-checks turn on only when
-          # signing AND a public key is configured, so we never ship a bundle that auto-checks a
-          # placeholder feed.
+          # Feed URL + public key are repo VARIABLES (not secrets). Auto-checks turn on when BOTH a
+          # feed URL and a public key are configured (independent of Apple signing), so updates work
+          # without notarization but we never auto-check a placeholder feed.
           SIMPLETON_SU_FEED_URL: ${{ vars.SIMPLETON_SU_FEED_URL }}
           SIMPLETON_SU_PUBLIC_ED_KEY: ${{ vars.SIMPLETON_SU_PUBLIC_ED_KEY }}
-          SIMPLETON_SU_AUTO_CHECKS: ${{ (steps.gate.outputs.sign == 'true' && vars.SIMPLETON_SU_PUBLIC_ED_KEY != '') && 'true' || 'false' }}
+          SIMPLETON_SU_AUTO_CHECKS: ${{ (vars.SIMPLETON_SU_PUBLIC_ED_KEY != '' && vars.SIMPLETON_SU_FEED_URL != '') && 'true' || 'false' }}
           SIMPLETON_SIGN_IDENTITY: ${{ vars.SIMPLETON_SIGN_IDENTITY }}
         run: bash scripts/e2e/make-app-bundle.sh release
 
       - name: Developer ID sign (hardened runtime, inside-out)
-        if: steps.gate.outputs.sign == 'true'
+        if: steps.gate.outputs.notarize == 'true'
         env:
           SIGN_IDENTITY: ${{ vars.SIMPLETON_SIGN_IDENTITY }}
         run: |
@@ -140,7 +146,7 @@ jobs:
       - name: Notarize, staple, and package
         id: pkg
         env:
-          SIGN: ${{ steps.gate.outputs.sign }}
+          NOTARIZE: ${{ steps.gate.outputs.notarize }}
           SHORT: ${{ steps.ver.outputs.short }}
           ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -149,7 +155,7 @@ jobs:
           set -euo pipefail
           APP=".build/Simpleton.app"
           OUT=".build/Simpleton-${SHORT}.zip"
-          if [ "$SIGN" = "true" ]; then
+          if [ "$NOTARIZE" = "true" ]; then
             KEY="$RUNNER_TEMP/asc.p8"
             echo -n "$ASC_API_KEY_P8_BASE64" | base64 --decode > "$KEY"
             ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
@@ -164,7 +170,7 @@ jobs:
 
       - name: Sparkle EdDSA sign the update
         id: sparkle
-        if: steps.gate.outputs.sign == 'true'
+        if: steps.gate.outputs.sparkle == 'true'
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           ZIP: ${{ steps.pkg.outputs.zip }}
@@ -186,12 +192,13 @@ jobs:
           echo "edsig=$ED" >> "$GITHUB_OUTPUT"
           echo "length=$LEN" >> "$GITHUB_OUTPUT"
 
-      - name: Upload artifact + sidecar to R2
-        if: steps.gate.outputs.upload == 'true'
+      - name: Publish update to R2 (zip + sidecar + appcast)
+        if: steps.gate.outputs.publish == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET: ${{ vars.R2_BUCKET || 'simpleton-updates' }}
+          FEED_URL: ${{ vars.SIMPLETON_SU_FEED_URL }}
           SHORT: ${{ steps.ver.outputs.short }}
           BUILD: ${{ steps.ver.outputs.build }}
           EDSIG: ${{ steps.sparkle.outputs.edsig }}
@@ -201,22 +208,44 @@ jobs:
           set -euo pipefail
           FILE="Simpleton-${SHORT}.zip"
           SIDE="$RUNNER_TEMP/Simpleton-${SHORT}.json"
+          APPCAST="$RUNNER_TEMP/appcast.xml"
           PUBDATE="$(date -u +'%a, %d %b %Y %H:%M:%S +0000')"
-          # Sidecar schema is the contract with services/update-server (keep in sync).
+          # Public base = the feed URL without its trailing /appcast.xml, so enclosures resolve on the
+          # same public R2 host.
+          BASE="${FEED_URL%/appcast.xml}"
+          if [ -z "$BASE" ] || [ "$BASE" = "$FEED_URL" ]; then
+            echo "::error::SIMPLETON_SU_FEED_URL must be set to <public-base>/appcast.xml" >&2; exit 1
+          fi
+          ENCLOSURE="${BASE}/releases/${FILE}"
+          # Sidecar JSON — the contract with services/update-server for a future Worker-served feed.
           jq -n \
-            --arg version "$BUILD" \
-            --arg shortVersionString "$SHORT" \
-            --arg pubDate "$PUBDATE" \
-            --arg edSignature "$EDSIG" \
-            --argjson length "$LENGTH" \
-            --arg minimumSystemVersion "14.0" \
+            --arg version "$BUILD" --arg shortVersionString "$SHORT" --arg pubDate "$PUBDATE" \
+            --arg edSignature "$EDSIG" --argjson length "$LENGTH" --arg minimumSystemVersion "14.0" \
             '{version:$version, shortVersionString:$shortVersionString, pubDate:$pubDate, edSignature:$edSignature, length:$length, minimumSystemVersion:$minimumSystemVersion}' \
             > "$SIDE"
-          cat "$SIDE"
-          npx --yes wrangler@4.153.0 r2 object put "${R2_BUCKET}/releases/${FILE}" \
-            --file "$ZIP" --remote --content-type application/zip
-          npx --yes wrangler@4.153.0 r2 object put "${R2_BUCKET}/releases/Simpleton-${SHORT}.json" \
-            --file "$SIDE" --remote --content-type application/json
+          # Static single-item appcast (the latest release), served straight from the public R2 bucket.
+          # base64 edSignature and the URL contain no XML-special characters, so no escaping is needed.
+          {
+            printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>'
+            printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
+            printf '%s\n' '  <channel>'
+            printf '%s\n' '    <title>Simpleton</title>'
+            printf '%s\n' '    <item>'
+            printf '      <title>%s</title>\n' "$SHORT"
+            printf '      <pubDate>%s</pubDate>\n' "$PUBDATE"
+            printf '      <sparkle:version>%s</sparkle:version>\n' "$BUILD"
+            printf '      <sparkle:shortVersionString>%s</sparkle:shortVersionString>\n' "$SHORT"
+            printf '%s\n' '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
+            printf '      <enclosure url="%s" length="%s" type="application/octet-stream" sparkle:edSignature="%s" />\n' "$ENCLOSURE" "$LENGTH" "$EDSIG"
+            printf '%s\n' '    </item>'
+            printf '%s\n' '  </channel>'
+            printf '%s\n' '</rss>'
+          } > "$APPCAST"
+          cat "$APPCAST"
+          wr() { npx --yes wrangler@4.153.0 r2 object put "$@"; }
+          wr "${R2_BUCKET}/releases/${FILE}" --file "$ZIP" --remote --content-type application/zip
+          wr "${R2_BUCKET}/releases/Simpleton-${SHORT}.json" --file "$SIDE" --remote --content-type application/json
+          wr "${R2_BUCKET}/appcast.xml" --file "$APPCAST" --remote --content-type application/xml
 
       - name: Attach artifact to GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
