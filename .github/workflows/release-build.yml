@@ -87,13 +87,29 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "notarize=$NOTARIZE  sparkle=$SPARKLE  publish=$PUBLISH"
 
+      - name: Set up metal shim
+        # swiftbuild (used below) can't compile SwiftTerm's Metal shader on the runner
+        # (CompileMetalFile/ClangStatCache failures), so stub metal/metallib/metal-ar to no-ops that just
+        # create their expected -o/-MF/-serialize-diagnostics outputs. The Metal renderer is optional —
+        # SwiftTerm falls back to CoreText — so a stubbed shader is fine for these builds. Added to
+        # $GITHUB_PATH so the build/CoreChecks steps pick it up. TODO: restore real Metal once swiftbuild's
+        # shader compile works on CI.
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/metal-shim"
+          for t in metal metallib metal-ar; do
+            # shellcheck disable=SC2016  # $@/$a/$prev are intentionally literal in the generated shim
+            printf '#!/bin/bash\nprev=""\nfor a in "$@"; do case "$prev" in -o|-MF|-serialize-diagnostics) : > "$a";; esac; prev="$a"; done\nexit 0\n' > "$RUNNER_TEMP/metal-shim/$t"
+            chmod +x "$RUNNER_TEMP/metal-shim/$t"
+          done
+          echo "$RUNNER_TEMP/metal-shim" >> "$GITHUB_PATH"
+
       - name: Build (release)
-        # Use the swiftbuild build system. Its generated Bundle.module accessor resolves resources via
-        # Bundle.main.resourceURL (Contents/Resources) — matching how make-app-bundle.sh packages the
-        # .app. The classic `native` system (Xcode's default) generates a Bundle.main.bundleURL-based
-        # accessor that looks at the .app ROOT and crashes at launch (resource_bundle_accessor fatalError:
-        # "could not load resource bundle"). swiftbuild also emits proper .bundle/Contents/ bundles.
-        # Keep CoreChecks on the same system so the .build/release products stay consistent for packaging.
+        # swiftbuild's generated Bundle.module accessor resolves resources via Bundle.main.resourceURL
+        # (Contents/Resources), matching how make-app-bundle.sh packages the .app. The classic `native`
+        # system's accessor looks at the .app ROOT and crashes at launch ("could not load resource
+        # bundle"). swiftbuild also emits proper .bundle/Contents/ bundles. CoreChecks uses the same
+        # system so .build/release stays consistent for packaging.
         run: swift build -c release --build-system swiftbuild
 
       - name: Run CoreChecks
