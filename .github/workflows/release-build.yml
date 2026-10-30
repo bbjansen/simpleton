@@ -99,11 +99,16 @@ jobs:
           DD="$RUNNER_TEMP/dd"
           echo "=== available schemes ==="
           xcodebuild -list || true
+          # -enableCodeCoverage NO: the auto-generated SPM scheme instruments every compile with
+          # -profile-generate / -fcoverage-mapping, which bloats the binary (__LLVM_COV, huge
+          # __LINKEDIT) and drops a .profraw at runtime. Disable it for release builds.
           xcodebuild -scheme Simpleton -configuration Release \
             -derivedDataPath "$DD" -destination 'generic/platform=macOS' \
-            -skipPackagePluginValidation -skipMacroValidation build
+            -skipPackagePluginValidation -skipMacroValidation \
+            -enableCodeCoverage NO build
+          REL="$DD/Build/Products/Release"
           echo "=== products (Release) ==="
-          ls -la "$DD/Build/Products/Release/" || true
+          ls -la "$REL/" || true
           echo "=== resource_bundle_accessor (want Bundle.main.resourceURL) ==="
           acc="$(find "$DD" -name resource_bundle_accessor.swift -path '*Simpleton*' | head -1)"
           if [ -n "$acc" ]; then
@@ -111,8 +116,22 @@ jobs:
           else
             echo "(accessor not found)"
           fi
-          echo "=== sign_update tool location ==="
-          find "$DD" -name sign_update -path '*Sparkle*' 2>/dev/null | head || true
+          echo "=== coverage check (expect no __LLVM_COV) ==="
+          if size -m "$REL/Simpleton" | grep -qi LLVM_COV; then
+            echo "WARNING: coverage still present in the binary"
+          else
+            echo "OK: no __LLVM_COV (coverage disabled)"
+          fi
+          echo "=== derive arm64-only products via lipo ==="
+          ARM="$RUNNER_TEMP/arm64products"; mkdir -p "$ARM"
+          if lipo -archs "$REL/Simpleton" | grep -qw x86_64; then
+            lipo "$REL/Simpleton" -thin arm64 -output "$ARM/Simpleton"
+          else
+            cp "$REL/Simpleton" "$ARM/Simpleton"
+          fi
+          ditto "$REL/Sparkle.framework" "$ARM/Sparkle.framework"
+          for b in "$REL"/*.bundle; do ditto "$b" "$ARM/$(basename "$b")"; done
+          echo "universal binary: $(du -h "$REL/Simpleton" | cut -f1)  |  arm64 binary: $(du -h "$ARM/Simpleton" | cut -f1)"
 
       - name: Run CoreChecks
         run: swift run -c release CoreChecks
@@ -139,161 +158,107 @@ jobs:
           security default-keychain -s "$KC"
           security find-identity -v -p codesigning "$KC"
 
-      - name: Assemble app bundle
+      - name: Derive per-lane feed URLs
+        id: feeds
+        # Two lanes, two appcasts on the same public host: universal → appcast.xml (unchanged, so
+        # existing universal installs keep updating), arm64 → appcast-arm64.xml (derived).
+        env:
+          FEED: ${{ vars.SIMPLETON_SU_FEED_URL }}
+        run: |
+          set -euo pipefail
+          {
+            echo "uni=$FEED"
+            echo "arm=${FEED:+${FEED%/appcast.xml}/appcast-arm64.xml}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Assemble universal app bundle
         env:
           SIMPLETON_SHORT_VERSION: ${{ steps.ver.outputs.short }}
           SIMPLETON_BUILD_VERSION: ${{ steps.ver.outputs.build }}
           # Feed URL + public key are repo VARIABLES (not secrets). Auto-checks turn on when BOTH a
           # feed URL and a public key are configured (independent of Apple signing), so updates work
           # without notarization but we never auto-check a placeholder feed.
-          SIMPLETON_SU_FEED_URL: ${{ vars.SIMPLETON_SU_FEED_URL }}
+          SIMPLETON_SU_FEED_URL: ${{ steps.feeds.outputs.uni }}
           SIMPLETON_SU_PUBLIC_ED_KEY: ${{ vars.SIMPLETON_SU_PUBLIC_ED_KEY }}
           SIMPLETON_SU_AUTO_CHECKS: ${{ (vars.SIMPLETON_SU_PUBLIC_ED_KEY != '' && vars.SIMPLETON_SU_FEED_URL != '') && 'true' || 'false' }}
           SIMPLETON_SIGN_IDENTITY: ${{ vars.SIMPLETON_SIGN_IDENTITY }}
-          # xcodebuild wrote products (binary + *.bundle + Sparkle.framework) here, not .build/release.
+          # xcodebuild wrote the universal products (binary + *.bundle + Sparkle.framework) here.
           SIMPLETON_BINDIR: ${{ runner.temp }}/dd/Build/Products/Release
+          SIMPLETON_APP_OUT: .build/Simpleton-universal.app
         run: bash scripts/e2e/make-app-bundle.sh release
 
-      - name: Developer ID sign (hardened runtime, inside-out)
-        if: steps.gate.outputs.notarize == 'true'
+      - name: Assemble arm64 app bundle
+        # Same products lipo-thinned to arm64 (prepared in the build step), pointed at the arm64
+        # appcast so it auto-updates within its own lane.
         env:
-          SIGN_IDENTITY: ${{ vars.SIMPLETON_SIGN_IDENTITY }}
-        run: |
-          set -euo pipefail
-          APP=".build/Simpleton.app"
-          FW="$APP/Contents/MacOS/Sparkle.framework" # this app embeds Sparkle under MacOS/
-          FWV="$FW/Versions/B"                        # Sparkle 2.x layout
-          sign() { codesign -f -s "$SIGN_IDENTITY" -o runtime --timestamp "$@"; }
-          # Skip components that aren't present, but let a real signing failure fail the job.
-          if [ -d "$FWV/XPCServices/Installer.xpc" ]; then sign "$FWV/XPCServices/Installer.xpc"; fi
-          if [ -d "$FWV/XPCServices/Downloader.xpc" ]; then
-            codesign -f -s "$SIGN_IDENTITY" -o runtime --timestamp \
-              --preserve-metadata=entitlements "$FWV/XPCServices/Downloader.xpc"
-          fi
-          if [ -e "$FWV/Autoupdate" ]; then sign "$FWV/Autoupdate"; fi
-          if [ -d "$FWV/Updater.app" ]; then sign "$FWV/Updater.app"; fi
-          if [ -d "$FW" ]; then sign "$FW"; fi
-          sign "$APP/Contents/MacOS/Simpleton"
-          sign "$APP"
-          codesign --verify --deep --strict --verbose=2 "$APP"
+          SIMPLETON_SHORT_VERSION: ${{ steps.ver.outputs.short }}
+          SIMPLETON_BUILD_VERSION: ${{ steps.ver.outputs.build }}
+          SIMPLETON_SU_FEED_URL: ${{ steps.feeds.outputs.arm }}
+          SIMPLETON_SU_PUBLIC_ED_KEY: ${{ vars.SIMPLETON_SU_PUBLIC_ED_KEY }}
+          SIMPLETON_SU_AUTO_CHECKS: ${{ (vars.SIMPLETON_SU_PUBLIC_ED_KEY != '' && vars.SIMPLETON_SU_FEED_URL != '') && 'true' || 'false' }}
+          SIMPLETON_SIGN_IDENTITY: ${{ vars.SIMPLETON_SIGN_IDENTITY }}
+          SIMPLETON_BINDIR: ${{ runner.temp }}/arm64products
+          SIMPLETON_APP_OUT: .build/Simpleton-arm64.app
+        run: bash scripts/e2e/make-app-bundle.sh release
 
-      - name: Notarize, staple, and package
-        id: pkg
+      - name: Publish universal lane
         env:
-          NOTARIZE: ${{ steps.gate.outputs.notarize }}
+          LANE_LABEL: universal
+          LANE_APP: .build/Simpleton-universal.app
+          LANE_ZIP: .build/Simpleton-${{ steps.ver.outputs.short }}.zip
+          LANE_FEED_URL: ${{ steps.feeds.outputs.uni }}
+          LANE_APPCAST_OBJ: appcast.xml
           SHORT: ${{ steps.ver.outputs.short }}
+          BUILD: ${{ steps.ver.outputs.build }}
+          NOTARIZE: ${{ steps.gate.outputs.notarize }}
+          SPARKLE: ${{ steps.gate.outputs.sparkle }}
+          PUBLISH: ${{ steps.gate.outputs.publish }}
+          SIGN_IDENTITY: ${{ vars.SIMPLETON_SIGN_IDENTITY }}
           ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          set -euo pipefail
-          APP=".build/Simpleton.app"
-          OUT=".build/Simpleton-${SHORT}.zip"
-          if [ "$NOTARIZE" = "true" ]; then
-            KEY="$RUNNER_TEMP/asc.p8"
-            echo -n "$ASC_API_KEY_P8_BASE64" | base64 --decode > "$KEY"
-            ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
-            xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
-              --key "$KEY" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait
-            xcrun stapler staple "$APP"
-            xcrun stapler validate "$APP"
-            spctl -a -t exec -vv "$APP" || true
-          fi
-          ditto -c -k --keepParent "$APP" "$OUT"
-          echo "zip=$OUT" >> "$GITHUB_OUTPUT"
-
-      - name: Sparkle EdDSA sign the update
-        id: sparkle
-        if: steps.gate.outputs.sparkle == 'true'
-        env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          ZIP: ${{ steps.pkg.outputs.zip }}
-        run: |
-          set -euo pipefail
-          # Use ONLY the sign_update that ships inside Sparkle's SPM artifact — its integrity is
-          # already pinned via Package.resolved's checksum. Never download an unverified tool here:
-          # this step pipes the private signing key into it. xcodebuild extracts SPM artifacts under
-          # DerivedData/SourcePackages, so search there first, then the classic .build location.
-          SIGN_UPDATE="$(find "$RUNNER_TEMP/dd/SourcePackages" .build/artifacts -path '*/Sparkle/bin/sign_update' 2>/dev/null | head -n1 || true)"
-          if [ -z "$SIGN_UPDATE" ]; then
-            echo "::error::sign_update not found under DerivedData/SourcePackages or .build/artifacts (Sparkle SPM artifact)." >&2
-            echo "::error::Refusing to fetch an unverified tool to handle the private signing key." >&2
-            exit 1
-          fi
-          SIG_OUT="$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - "$ZIP")"
-          echo "$SIG_OUT"
-          ED="$(printf '%s' "$SIG_OUT" | sed -E 's/.*edSignature="([^"]+)".*/\1/')"
-          LEN="$(printf '%s' "$SIG_OUT" | sed -E 's/.*length="([0-9]+)".*/\1/')"
-          echo "edsig=$ED" >> "$GITHUB_OUTPUT"
-          echo "length=$LEN" >> "$GITHUB_OUTPUT"
-
-      - name: Publish update to R2 (zip + sidecar + appcast)
-        if: steps.gate.outputs.publish == 'true'
-        env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET: ${{ vars.R2_BUCKET || 'simpleton-updates' }}
-          FEED_URL: ${{ vars.SIMPLETON_SU_FEED_URL }}
+        run: bash scripts/ci/publish-lane.sh
+
+      - name: Publish arm64 lane
+        env:
+          LANE_LABEL: arm64
+          LANE_APP: .build/Simpleton-arm64.app
+          LANE_ZIP: .build/Simpleton-${{ steps.ver.outputs.short }}-arm64.zip
+          LANE_FEED_URL: ${{ steps.feeds.outputs.arm }}
+          LANE_APPCAST_OBJ: appcast-arm64.xml
           SHORT: ${{ steps.ver.outputs.short }}
           BUILD: ${{ steps.ver.outputs.build }}
-          EDSIG: ${{ steps.sparkle.outputs.edsig }}
-          LENGTH: ${{ steps.sparkle.outputs.length }}
-          ZIP: ${{ steps.pkg.outputs.zip }}
-        run: |
-          set -euo pipefail
-          FILE="Simpleton-${SHORT}.zip"
-          SIDE="$RUNNER_TEMP/Simpleton-${SHORT}.json"
-          APPCAST="$RUNNER_TEMP/appcast.xml"
-          PUBDATE="$(date -u +'%a, %d %b %Y %H:%M:%S +0000')"
-          # Public base = the feed URL without its trailing /appcast.xml, so enclosures resolve on the
-          # same public R2 host.
-          BASE="${FEED_URL%/appcast.xml}"
-          if [ -z "$BASE" ] || [ "$BASE" = "$FEED_URL" ]; then
-            echo "::error::SIMPLETON_SU_FEED_URL must be set to <public-base>/appcast.xml" >&2; exit 1
-          fi
-          ENCLOSURE="${BASE}/releases/${FILE}"
-          # Sidecar JSON — the contract with services/update-server for a future Worker-served feed.
-          jq -n \
-            --arg version "$BUILD" --arg shortVersionString "$SHORT" --arg pubDate "$PUBDATE" \
-            --arg edSignature "$EDSIG" --argjson length "$LENGTH" --arg minimumSystemVersion "14.0" \
-            '{version:$version, shortVersionString:$shortVersionString, pubDate:$pubDate, edSignature:$edSignature, length:$length, minimumSystemVersion:$minimumSystemVersion}' \
-            > "$SIDE"
-          # Static single-item appcast (the latest release), served straight from the public R2 bucket.
-          # base64 edSignature and the URL contain no XML-special characters, so no escaping is needed.
-          {
-            printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>'
-            printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
-            printf '%s\n' '  <channel>'
-            printf '%s\n' '    <title>Simpleton</title>'
-            printf '%s\n' '    <item>'
-            printf '      <title>%s</title>\n' "$SHORT"
-            printf '      <pubDate>%s</pubDate>\n' "$PUBDATE"
-            printf '      <sparkle:version>%s</sparkle:version>\n' "$BUILD"
-            printf '      <sparkle:shortVersionString>%s</sparkle:shortVersionString>\n' "$SHORT"
-            printf '%s\n' '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
-            printf '      <enclosure url="%s" length="%s" type="application/octet-stream" sparkle:edSignature="%s" />\n' "$ENCLOSURE" "$LENGTH" "$EDSIG"
-            printf '%s\n' '    </item>'
-            printf '%s\n' '  </channel>'
-            printf '%s\n' '</rss>'
-          } > "$APPCAST"
-          cat "$APPCAST"
-          wr() { npx --yes wrangler@4.153.0 r2 object put "$@"; }
-          wr "${R2_BUCKET}/releases/${FILE}" --file "$ZIP" --remote --content-type application/zip
-          wr "${R2_BUCKET}/releases/Simpleton-${SHORT}.json" --file "$SIDE" --remote --content-type application/json
-          wr "${R2_BUCKET}/appcast.xml" --file "$APPCAST" --remote --content-type application/xml
+          NOTARIZE: ${{ steps.gate.outputs.notarize }}
+          SPARKLE: ${{ steps.gate.outputs.sparkle }}
+          PUBLISH: ${{ steps.gate.outputs.publish }}
+          SIGN_IDENTITY: ${{ vars.SIMPLETON_SIGN_IDENTITY }}
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'simpleton-updates' }}
+        run: bash scripts/ci/publish-lane.sh
 
-      - name: Attach artifact to GitHub Release
+      - name: Attach artifacts to GitHub Release
         # Use the gh CLI with the explicit tag rather than a third-party action: no ref inference
         # (softprops mis-resolved the workflow_dispatch ref refs/heads/main), one fewer dependency.
+        # Attach both lanes: the universal zip (default download) and the smaller arm64 zip.
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
-          ZIP: ${{ steps.pkg.outputs.zip }}
+          UNI_ZIP: .build/Simpleton-${{ steps.ver.outputs.short }}.zip
+          ARM_ZIP: .build/Simpleton-${{ steps.ver.outputs.short }}-arm64.zip
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$ZIP" --clobber
+            gh release upload "$TAG" "$UNI_ZIP" "$ARM_ZIP" --clobber
           else
-            gh release create "$TAG" "$ZIP" --title "$TAG" --generate-notes --prerelease
+            gh release create "$TAG" "$UNI_ZIP" "$ARM_ZIP" --title "$TAG" --generate-notes --prerelease
           fi

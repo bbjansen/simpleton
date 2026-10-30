@@ -17,7 +17,9 @@ CONFIG="${1:-debug}"
 # Where the built products live. Defaults to SwiftPM's .build/<config>, but the release pipeline builds
 # with xcodebuild and points this at DerivedData/Build/Products/Release via SIMPLETON_BINDIR.
 BINDIR="${SIMPLETON_BINDIR:-.build/${CONFIG}}"
-APP=".build/Simpleton.app"
+# Output .app path. Defaults to .build/Simpleton.app; the release pipeline overrides it to build
+# both a universal and an arm64 bundle in one run (SIMPLETON_APP_OUT).
+APP="${SIMPLETON_APP_OUT:-.build/Simpleton.app}"
 BIN="${BINDIR}/Simpleton"
 IDENTITY="${SIMPLETON_SIGN_IDENTITY:-Simpleton Dev}"
 
@@ -26,6 +28,13 @@ IDENTITY="${SIMPLETON_SIGN_IDENTITY:-Simpleton Dev}"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Simpleton"
+
+# Strip debug + local symbols from the executable (release builds ship with -g and a bloated
+# __LINKEDIT). Keeps the dSYM-less binary much smaller; harmless for a standalone app binary.
+# Must run before signing — it invalidates any existing signature. (Opt out with SIMPLETON_NO_STRIP=1.)
+if [ "${SIMPLETON_NO_STRIP:-0}" != "1" ]; then
+  strip -S -x "$APP/Contents/MacOS/Simpleton"
+fi
 
 # SPM resource bundle(s) → Resources only (Bundle.module resolves via Bundle.main.resourceURL).
 # Do NOT place them in MacOS/ — codesign --deep rejects resource bundles there.
