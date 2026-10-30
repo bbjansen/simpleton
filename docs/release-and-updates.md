@@ -58,6 +58,13 @@ Two options:
   `simpleton-updates`, enable its public development URL, and the release pipeline writes `appcast.xml`
   plus the artifacts straight to it. The feed is `https://<pub-id>.r2.dev/appcast.xml`. Needs only a
   Cloudflare **API token** with *Workers R2 Storage: Edit* and your **account ID**.
+
+> **Two architectures, two lanes.** Each release builds **two** artifacts from one `xcodebuild`
+> run: a **universal** zip `Simpleton-<ver>.zip` (Intel + Apple Silicon, the default download, feed
+> `appcast.xml`) and a smaller **arm64-only** zip `Simpleton-<ver>-arm64.zip` (feed
+> `appcast-arm64.xml`, derived automatically from `SIMPLETON_SU_FEED_URL` — no extra variable). Each
+> bundle embeds its own feed URL, so an installed copy only ever auto-updates within its own lane.
+> Release binaries build with code coverage disabled and are symbol-stripped to keep size down.
 - **Worker on a custom domain (optional upgrade).** `services/update-server/` is a Worker that serves a
   dynamic appcast from the same R2 objects — deploy it (`pnpm -C services/update-server exec wrangler deploy`,
   needs a *Workers Scripts: Edit* token), point a custom domain at it, and set `SIMPLETON_SU_FEED_URL`
