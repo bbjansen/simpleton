@@ -34,10 +34,22 @@ for b in "${BINDIR}"/*.bundle; do
   ditto "$b" "$APP/Contents/Resources/$(basename "$b")"
 done
 
-# Embed Sparkle.framework next to the binary so the binary's existing @loader_path rpath
-# finds it (dyld searches @loader_path = Contents/MacOS). Avoids install_name_tool.
+# Embed Sparkle.framework next to the binary (Contents/MacOS). The binary links it as
+# @rpath/Sparkle.framework, so dyld must have an rpath that resolves to this directory.
 SPARKLE="${BINDIR}/Sparkle.framework"   # note: BINDIR may be a symlink, so use the path directly
 [ -d "$SPARKLE" ] && ditto "$SPARKLE" "$APP/Contents/MacOS/Sparkle.framework"
+
+# xcodebuild-built binaries carry only @executable_path/../lib (→ Contents/lib) as their
+# relocatable rpath, so @rpath/Sparkle.framework misses the framework above and the app
+# aborts at launch ("Library not loaded: @rpath/Sparkle.framework"). Add a plain
+# @executable_path rpath (= Contents/MacOS) so dyld finds it. swift build binaries already
+# resolve it; only add when the exact entry is absent (install_name_tool errors on a
+# duplicate). Must run before signing — it invalidates any existing signature.
+if [ -d "$APP/Contents/MacOS/Sparkle.framework" ]; then
+  if ! otool -l "$APP/Contents/MacOS/Simpleton" | awk '/LC_RPATH/{f=1;next} f&&/ path /{print $2;f=0}' | grep -Fxq '@executable_path'; then
+    install_name_tool -add_rpath @executable_path "$APP/Contents/MacOS/Simpleton"
+  fi
+fi
 
 # Sparkle / versioning are env-driven so the release pipeline can bake in the real update
 # feed, public key, auto-checks, and an incrementing build number — while a plain dev build
