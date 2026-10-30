@@ -87,33 +87,35 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "notarize=$NOTARIZE  sparkle=$SPARKLE  publish=$PUBLISH"
 
-      - name: Set up metal shim
-        # swiftbuild (used below) can't compile SwiftTerm's Metal shader on the runner
-        # (CompileMetalFile/ClangStatCache failures), so stub metal/metallib/metal-ar to no-ops that just
-        # create their expected -o/-MF/-serialize-diagnostics outputs. The Metal renderer is optional —
-        # SwiftTerm falls back to CoreText — so a stubbed shader is fine for these builds. Added to
-        # $GITHUB_PATH so the build/CoreChecks steps pick it up. TODO: restore real Metal once swiftbuild's
-        # shader compile works on CI.
+      - name: Build (release) via xcodebuild
+        # Build with xcodebuild (Xcode's build system) rather than `swift build`. Xcode sets up the full
+        # SDK/Metal toolchain context, so it compiles SwiftTerm's Metal shader (which `swift build
+        # --build-system swiftbuild` fails to do on the runner) AND generates a Bundle.module accessor
+        # that resolves resources from Contents/Resources (the native `swift build` accessor looks at the
+        # .app ROOT and crashes at launch). Products go to DerivedData/Build/Products/Release, which
+        # make-app-bundle.sh consumes via SIMPLETON_BINDIR.
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/metal-shim"
-          for t in metal metallib metal-ar; do
-            # shellcheck disable=SC2016  # $@/$a/$prev are intentionally literal in the generated shim
-            printf '#!/bin/bash\nprev=""\nfor a in "$@"; do case "$prev" in -o|-MF|-serialize-diagnostics) : > "$a";; esac; prev="$a"; done\nexit 0\n' > "$RUNNER_TEMP/metal-shim/$t"
-            chmod +x "$RUNNER_TEMP/metal-shim/$t"
-          done
-          echo "$RUNNER_TEMP/metal-shim" >> "$GITHUB_PATH"
-
-      - name: Build (release)
-        # swiftbuild's generated Bundle.module accessor resolves resources via Bundle.main.resourceURL
-        # (Contents/Resources), matching how make-app-bundle.sh packages the .app. The classic `native`
-        # system's accessor looks at the .app ROOT and crashes at launch ("could not load resource
-        # bundle"). swiftbuild also emits proper .bundle/Contents/ bundles. CoreChecks uses the same
-        # system so .build/release stays consistent for packaging.
-        run: swift build -c release --build-system swiftbuild
+          DD="$RUNNER_TEMP/dd"
+          echo "=== available schemes ==="
+          xcodebuild -list || true
+          xcodebuild -scheme Simpleton -configuration Release \
+            -derivedDataPath "$DD" -destination 'generic/platform=macOS' \
+            -skipPackagePluginValidation -skipMacroValidation build
+          echo "=== products (Release) ==="
+          ls -la "$DD/Build/Products/Release/" || true
+          echo "=== resource_bundle_accessor (want Bundle.main.resourceURL) ==="
+          acc="$(find "$DD" -name resource_bundle_accessor.swift -path '*Simpleton*' | head -1)"
+          if [ -n "$acc" ]; then
+            grep -nE 'resourceURL|bundleURL' "$acc" | head -4 || true
+          else
+            echo "(accessor not found)"
+          fi
+          echo "=== sign_update tool location ==="
+          find "$DD" -name sign_update -path '*Sparkle*' 2>/dev/null | head || true
 
       - name: Run CoreChecks
-        run: swift run -c release --build-system swiftbuild CoreChecks
+        run: swift run -c release CoreChecks
 
       - name: Import Developer ID certificate
         if: steps.gate.outputs.notarize == 'true'
@@ -148,6 +150,8 @@ jobs:
           SIMPLETON_SU_PUBLIC_ED_KEY: ${{ vars.SIMPLETON_SU_PUBLIC_ED_KEY }}
           SIMPLETON_SU_AUTO_CHECKS: ${{ (vars.SIMPLETON_SU_PUBLIC_ED_KEY != '' && vars.SIMPLETON_SU_FEED_URL != '') && 'true' || 'false' }}
           SIMPLETON_SIGN_IDENTITY: ${{ vars.SIMPLETON_SIGN_IDENTITY }}
+          # xcodebuild wrote products (binary + *.bundle + Sparkle.framework) here, not .build/release.
+          SIMPLETON_BINDIR: ${{ runner.temp }}/dd/Build/Products/Release
         run: bash scripts/e2e/make-app-bundle.sh release
 
       - name: Developer ID sign (hardened runtime, inside-out)
@@ -208,10 +212,11 @@ jobs:
           set -euo pipefail
           # Use ONLY the sign_update that ships inside Sparkle's SPM artifact — its integrity is
           # already pinned via Package.resolved's checksum. Never download an unverified tool here:
-          # this step pipes the private signing key into it.
-          SIGN_UPDATE="$(find .build/artifacts -path '*/Sparkle/bin/sign_update' | head -n1 || true)"
+          # this step pipes the private signing key into it. xcodebuild extracts SPM artifacts under
+          # DerivedData/SourcePackages, so search there first, then the classic .build location.
+          SIGN_UPDATE="$(find "$RUNNER_TEMP/dd/SourcePackages" .build/artifacts -path '*/Sparkle/bin/sign_update' 2>/dev/null | head -n1 || true)"
           if [ -z "$SIGN_UPDATE" ]; then
-            echo "::error::sign_update not found under .build/artifacts (Sparkle SPM artifact)." >&2
+            echo "::error::sign_update not found under DerivedData/SourcePackages or .build/artifacts (Sparkle SPM artifact)." >&2
             echo "::error::Refusing to fetch an unverified tool to handle the private signing key." >&2
             exit 1
           fi

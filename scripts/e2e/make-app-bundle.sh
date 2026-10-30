@@ -14,7 +14,9 @@
 set -euo pipefail
 
 CONFIG="${1:-debug}"
-BINDIR=".build/${CONFIG}"
+# Where the built products live. Defaults to SwiftPM's .build/<config>, but the release pipeline builds
+# with xcodebuild and points this at DerivedData/Build/Products/Release via SIMPLETON_BINDIR.
+BINDIR="${SIMPLETON_BINDIR:-.build/${CONFIG}}"
 APP=".build/Simpleton.app"
 BIN="${BINDIR}/Simpleton"
 IDENTITY="${SIMPLETON_SIGN_IDENTITY:-Simpleton Dev}"
