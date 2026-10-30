@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.6](https://github.com/bbjansen/simpleton/compare/v0.1.5...v0.1.6) (2026-10-30)
+
+
+### Features
+
+* **release:** dual-arch builds (universal + arm64) with per-lane feeds ([#72](https://github.com/bbjansen/simpleton/issues/72)) ([fda515c](https://github.com/bbjansen/simpleton/commit/fda515c658507f7d8a78c40d1d3f65bcd9c7a376))
+
+
+### Bug Fixes
+
+* **ci:** attach release artifact via gh CLI (explicit tag) ([c64b0cf](https://github.com/bbjansen/simpleton/commit/c64b0cf9b0265828c046f2bc832361e1fc373590))
+* **ci:** attach release artifact via gh CLI with explicit tag ([9550120](https://github.com/bbjansen/simpleton/commit/95501208bd0a1774f66ef0b1b7b5e887f5ca06e9))
+* **ci:** build on release-please releases_created + manual release dispatch ([e3447e7](https://github.com/bbjansen/simpleton/commit/e3447e73506795db9e181b2f320e1db295d673bf))
+* **ci:** build release with swiftbuild so app resources resolve (fixes launch crash) ([6a1bcb0](https://github.com/bbjansen/simpleton/commit/6a1bcb07b5fc787fab8485a6cbf397676d022a63))
+* **ci:** build release with swiftbuild so app resources resolve at launch ([fecfdcf](https://github.com/bbjansen/simpleton/commit/fecfdcf3a0f6caaf711779462b88440a8f965c05))
+* **ci:** shim metal for swiftbuild release so SwiftTerm compiles on CI ([63644e5](https://github.com/bbjansen/simpleton/commit/63644e58b17270d192c4938a478ee1854a7a9372))
+* **ci:** shim metal for the swiftbuild release build so it compiles on CI ([4bae62d](https://github.com/bbjansen/simpleton/commit/4bae62da570408c4dd0716b68054b072a3c7981c))
+* **ci:** trigger release build on releases_created + add manual dispatch ([70bcc72](https://github.com/bbjansen/simpleton/commit/70bcc727746f955cc4c1e02bbd0d5c3392d3ee0b))
+* **release:** add [@executable](https://github.com/executable)_path rpath so the app finds Sparkle ([#71](https://github.com/bbjansen/simpleton/issues/71)) ([3ac996e](https://github.com/bbjansen/simpleton/commit/3ac996ec1083171be7962fef2e8915e06f95e53b))
+* **release:** build release via xcodebuild so the .app launches ([#70](https://github.com/bbjansen/simpleton/issues/70)) ([3743021](https://github.com/bbjansen/simpleton/commit/37430216cf9eefa77b31d0850ae80a55fa6da5aa))
+
 ## [0.1.5](https://github.com/bbjansen/simpleton/compare/v0.1.4...v0.1.5) (2026-10-29)
 
 
