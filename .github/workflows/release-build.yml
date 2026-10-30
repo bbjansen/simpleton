@@ -88,10 +88,16 @@ jobs:
           echo "notarize=$NOTARIZE  sparkle=$SPARKLE  publish=$PUBLISH"
 
       - name: Build (release)
-        run: swift build -c release
+        # Use the swiftbuild build system. Its generated Bundle.module accessor resolves resources via
+        # Bundle.main.resourceURL (Contents/Resources) — matching how make-app-bundle.sh packages the
+        # .app. The classic `native` system (Xcode's default) generates a Bundle.main.bundleURL-based
+        # accessor that looks at the .app ROOT and crashes at launch (resource_bundle_accessor fatalError:
+        # "could not load resource bundle"). swiftbuild also emits proper .bundle/Contents/ bundles.
+        # Keep CoreChecks on the same system so the .build/release products stay consistent for packaging.
+        run: swift build -c release --build-system swiftbuild
 
       - name: Run CoreChecks
-        run: swift run -c release CoreChecks
+        run: swift run -c release --build-system swiftbuild CoreChecks
 
       - name: Import Developer ID certificate
         if: steps.gate.outputs.notarize == 'true'
